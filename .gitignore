@@ -1,0 +1,24 @@
+# Secrets — never commit
+.env
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# IDE / local tooling
+.vscode/
+.claude/
+.run/
+
+# Test / debug artifacts & generated outputs
+output/
+prepared-input.json
+
+# Empty scaffolding (auto-generated stubs only, no real code)
+gorules/
+
+# OS
+.DS_Store
+Thumbs.db

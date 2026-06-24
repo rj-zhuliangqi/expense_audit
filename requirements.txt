@@ -1,0 +1,6 @@
+fastapi
+httpx
+pika
+python-dotenv
+uvicorn
+zen-engine

@@ -1,0 +1,172 @@
+{
+  "contentType": "application/vnd.gorules.decision",
+  "nodes": [
+    {
+      "type": "inputNode",
+      "content": {
+        "schema": ""
+      },
+      "id": "9948bfb0-d9fb-416d-b9a2-b22a875094f0",
+      "name": "request",
+      "position": {
+        "x": -410,
+        "y": 65
+      }
+    },
+    {
+      "type": "outputNode",
+      "content": {
+        "schema": ""
+      },
+      "id": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
+      "name": "response",
+      "position": {
+        "x": 1375,
+        "y": 15
+      }
+    },
+    {
+      "type": "functionNode",
+      "content": {
+        "source": "import http from 'http';\n\nconst LOCAL_LLM_URL = 'http://127.0.0.1:8091/api/v1/node-gateway/llm/evaluate';\n\nexport const handler = async (input) => {\n  try {\n    const context = input && input.context ? input.context : {};\n    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\n\n    if (!prompt) {\n      throw new Error('missing prompt from previous component output');\n    }\n\n    const payload = {\n      prompt\n    };\n\n    if (input.systemPrompt || context.systemPrompt) {\n      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\n    }\n\n    if (input.model || context.llmModel) {\n      payload.model = input.model || context.llmModel;\n    }\n\n    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\n      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\n    }\n\n    const response = await http.post(LOCAL_LLM_URL, payload);\n\n    if (!response || response.status < 200 || response.status >= 300) {\n      throw new Error('local llm service failed at ' + LOCAL_LLM_URL + ': ' + (response && response.status ? response.status : 'unknown'));\n    }\n\n    const result = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});\n\n    return {\n      llm_status: result.llmStatus || 'error',\n      llm_result: result.llmResult || null,\n      raw_content: result.rawContent || null,\n      error_message: result.errorMessage || null\n    };\n  } catch (error) {\n    return {\n      llm_status: 'error',\n      error_message: error && error.message ? error.message : String(error)\n    };\n  }\n};"
+      },
+      "id": "external_api_call",
+      "name": "调用llm",
+      "position": {
+        "x": 535,
+        "y": -35
+      }
+    },
+    {
+      "type": "expressionNode",
+      "content": {
+        "expressions": [
+          {
+            "id": "8894e598-7156-4e42-a7fb-bd28b2c76353",
+            "key": "rechargeCardCheck",
+            "value": "llm_result.passed"
+          },
+          {
+            "id": "9364e4d3-77c7-44bd-95d5-185eb6777612",
+            "key": "isValidInvoiceAmount",
+            "value": "(llm_result.finalAmount) <= (serviceData.auditInfo.applyAmount)"
+          }
+        ],
+        "passThrough": false,
+        "inputField": null,
+        "outputPath": null,
+        "executionMode": "single"
+      },
+      "id": "fdd71299-2d64-43e9-8790-adb5360e8bd2",
+      "name": "结果后处理",
+      "position": {
+        "x": 865,
+        "y": 20
+      }
+    },
+    {
+      "type": "functionNode",
+      "content": {
+        "source": "export const handler = async (input) => {\r\n  // 从输入的原始 JSON 中安全获取 items 数组\r\n  const items = input.items || [];\r\n  \r\n  // 1. 核心循环：把所有 goodsName 用“、”拼接在一起\r\n  const resultText = items\r\n    .map(item => item?.goodsName || '')\r\n    .filter(name => name !== '')\r\n    .join('、');\r\n\r\n  // 2. 核心循环：精简字段，清洗多余的杂乱字段\r\n  const cleanedItems = items.map(item => {\r\n    // 将字符串形式的金额（如 \"476.1\"）安全转换为真正的数字（支持小数）\r\n    const parsedAmount = item?.detailAmount ? parseFloat(item.detailAmount) : 0;\r\n    \r\n    return {\r\n      goodsName: item?.goodsName || '',\r\n      detailAmount: isNaN(parsedAmount) ? 0 : parsedAmount  // 确保万无一失不出现 NaN\r\n    };\r\n  });\r\n\r\n  // 3. 统一返回你需要的所有结果\r\n  return {\r\n    contents: resultText || '无',\r\n    filtered_items: cleanedItems,\r\n    invoiceAmount: parseFloat(input.invoiceAmount)\r\n  };\r\n};\r\n"
+      },
+      "id": "df0530a5-088c-4868-946c-6bcbb16ce607",
+      "name": "发票内容预处理",
+      "position": {
+        "x": -115,
+        "y": 60
+      }
+    },
+    {
+      "type": "functionNode",
+      "content": {
+        "source": "export const handler = async (input) => {\r\n  // 1. 获取您传入的 filtered_items 数组和发票总额 invoiceAmount\r\n  const filteredItems = input.filtered_items || [];\r\n  const invoiceAmount = input.invoiceAmount ?? 0;\r\n\r\n  // 2. 组装更新后的多行提示词（已移除所有容易引起沙箱解析崩溃的转义字符）\r\n  const fullPrompt = `# Role\r\n你是一位极其严谨的企业财务审计专家，负责对员工提交的发票明细（filtered_items）和发票总额（invoiceAmount）进行合规性单条核减审计。\r\n\r\n# 原始已知数据\r\n【发票总额 (invoiceAmount)】：${invoiceAmount}\r\n\r\n# 核心审查与单条核减规则\r\n请逐一扫描下方 filtered_items 中的明细项目。如果某项商品的名称（goodsName）中含有以下【禁止报销内容清单】，则判定该项目为不合规项目，必须执行【单条核减】——即直接用发票总额（invoiceAmount）减去该不合规单项的金额（detailAmount）！\r\n\r\n【禁止报销内容清单】：\r\n1. 互联网宽带、电视安装、调测、移机、服务费用\r\n2. 各类广播影视套餐服务（例如：会员服务、视频、游戏、音乐流媒体使用产生的服务费用）\r\n3. 业务解约费、违约金、滞纳金、代收费项目\r\n4. 其他信息技术服务、现代服务\r\n\r\n# 任务要求\r\n根据上述规则，对不合规单项进行单条核减计算，得出最终核减后的可报销金额，并给出详细的原因。\r\n\r\n# 计算步骤约束\r\n1. 锁定初始的【发票总额 (invoiceAmount)】为基准计算起点。\r\n2. 逐一判定明细中的每一项。若命中清单，则将该项视为不合规项目。\r\n3. 执行减法：最终可报销金额 = 发票总额 - 每一个不合规单项的 detailAmount。\r\n4. 确保最终输出的 finalAmount 为纯数字，最多保留两位小数。\r\n\r\n# 极其严格的输出格式要求\r\n你必须【仅仅且直接】返回一个标准的 JSON 对象，不要包含任何前言、后记、Markdown 标记（如 json 块标签）或解释性文本。\r\n\r\nJSON 结构如下：\r\n{\r\n  \"finalAmount\": 最终核减计算后的数值(Number类型，不要带引号),\r\n  \"reason\": \"一段清晰的财务审计说明，必须写明：1. 原始发票总额是多少；2. 识别出哪些单项不合规并进行了核减，列出它们各自的金额；3. 扣减的依据是什么。\"\r\n}\r\n\r\n# 待审查的发票明细输入\r\nfiltered_items: ${JSON.stringify(filteredItems, null, 2)}`;\r\n\r\n  // 3. 严格只返回组装好的最终大模型提示词结果\r\n  return {\r\n    prompt: fullPrompt\r\n  };\r\n};\r\n"
+      },
+      "id": "b3da39c3-d3dc-41f6-9cd7-ac5aa3ec115d",
+      "name": "发票内容检查prompt",
+      "position": {
+        "x": 225,
+        "y": 115
+      }
+    },
+    {
+      "type": "functionNode",
+      "content": {
+        "source": "import http from 'http';\r\n\r\nconst LOCAL_LLM_URL = 'http://127.0.0.1:8091/api/v1/node-gateway/llm/evaluate';\r\n\r\nexport const handler = async (input) => {\r\n  try {\r\n    const context = input && input.context ? input.context : {};\r\n    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\r\n\r\n    if (!prompt) {\r\n      throw new Error('missing prompt from previous component output');\r\n    }\r\n\r\n    const payload = {\r\n      prompt\r\n    };\r\n\r\n    if (input.systemPrompt || context.systemPrompt) {\r\n      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\r\n    }\r\n\r\n    if (input.model || context.llmModel) {\r\n      payload.model = input.model || context.llmModel;\r\n    }\r\n\r\n    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\r\n      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\r\n    }\r\n\r\n    const response = await http.post(LOCAL_LLM_URL, payload);\r\n\r\n    if (!response || response.status < 200 || response.status >= 300) {\r\n      throw new Error('local llm service failed at ' + LOCAL_LLM_URL + ': ' + (response && response.status ? response.status : 'unknown'));\r\n    }\r\n\r\n    const result = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});\r\n\r\n    return {\r\n      llm_status: result.llmStatus || 'error',\r\n      llm_result: result.llmResult || null,\r\n      raw_content: result.rawContent || null,\r\n      error_message: result.errorMessage || null\r\n    };\r\n  } catch (error) {\r\n    return {\r\n      llm_status: 'error',\r\n      error_message: error && error.message ? error.message : String(error)\r\n    };\r\n  }\r\n};"
+      },
+      "id": "d7922fd5-7874-49b2-a762-44b207a572cc",
+      "name": "调用llm2",
+      "position": {
+        "x": 535,
+        "y": 105
+      }
+    },
+    {
+      "type": "functionNode",
+      "content": {
+        "source": "export const handler = async (input) => {\r\n  // 1. 深度兼容获取拼接好的发票商品内容字符串（兼容顶级和 context 结构）\r\n  const context = input.context || {};\r\n  const contents = input.contents ?? context.contents ?? '无';\r\n\r\n  // 2. 结构化、极度严谨的专家级提示词组装\r\n  const optimizedPrompt = `# Role\r\n你是一位极其严谨的企业财税合规审计专家，负责审查发票商品内容（发票内容）中是否包含公司明令禁止报销的“预付、充值、储值类卡券”项目。\r\n\r\n# 核心审查规则\r\n请仔细阅读给出的【发票内容】。如果内容中包含、涉及或暗示了“预付卡销售”、“话费充值”、“卡券购买”、“预存、储值”等资金前置占用的非即期消费行为，则判定为【不合规】；如果是正常的单次通信服务费、宽带费或实物消费，则判定为【合规】。\r\n\r\n# 核心判据清单\r\n- 【不合规（Passed = false）的特征】词：预付卡、单用途卡、充值、充值卡、预存、储值、面值、卡券。\r\n- 【合规（Passed = true）的特征】词：通信服务费、信息服务费、话费、宽带费、月租费、套餐费。\r\n\r\n# 示例参考 (Few-Shot)\r\n- 输入：*电信服务*通信服务费 ➡️ 返回：{\"passed\": true}\r\n- 输入：*电信服务*话费充值 ➡️ 返回：{\"passed\": false}\r\n- 输入：*现代服务*预付卡销售 ➡️ 返回：{\"passed\": false}\r\n- 输入：*电信服务*移动话费、*电信服务*违约金 ➡️ 返回：{\"passed\": true}\r\n\r\n# 极其严格的输出格式要求\r\n你必须【仅仅且直接】返回一个标准的 JSON 对象，严禁包含任何前言、后记、Markdown 标记（如 json 块标签）或多余的文字解释。\r\n\r\nJSON 结构必须严格如下：\r\n{\r\n  \"passed\": 判定结果（布尔类型 true 或 false，不要带引号）\r\n}\r\n\r\n# 待审查的真实数据\r\n发票内容是：${contents}`;\r\n\r\n  // 3. 返回高准确率的最终大模型提示词\r\n  return {\r\n    prompt: optimizedPrompt\r\n  };\r\n};\r\n"
+      },
+      "id": "0390b661-b8ed-4e9f-88de-aeab29c5728b",
+      "name": "充值卡检查prompt",
+      "position": {
+        "x": 230,
+        "y": -35
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "9724ae1c-ebea-458d-bf40-244224363d1b",
+      "sourceId": "fdd71299-2d64-43e9-8790-adb5360e8bd2",
+      "type": "edge",
+      "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b"
+    },
+    {
+      "id": "b5f184a0-c2fd-40b8-bec4-a8a9548d5b0f",
+      "sourceId": "9948bfb0-d9fb-416d-b9a2-b22a875094f0",
+      "type": "edge",
+      "targetId": "df0530a5-088c-4868-946c-6bcbb16ce607"
+    },
+    {
+      "id": "a57a28d7-d478-4c45-bf03-68fe2aced5fc",
+      "sourceId": "df0530a5-088c-4868-946c-6bcbb16ce607",
+      "type": "edge",
+      "targetId": "b3da39c3-d3dc-41f6-9cd7-ac5aa3ec115d"
+    },
+    {
+      "id": "73628862-ae0f-4e77-ac32-df5194df3cac",
+      "sourceId": "b3da39c3-d3dc-41f6-9cd7-ac5aa3ec115d",
+      "type": "edge",
+      "targetId": "d7922fd5-7874-49b2-a762-44b207a572cc"
+    },
+    {
+      "id": "c9f04b38-1523-476e-8a85-6501d2a99a57",
+      "sourceId": "df0530a5-088c-4868-946c-6bcbb16ce607",
+      "type": "edge",
+      "targetId": "0390b661-b8ed-4e9f-88de-aeab29c5728b"
+    },
+    {
+      "id": "a801b3c0-3ed7-4e21-a616-020d91ba00fb",
+      "sourceId": "0390b661-b8ed-4e9f-88de-aeab29c5728b",
+      "type": "edge",
+      "targetId": "external_api_call"
+    },
+    {
+      "id": "4b09b2c6-9126-4d81-9f56-16f1dc44ddef",
+      "sourceId": "external_api_call",
+      "type": "edge",
+      "targetId": "fdd71299-2d64-43e9-8790-adb5360e8bd2"
+    },
+    {
+      "id": "3774a262-d46e-4d42-8b9e-0980d8dac508",
+      "sourceId": "d7922fd5-7874-49b2-a762-44b207a572cc",
+      "type": "edge",
+      "targetId": "fdd71299-2d64-43e9-8790-adb5360e8bd2"
+    },
+    {
+      "id": "53e049d1-cfb1-4ebf-ab54-cfd1227d3824",
+      "sourceId": "9948bfb0-d9fb-416d-b9a2-b22a875094f0",
+      "type": "edge",
+      "targetId": "fdd71299-2d64-43e9-8790-adb5360e8bd2"
+    }
+  ]
+}
