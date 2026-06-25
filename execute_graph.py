@@ -150,11 +150,13 @@ def _wait_for_mock_server_service(
 def run_graph(
     receipt_code: str = DEFAULT_RECEIPT_CODE,
     *,
-    graph_path: Path | str = DEFAULT_GRAPH_PATH,
+    profile: str = "telecom",
+    graph_path: Path | str | None = None,
     ocr_sample_path: Path | str = DEFAULT_OCR_PATH,
     prepared_output_path: Path | str | None = None,
     audit_service_url: str | None = None,
     graph_runtime_url: str | None = None,
+    telecom_asset_dir: Path | str | None = None,
 ) -> dict[str, Any]:
     audit_service_url_context = (
         ensure_mock_audit_service_url()
@@ -164,9 +166,11 @@ def run_graph(
 
     with audit_service_url_context as resolved_audit_service_url:
         expense_service = create_receipt_audit_service(
+            profile=profile,
             graph_path=graph_path,
             audit_service_url=resolved_audit_service_url,
             graph_runtime_url=graph_runtime_url,
+            telecom_asset_dir=telecom_asset_dir,
         )
 
         print("🤖 开始执行独立图执行测试...")
@@ -183,11 +187,13 @@ def run_graph(
 def export_prepared_input_only(
     receipt_code: str = DEFAULT_RECEIPT_CODE,
     *,
-    graph_path: Path | str = DEFAULT_GRAPH_PATH,
+    profile: str = "telecom",
+    graph_path: Path | str | None = None,
     ocr_sample_path: Path | str = DEFAULT_OCR_PATH,
     prepared_output_path: Path | str,
     audit_service_url: str | None = None,
     graph_runtime_url: str | None = None,
+    telecom_asset_dir: Path | str | None = None,
 ) -> dict[str, Any]:
     audit_service_url_context = (
         ensure_mock_audit_service_url()
@@ -197,9 +203,11 @@ def export_prepared_input_only(
 
     with audit_service_url_context as resolved_audit_service_url:
         expense_service = create_receipt_audit_service(
+            profile=profile,
             graph_path=graph_path,
             audit_service_url=resolved_audit_service_url,
             graph_runtime_url=graph_runtime_url,
+            telecom_asset_dir=telecom_asset_dir,
         )
 
         print("🤖 开始执行独立图执行测试...")
@@ -252,8 +260,13 @@ def run_graph_with_prepared_input(
 def build_cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Execute a built GoRules graph against expense audit data")
     parser.add_argument("--receipt-code", default=DEFAULT_RECEIPT_CODE)
+    parser.add_argument("--profile", default="telecom")
     parser.add_argument("--graph-path", default=str(DEFAULT_GRAPH_PATH))
     parser.add_argument("--ocr-sample-path", default=str(DEFAULT_OCR_PATH))
+    parser.add_argument(
+        "--telecom-asset-dir",
+        help="通讯费 operator_city.csv 所在目录；默认用包内资产",
+    )
     parser.add_argument(
         "--graph-runtime-url",
         help="指定下游 graph runtime 地址；未传时优先读 GRAPH_RUNTIME_URL，否则默认 http://127.0.0.1:8090",
@@ -299,21 +312,25 @@ def main_cli(argv: Sequence[str] | None = None) -> int:
     if args.prepare_only:
         export_prepared_input_only(
             receipt_code=args.receipt_code,
+            profile=args.profile,
             graph_path=args.graph_path,
             ocr_sample_path=args.ocr_sample_path,
             prepared_output_path=args.prepared_output_path,
             audit_service_url=args.audit_service_url,
             graph_runtime_url=args.graph_runtime_url,
+            telecom_asset_dir=args.telecom_asset_dir,
         )
         return 0
 
     run_graph(
         receipt_code=args.receipt_code,
+        profile=args.profile,
         graph_path=args.graph_path,
         ocr_sample_path=args.ocr_sample_path,
         prepared_output_path=args.prepared_output_path,
         audit_service_url=args.audit_service_url,
         graph_runtime_url=args.graph_runtime_url,
+        telecom_asset_dir=args.telecom_asset_dir,
     )
     return 0
 

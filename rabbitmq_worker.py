@@ -468,7 +468,8 @@ def _is_explicit_unsuccessful_result(value: Any) -> bool:
 
 def create_worker(
     *,
-    graph_path: Path | str = DEFAULT_GRAPH_PATH,
+    profile: str | Any = "telecom",
+    graph_path: Path | str | None = None,
     audit_service_url: str | None = None,
     graph_runtime_url: str | None = None,
     ocr_sample_path: Path | str | None = None,
@@ -477,18 +478,18 @@ def create_worker(
     prepared_output_dir: Path | str | None = None,
     writeback_output_dir: Path | str | None = None,
     bypass_task_gate: bool = False,
+    telecom_asset_dir: Path | str | None = None,
 ) -> ReceiptAuditWorker:
     resolved_audit_service_url = resolve_audit_service_url(audit_service_url)
-    receipt_result_sink = None
-    if writeback_output_dir is not None:
-        receipt_result_sink = build_receipt_writeback_file_sink(writeback_output_dir)
 
     service = create_receipt_audit_service(
+        profile=profile,
         graph_path=graph_path,
         audit_service_url=resolved_audit_service_url,
         graph_runtime_url=graph_runtime_url,
-        receipt_result_sink=receipt_result_sink,
         enable_writeback=True,
+        writeback_output_dir=writeback_output_dir,
+        telecom_asset_dir=telecom_asset_dir,
     )
     return ReceiptAuditWorker(
         service=service,
@@ -507,12 +508,17 @@ def build_cli_parser() -> argparse.ArgumentParser:
         description="Consume receipt audit tasks from RabbitMQ and execute downstream graph runtime"
     )
     parser.add_argument("--amqp-url", default=resolve_amqp_url())
+    parser.add_argument("--profile", default="telecom")
     parser.add_argument("--graph-path", default=str(DEFAULT_GRAPH_PATH))
     parser.add_argument("--audit-service-url")
     parser.add_argument("--graph-runtime-url")
     parser.add_argument("--ocr-sample-path", default=str(DEFAULT_OCR_PATH))
     parser.add_argument("--prepared-output-dir")
     parser.add_argument("--writeback-output-dir")
+    parser.add_argument(
+        "--telecom-asset-dir",
+        help="通讯费 operator_city.csv 所在目录；默认用包内资产",
+    )
     parser.add_argument("--delay-time-millis", type=int, default=resolve_delay_time_millis())
     parser.add_argument(
         "--bypass-task-gate",
@@ -536,6 +542,7 @@ def main_cli(argv: Sequence[str] | None = None) -> int:
         delay_time_millis=resolve_delay_time_millis(args.delay_time_millis),
     )
     worker = create_worker(
+        profile=args.profile,
         graph_path=args.graph_path,
         audit_service_url=resolve_audit_service_url(args.audit_service_url),
         graph_runtime_url=args.graph_runtime_url,
@@ -545,6 +552,7 @@ def main_cli(argv: Sequence[str] | None = None) -> int:
         prepared_output_dir=args.prepared_output_dir,
         writeback_output_dir=args.writeback_output_dir,
         bypass_task_gate=args.bypass_task_gate,
+        telecom_asset_dir=args.telecom_asset_dir,
     )
     worker.run_forever()
     return 0

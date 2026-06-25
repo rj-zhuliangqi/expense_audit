@@ -17,10 +17,10 @@ except ImportError:  # pragma: no cover
 from expense_audit_orchestrator import (
     DEFAULT_GRAPH_PATH,
     DEFAULT_OCR_PATH,
-    assemble_result_audit_info,
     create_receipt_audit_service,
 )
 from expense_audit_orchestrator.audit_client import DEFAULT_AUDIT_SERVICE_URL
+from expense_audit_orchestrator.writeback_client import build_writeback_payload
 from rabbitmq_worker import RabbitMQSettings, create_blocking_connection, parse_receipt_code, resolve_amqp_url
 
 
@@ -73,6 +73,9 @@ def consume_and_prepare_once(
     writeback_output_path: Path | str | None = None,
     ack_on_success: bool = False,
     receipt_code_only: bool = False,
+    compliance_rule: Any | None = None,
+    audit_travels_builder: Any | None = None,
+    form_invoice_tax_views_builder: Any | None = None,
 ) -> int:
     connection = create_blocking_connection(settings)
     channel = connection.channel()
@@ -111,7 +114,12 @@ def consume_and_prepare_once(
                 raise ValueError("service does not support process_prepared_receipt required for writeback export")
 
             processed_receipt = process_prepared_method(prepared_receipt)
-            writeback_payload = assemble_result_audit_info(prepared_receipt, processed_receipt)
+            writeback_payload = build_writeback_payload(
+                processed_receipt,
+                compliance_rule=compliance_rule,
+                audit_travels_builder=audit_travels_builder,
+                form_invoice_tax_views_builder=form_invoice_tax_views_builder,
+            )
             export_writeback_payload(writeback_payload, writeback_output_path)
 
         print(
@@ -146,10 +154,19 @@ def build_cli_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--amqp-url", default=resolve_amqp_url())
     parser.add_argument("--queue", default=RabbitMQSettings().queue_name)
+    parser.add_argument("--profile", default="telecom")
     parser.add_argument("--graph-path", default=str(DEFAULT_GRAPH_PATH))
     parser.add_argument("--audit-service-url", default=DEFAULT_AUDIT_SERVICE_URL)
+    parser.add_argument(
+        "--graph-runtime-url",
+        help="指定下游 graph runtime 地址；未传时优先读 GRAPH_RUNTIME_URL，否则默认 http://127.0.0.1:8090",
+    )
     parser.add_argument("--ocr-sample-path", default=str(DEFAULT_OCR_PATH))
     parser.add_argument("--prepared-output-path")
+    parser.add_argument(
+        "--telecom-asset-dir",
+        help="通讯费 operator_city.csv 所在目录；默认用包内资产",
+    )
     parser.add_argument(
         "--writeback-output-path",
         help="执行 prepare + runtime，并导出最终回写 payload；不会发起真实回调",
@@ -174,11 +191,22 @@ def main_cli(argv: Sequence[str] | None = None) -> int:
 
     settings = RabbitMQSettings(amqp_url=resolve_amqp_url(args.amqp_url))
     service = None
+    profile_kwargs: dict[str, Any] = {}
     if not args.receipt_code_only:
+        from expense_audit_orchestrator.profiles import get_profile
+
+        profile = get_profile(args.profile, telecom_asset_dir=args.telecom_asset_dir)
         service = create_receipt_audit_service(
+            profile=profile,
             graph_path=args.graph_path,
             audit_service_url=args.audit_service_url,
+            graph_runtime_url=args.graph_runtime_url,
         )
+        profile_kwargs = {
+            "compliance_rule": profile.compliance_rule,
+            "audit_travels_builder": profile.audit_travels_builder,
+            "form_invoice_tax_views_builder": profile.form_invoice_tax_views_builder,
+        }
     return consume_and_prepare_once(
         service=service,
         settings=settings,
@@ -188,6 +216,7 @@ def main_cli(argv: Sequence[str] | None = None) -> int:
         writeback_output_path=args.writeback_output_path,
         ack_on_success=args.ack_on_success,
         receipt_code_only=args.receipt_code_only,
+        **profile_kwargs,
     )
 
 

@@ -35,23 +35,34 @@ class ExpenseProfile:
 _TELECOM_PROFILE: ExpenseProfile | None = None
 
 
-def _build_telecom_profile() -> ExpenseProfile:
-    from .telecom.data import load_telecom_list, telecom_receipt_enricher
+def _build_telecom_profile(asset_dir: Path | str | None = None) -> ExpenseProfile:
+    from .telecom.data import (
+        load_telecom_list,
+        resolve_telecom_csv_path,
+        telecom_receipt_enricher,
+    )
     from .telecom.writeback import telecom_compliance_rule
 
+    csv_path = resolve_telecom_csv_path(asset_dir)
     return ExpenseProfile(
         name="telecom",
         default_graph_path=DEFAULT_GRAPH_PATH,
-        receipt_enrichers={"telecom_list": telecom_receipt_enricher(load_telecom_list())},
+        receipt_enrichers={"telecom_list": telecom_receipt_enricher(load_telecom_list(csv_path))},
         compliance_rule=telecom_compliance_rule,
         writeback_save_path=AUDIT_INFO_SAVE_PATH,
     )
 
 
-def get_profile(name: str) -> ExpenseProfile:
+def get_profile(
+    name: str,
+    *,
+    telecom_asset_dir: Path | str | None = None,
+) -> ExpenseProfile:
     global _TELECOM_PROFILE
     normalized = name.strip().lower()
     if normalized == "telecom":
+        if telecom_asset_dir is not None:
+            return _build_telecom_profile(telecom_asset_dir)
         if _TELECOM_PROFILE is None:
             _TELECOM_PROFILE = _build_telecom_profile()
         return _TELECOM_PROFILE
