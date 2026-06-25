@@ -12,6 +12,9 @@ __pycache__/
 .claude/
 .run/
 
+# claude-mem auto-generated recent-activity (per-subdir CLAUDE.md only; keep top-level tracked)
+expense_audit_orchestrator/profiles/**/CLAUDE.md
+
 # Test / debug artifacts & generated outputs
 output/
 prepared-input.json
