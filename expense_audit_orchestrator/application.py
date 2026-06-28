@@ -114,6 +114,7 @@ class ReceiptAuditService:
             "invoiceCount": len(invoice_results),
             "invoiceResults": invoice_results,
             "summary": _build_receipt_summary(invoice_results),
+            "isAmountSufficient": (remaining_apply_amount is None or remaining_apply_amount <= 0),
         }
         self._receipt_result_sink(receipt_result)
         return receipt_result
@@ -319,12 +320,44 @@ def _update_preparation_apply_amount(
         context["serviceData"] = updated_service_data
 
 
-def _extract_invoice_final_amount(invoice_result: dict[str, Any]) -> float | None:
+def _is_invoice_valid_excluding_e31(invoice_result: dict[str, Any]) -> bool:
     if invoice_result.get("executionStatus") != "SUCCEEDED":
-        return None
+        return False
 
     decision_status = invoice_result.get("decisionStatus", "").lower()
     if decision_status in ("failed", "reject"):
+        # We need to make sure the rejection/failure was not caused solely by E31.
+        # If there are other rule results that reject/fail, then the invoice is invalid.
+        # If the only rejecting/failing rule is E31, then we consider it valid (we ignore E31).
+        decision_output = invoice_result.get("decisionOutput") or {}
+        has_other_rejections = False
+        rule_results = []
+        for value in decision_output.values():
+            if isinstance(value, Mapping) and any(
+                key in value
+                for key in ("distinguish_result", "reason_code", "audit_content", "audit_type")
+            ):
+                rule_results.append(value)
+
+        # If there are no structured sub-rule results, fall back to decisionStatus check
+        if not rule_results:
+            return False
+
+        for r in rule_results:
+            reason_code = r.get("reason_code") or r.get("reasonCode")
+            distinguish_result = r.get("distinguish_result") or r.get("distinguishResult")
+            if reason_code != "E31" and str(distinguish_result).lower() in ("reject", "failed"):
+                has_other_rejections = True
+                break
+
+        if has_other_rejections:
+            return False
+
+    return True
+
+
+def _extract_invoice_final_amount(invoice_result: dict[str, Any]) -> float | None:
+    if not _is_invoice_valid_excluding_e31(invoice_result):
         return None
 
     runtime_result = invoice_result.get("runtimeResult") or {}

@@ -2,6 +2,7 @@ import unittest
 import json
 
 from expense_audit_orchestrator.writeback import assemble_result_audit_info
+from expense_audit_orchestrator.profiles.telecom.writeback import telecom_compliance_rule
 
 
 class WritebackAssemblerTests(unittest.TestCase):
@@ -666,6 +667,313 @@ class WritebackAssemblerTests(unittest.TestCase):
 
         self.assertEqual(len(payload["auditTruthCheckResultBills"]), 1)
         self.assertEqual(payload["auditTruthCheckResultBills"][0]["name"], "发票号码-启用")
+
+    def test_assemble_result_audit_info_with_multiple_invoices_strips_e31_on_non_last_and_overrides_last_pass(self) -> None:
+        prepared_receipt = {
+            "receiptCode": "REC-MULTI-001",
+            "serviceData": {
+                "auditInfo": {
+                    "instanceCode": "REC-MULTI-001",
+                }
+            },
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "invoiceFile": {
+                        "auditInvoiceFile": {
+                            "afiid": "AFID-001",
+                            "fid": "FID-001",
+                            "aiid": "AIID-001",
+                        }
+                    },
+                    "preparedInput": {
+                        "invoiceNo": "INV-001",
+                        "serviceData": {
+                            "invoiceUsageHistory": [],
+                            "currentInvoiceInfo": {
+                                "aiiid": "AIIID-001",
+                            },
+                            "currentAuditInvoiceFile": {
+                                "afiid": "AFID-001",
+                                "fid": "FID-001",
+                                "aiid": "AIID-001",
+                            },
+                            "ocrEnvelope": {
+                                "status": {"code": "200", "finishedAt": "2026-06-16T12:00:00+00:00"},
+                            },
+                        },
+                    },
+                },
+                {
+                    "invoiceKey": "FID-002",
+                    "invoiceFile": {
+                        "auditInvoiceFile": {
+                            "afiid": "AFID-002",
+                            "fid": "FID-002",
+                            "aiid": "AIID-002",
+                        }
+                    },
+                    "preparedInput": {
+                        "invoiceNo": "INV-002",
+                        "serviceData": {
+                            "invoiceUsageHistory": [],
+                            "currentInvoiceInfo": {
+                                "aiiid": "AIIID-002",
+                            },
+                            "currentAuditInvoiceFile": {
+                                "afiid": "AFID-002",
+                                "fid": "FID-002",
+                                "aiid": "AIID-002",
+                            },
+                            "ocrEnvelope": {
+                                "status": {"code": "200", "finishedAt": "2026-06-16T12:00:00+00:00"},
+                            },
+                        },
+                    },
+                }
+            ],
+        }
+        processed_receipt = {
+            "receiptCode": "REC-MULTI-001",
+            "serviceData": prepared_receipt["serviceData"],
+            "isAmountSufficient": True,
+            "invoiceResults": [
+                {
+                    "invoiceKey": "FID-001",
+                    "preparedInput": prepared_receipt["invoicePreparations"][0]["preparedInput"],
+                    "decisionOutput": {
+                        "amount_result": {
+                            "reason_code": "E31",
+                            "distinguish_result": "REJECT",
+                            "audit_content": "检查使用发票合计金额是否充足",
+                            "message": "金额不够",
+                        },
+                        "header_result": {
+                            "reason_code": "E01",
+                            "distinguish_result": "PASS",
+                            "audit_content": "检查使用的发票购买方抬头与公司信息是否一致",
+                            "message": "抬头一致",
+                        }
+                    },
+                    "decisionStatus": "reject",
+                    "executionStatus": "SUCCEEDED",
+                },
+                {
+                    "invoiceKey": "FID-002",
+                    "preparedInput": prepared_receipt["invoicePreparations"][1]["preparedInput"],
+                    "decisionOutput": {
+                        "amount_result": {
+                            "reason_code": "E31",
+                            "distinguish_result": "REJECT",
+                            "audit_content": "检查使用发票合计金额是否充足",
+                            "message": "金额不够",
+                        },
+                    },
+                    "decisionStatus": "reject",
+                    "executionStatus": "SUCCEEDED",
+                }
+            ],
+            "summary": {"overallStatus": "SUCCESS"},
+        }
+
+        payload = assemble_result_audit_info(prepared_receipt, processed_receipt)
+
+        # 1. auditLogs validation
+        # FID-001's E31 is stripped, only E01 remains
+        # FID-002's E31 is overridden to PASS
+        self.assertEqual(len(payload["auditLogs"]), 2)
+
+        # Log 0: FID-001's E01 (E31 was stripped)
+        self.assertEqual(payload["auditLogs"][0]["invoiceFileId"], "AFID-001")
+        self.assertEqual(payload["auditLogs"][0]["reasonCode"], "E01")
+        self.assertEqual(payload["auditLogs"][0]["distinguishResult"], "pass")
+
+        # Log 1: FID-002's overridden E31 (it was REJECT in processed_receipt but isAmountSufficient is True)
+        self.assertEqual(payload["auditLogs"][1]["invoiceFileId"], "AFID-002")
+        self.assertEqual(payload["auditLogs"][1]["reasonCode"], "E31")
+        self.assertEqual(payload["auditLogs"][1]["distinguishResult"], "pass")
+        self.assertEqual(payload["auditLogs"][1]["message"], "发票合计金额充足")
+
+        # 2. auditInvoiceInfos validation
+        self.assertEqual(len(payload["auditInvoiceInfos"]), 2)
+        # For FID-001, since E31 was stripped, the primary rule result should be E01 (pass)
+        self.assertEqual(payload["auditInvoiceInfos"][0]["fid"], "FID-001")
+        self.assertEqual(payload["auditInvoiceInfos"][0]["reasonCode"], "E01")
+        # For FID-002, E31 is overridden to PASS, so its reasonCode is E31
+        self.assertEqual(payload["auditInvoiceInfos"][1]["fid"], "FID-002")
+        self.assertEqual(payload["auditInvoiceInfos"][1]["reasonCode"], "E31")
+
+    def test_assemble_result_audit_info_with_multiple_invoices_strips_e31_on_non_last_and_overrides_last_reject(self) -> None:
+        prepared_receipt = {
+            "receiptCode": "REC-MULTI-002",
+            "serviceData": {
+                "auditInfo": {
+                    "instanceCode": "REC-MULTI-002",
+                }
+            },
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "invoiceFile": {
+                        "auditInvoiceFile": {
+                            "afiid": "AFID-001",
+                            "fid": "FID-001",
+                            "aiid": "AIID-001",
+                        }
+                    },
+                    "preparedInput": {
+                        "invoiceNo": "INV-001",
+                        "serviceData": {
+                            "invoiceUsageHistory": [],
+                            "currentInvoiceInfo": {
+                                "aiiid": "AIIID-001",
+                            },
+                            "currentAuditInvoiceFile": {
+                                "afiid": "AFID-001",
+                                "fid": "FID-001",
+                                "aiid": "AIID-001",
+                            },
+                            "ocrEnvelope": {
+                                "status": {"code": "200", "finishedAt": "2026-06-16T12:00:00+00:00"},
+                            },
+                        },
+                    },
+                },
+                {
+                    "invoiceKey": "FID-002",
+                    "invoiceFile": {
+                        "auditInvoiceFile": {
+                            "afiid": "AFID-002",
+                            "fid": "FID-002",
+                            "aiid": "AIID-002",
+                        }
+                    },
+                    "preparedInput": {
+                        "invoiceNo": "INV-002",
+                        "serviceData": {
+                            "invoiceUsageHistory": [],
+                            "currentInvoiceInfo": {
+                                "aiiid": "AIIID-002",
+                            },
+                            "currentAuditInvoiceFile": {
+                                "afiid": "AFID-002",
+                                "fid": "FID-002",
+                                "aiid": "AIID-002",
+                            },
+                            "ocrEnvelope": {
+                                "status": {"code": "200", "finishedAt": "2026-06-16T12:00:00+00:00"},
+                            },
+                        },
+                    },
+                }
+            ],
+        }
+        processed_receipt = {
+            "receiptCode": "REC-MULTI-002",
+            "serviceData": prepared_receipt["serviceData"],
+            "isAmountSufficient": False,
+            "invoiceResults": [
+                {
+                    "invoiceKey": "FID-001",
+                    "preparedInput": prepared_receipt["invoicePreparations"][0]["preparedInput"],
+                    "decisionOutput": {
+                        "amount_result": {
+                            "reason_code": "E31",
+                            "distinguish_result": "PASS",
+                            "audit_content": "检查使用发票合计金额是否充足",
+                            "message": "发票合计金额充足",
+                        },
+                    },
+                    "decisionStatus": "pass",
+                    "executionStatus": "SUCCEEDED",
+                },
+                {
+                    "invoiceKey": "FID-002",
+                    "preparedInput": prepared_receipt["invoicePreparations"][1]["preparedInput"],
+                    "decisionOutput": {
+                        "amount_result": {
+                            "reason_code": "E31",
+                            "distinguish_result": "PASS",
+                            "audit_content": "检查使用发票合计金额是否充足",
+                            "message": "发票合计金额充足",
+                        },
+                    },
+                    "decisionStatus": "pass",
+                    "executionStatus": "SUCCEEDED",
+                }
+            ],
+            "summary": {"overallStatus": "SUCCESS"},
+        }
+
+        payload = assemble_result_audit_info(prepared_receipt, processed_receipt)
+
+        # 1. auditLogs validation
+        # FID-001's E31 is stripped, list becomes length 1
+        # FID-002's E31 is overridden to REJECT
+        self.assertEqual(len(payload["auditLogs"]), 1)
+
+        # Log 0: FID-002's overridden E31 (it was PASS in processed_receipt but isAmountSufficient is False)
+        self.assertEqual(payload["auditLogs"][0]["invoiceFileId"], "AFID-002")
+        self.assertEqual(payload["auditLogs"][0]["reasonCode"], "E31")
+        self.assertEqual(payload["auditLogs"][0]["distinguishResult"], "reject")
+        self.assertEqual(payload["auditLogs"][0]["message"], "发票合计金额不足")
+
+        # 2. auditInvoiceInfos validation
+        self.assertEqual(len(payload["auditInvoiceInfos"]), 2)
+        # For FID-001, since E31 was stripped, reasonCode is None
+        self.assertEqual(payload["auditInvoiceInfos"][0]["fid"], "FID-001")
+        self.assertIsNone(payload["auditInvoiceInfos"][0]["reasonCode"])
+        # For FID-002, E31 is overridden to REJECT, so its reasonCode is E31
+        self.assertEqual(payload["auditInvoiceInfos"][1]["fid"], "FID-002")
+        self.assertEqual(payload["auditInvoiceInfos"][1]["reasonCode"], "E31")
+
+    def test_telecom_compliance_marks_telecom_service_penalty_and_surcharge_noncompliant(self) -> None:
+        prepared_receipt = {
+            "receiptCode": "REC-COMPLIANCE-001",
+            "serviceData": {
+                "auditInfo": {"instanceCode": "REC-COMPLIANCE-001"},
+            },
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "invoiceFile": {"fid": "FID-001"},
+                    "preparedInput": {
+                        "items": [
+                            {"goodsName": "*电信服务*违约金", "detailAmount": "10", "taxAmount": "0", "taxRate": "0"},
+                            {"goodsName": "*电信服务*代收费", "detailAmount": "20", "taxAmount": "0", "taxRate": "0"},
+                            {"goodsName": "*电信服务*通信服务费", "detailAmount": "30", "taxAmount": "0", "taxRate": "0"},
+                            {"goodsName": "普通商品", "detailAmount": "40", "taxAmount": "0", "taxRate": "0"},
+                            {"goodsName": "", "detailAmount": "50", "taxAmount": "0", "taxRate": "0"},
+                        ],
+                        "serviceData": {
+                            "currentInvoiceInfo": {"aiiid": "AIIID-001", "atcrid": "ATCRID-001"},
+                            "ocrEnvelope": {"status": {"finishedAt": "2026-06-16T12:00:00+00:00"}},
+                        },
+                    },
+                }
+            ],
+        }
+        processed_receipt = {
+            "receiptCode": "REC-COMPLIANCE-001",
+            "serviceData": prepared_receipt["serviceData"],
+            "invoiceResults": [
+                {
+                    "invoiceKey": "FID-001",
+                    "preparedInput": prepared_receipt["invoicePreparations"][0]["preparedInput"],
+                    "decisionOutput": {"checkStatus": "pass"},
+                    "decisionStatus": "pass",
+                    "executionStatus": "SUCCEEDED",
+                }
+            ],
+            "summary": {"overallStatus": "SUCCESS"},
+        }
+
+        payload = assemble_result_audit_info(
+            prepared_receipt, processed_receipt, compliance_rule=telecom_compliance_rule
+        )
+        compliance = [c["compliance"] for c in payload["auditInvoiceInfoContents"]]
+
+        self.assertEqual(compliance, [False, False, True, True, True])
 
 
 if __name__ == "__main__":

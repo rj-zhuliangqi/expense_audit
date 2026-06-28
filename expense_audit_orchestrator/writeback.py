@@ -1,13 +1,26 @@
 import json
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 from uuid import uuid4
+
+
+ComplianceRule = Callable[[str, Mapping[str, Any]], bool]
+AuditTravelsBuilder = Callable[[list[tuple[dict[str, Any], dict[str, Any]]], Mapping[str, Any]], list[dict[str, Any]]]
+FormBuilder = Callable[[list[tuple[dict[str, Any], dict[str, Any]]], Mapping[str, Any]], list[dict[str, Any]]]
+
+
+def _default_compliance(goods_name: str, item: Mapping[str, Any]) -> bool:
+    return True
 
 
 def assemble_result_audit_info(
     prepared_receipt: Mapping[str, Any],
     processed_receipt: Mapping[str, Any],
+    *,
+    compliance_rule: ComplianceRule = _default_compliance,
+    audit_travels_builder: AuditTravelsBuilder | None = None,
+    form_invoice_tax_views_builder: FormBuilder | None = None,
 ) -> dict[str, Any]:
     receipt_code = str(processed_receipt.get("receiptCode") or prepared_receipt.get("receiptCode") or "")
     service_data = dict(prepared_receipt.get("serviceData") or processed_receipt.get("serviceData") or {})
@@ -15,16 +28,21 @@ def assemble_result_audit_info(
     instance_code = _get_string_value(audit_info, "instanceCode") or receipt_code
 
     invoice_pairs = _pair_invoices(prepared_receipt, processed_receipt)
+    is_amount_sufficient = processed_receipt.get("isAmountSufficient")
 
     return {
         "instanceCode": instance_code,
-        "auditLogs": _build_audit_logs(instance_code, audit_info, invoice_pairs),
-        "auditInvoiceInfos": _build_audit_invoice_infos(instance_code, audit_info, invoice_pairs),
+        "auditLogs": _build_audit_logs(instance_code, audit_info, invoice_pairs, is_amount_sufficient=is_amount_sufficient),
+        "auditInvoiceInfos": _build_audit_invoice_infos(instance_code, audit_info, invoice_pairs, is_amount_sufficient=is_amount_sufficient),
         "auditInvoiceFiles": _build_audit_invoice_files(service_data),
         "auditRelationFiles": _build_audit_relation_files(invoice_pairs),
-        "auditInvoiceInfoContents": _build_audit_invoice_info_contents(instance_code, invoice_pairs),
-        "auditTravels": [],
-        "formInvoiceTaxViews": [],
+        "auditInvoiceInfoContents": _build_audit_invoice_info_contents(
+            instance_code, invoice_pairs, compliance_rule
+        ),
+        "auditTravels": audit_travels_builder(invoice_pairs, service_data) if audit_travels_builder else [],
+        "formInvoiceTaxViews": (
+            form_invoice_tax_views_builder(invoice_pairs, service_data) if form_invoice_tax_views_builder else []
+        ),
         "auditTruthCheckLogs": _build_audit_truthcheck_logs(instance_code, invoice_pairs),
         "auditTruthCheckResultBills": _build_audit_truthcheck_result_bills(instance_code, invoice_pairs),
         "auditTruthCheckResultItems": _build_audit_truthcheck_result_items(instance_code, invoice_pairs),
@@ -62,10 +80,13 @@ def _build_audit_logs(
     instance_code: str,
     audit_info: Mapping[str, Any],
     invoice_pairs: list[tuple[dict[str, Any], dict[str, Any]]],
+    *,
+    is_amount_sufficient: bool | None = None,
 ) -> list[dict[str, Any]]:
     del audit_info
     audit_logs: list[dict[str, Any]] = []
-    for preparation, result in invoice_pairs:
+    for index, (preparation, result) in enumerate(invoice_pairs):
+        is_last = (index == len(invoice_pairs) - 1)
         prepared_input = _resolve_prepared_input(preparation, result)
         current_invoice_info = _resolve_first_mapping(prepared_input.get("serviceData", {}).get("currentInvoiceInfo"))
         current_audit_invoice_file = _resolve_current_audit_invoice_file(preparation, prepared_input)
@@ -83,6 +104,21 @@ def _build_audit_logs(
         rule_results = _extract_rule_results(decision_output)
         if rule_results:
             for rule_result in rule_results:
+                reason_code = rule_result.get("reason_code") or rule_result.get("reasonCode")
+                if reason_code == "E31":
+                    if not is_last:
+                        continue
+                    if is_amount_sufficient is not None:
+                        rule_result = dict(rule_result)
+                        if is_amount_sufficient:
+                            rule_result["distinguish_result"] = "PASS"
+                            rule_result["distinguishResult"] = "PASS"
+                            rule_result["message"] = "发票合计金额充足"
+                        else:
+                            rule_result["distinguish_result"] = "REJECT"
+                            rule_result["distinguishResult"] = "REJECT"
+                            rule_result["message"] = "发票合计金额不足"
+
                 audit_logs.append(
                     {
                         "instanceCode": _get_string_value(rule_result, "instance_code")
@@ -188,15 +224,32 @@ def _build_audit_invoice_infos(
     instance_code: str,
     audit_info: Mapping[str, Any],
     invoice_pairs: list[tuple[dict[str, Any], dict[str, Any]]],
+    *,
+    is_amount_sufficient: bool | None = None,
 ) -> list[dict[str, Any]]:
     invoice_infos: list[dict[str, Any]] = []
-    for preparation, result in invoice_pairs:
+    for index, (preparation, result) in enumerate(invoice_pairs):
+        is_last = (index == len(invoice_pairs) - 1)
         prepared_input = _resolve_prepared_input(preparation, result)
         service_data = dict(prepared_input.get("serviceData") or {})
         current_invoice_info = _resolve_first_mapping(service_data.get("currentInvoiceInfo"))
         current_audit_invoice_file = _resolve_current_audit_invoice_file(preparation, prepared_input)
         decision_output = dict(result.get("decisionOutput") or {})
-        primary_rule_result = _select_primary_rule_result(decision_output)
+
+        if is_last and is_amount_sufficient is not None and "amount_result" in decision_output:
+            overridden_amount_result = dict(decision_output["amount_result"])
+            if is_amount_sufficient:
+                overridden_amount_result["distinguish_result"] = "PASS"
+                overridden_amount_result["distinguishResult"] = "PASS"
+                overridden_amount_result["message"] = "发票合计金额充足"
+            else:
+                overridden_amount_result["distinguish_result"] = "REJECT"
+                overridden_amount_result["distinguishResult"] = "REJECT"
+                overridden_amount_result["message"] = "发票合计金额不足"
+            decision_output = {**decision_output, "amount_result": overridden_amount_result}
+
+        ignore_codes = [] if is_last else ["E31"]
+        primary_rule_result = _select_primary_rule_result(decision_output, ignore_reason_codes=ignore_codes)
         invoice_infos.append(
             {
                 "aiiid": current_invoice_info.get("aiiid"),
@@ -247,6 +300,7 @@ def _build_audit_invoice_infos(
 def _build_audit_invoice_info_contents(
     instance_code: str,
     invoice_pairs: list[tuple[dict[str, Any], dict[str, Any]]],
+    compliance_rule: ComplianceRule = _default_compliance,
 ) -> list[dict[str, Any]]:
     contents: list[dict[str, Any]] = []
     for preparation, result in invoice_pairs:
@@ -272,13 +326,7 @@ def _build_audit_invoice_info_contents(
                     "taxAmount": item.get("taxAmount"),
                     "createTime": _resolve_ocr_envelope(prepared_input).get("status", {}).get("finishedAt"),
                     "atcrId": current_invoice_info.get("atcrid"),
-                    "compliance": (
-                        not goods_name
-                        or (
-                            "*电信服务*违约金" not in goods_name
-                            and "*电信服务*代收费" not in goods_name
-                        )
-                    ),
+                    "compliance": compliance_rule(goods_name, item),
                 }
             )
     return contents
@@ -585,8 +633,17 @@ def _normalize_rule_distinguish_result(value: Any) -> str | None:
     return normalized or None
 
 
-def _select_primary_rule_result(decision_output: Mapping[str, Any]) -> dict[str, Any] | None:
+def _select_primary_rule_result(
+    decision_output: Mapping[str, Any],
+    *,
+    ignore_reason_codes: list[str] | None = None,
+) -> dict[str, Any] | None:
     rule_results = _extract_rule_results(decision_output)
+    if ignore_reason_codes:
+        rule_results = [
+            r for r in rule_results
+            if (r.get("reason_code") or r.get("reasonCode")) not in ignore_reason_codes
+        ]
     for candidate_status in ("reject", "failed", "warning"):
         for rule_result in rule_results:
             if _normalize_rule_distinguish_result(rule_result.get("distinguish_result")) == candidate_status:
