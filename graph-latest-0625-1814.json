@@ -147,7 +147,7 @@
           {
             "id": "f86cf5db-4ebb-4ae1-9a21-2166e5b50098",
             "key": "isAmountEnough",
-            "value": "number(serviceData.auditInfo.applyAmount ?? 0) >= number(invoiceAmount ?? 0)"
+            "value": "number(serviceData.auditInfo.applyAmount ?? 0) <= number(invoiceAmount ?? 0)"
           },
           {
             "id": "7bc39b0a-e5ae-4cc2-a822-af12ad4d9c3c",
@@ -395,7 +395,7 @@
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E31\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
             "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查使用发票合计金额是否充足\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"verification-form\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
@@ -409,7 +409,7 @@
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E31\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
             "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查使用发票合计金额是否充足\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"verification-form\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
@@ -792,10 +792,10 @@
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
-            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E33\"",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E32\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
             "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查票据账单年份是否与报销年份一致\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"verification-form\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
@@ -806,10 +806,10 @@
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
-            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E33\"",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E32\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
             "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查票据账单年份是否与报销年份一致\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"verification-form\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
@@ -1050,7 +1050,7 @@
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E19\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
             "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票开具方是否属于运营商\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"expense-item\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
@@ -1064,7 +1064,7 @@
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E19\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
             "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票开具方是否属于运营商\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"expense-item\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
@@ -1192,7 +1192,7 @@
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"W32\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
             "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查员工使用发票的手机号与飞书备案的手机号相同\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"staff-behavior\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
@@ -1206,7 +1206,7 @@
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"W32\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
             "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查员工使用发票的手机号与飞书备案的手机号相同\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"staff-behavior\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
@@ -1294,7 +1294,7 @@
     {
       "type": "functionNode",
       "content": {
-        "source": "export const handler = async (input) => {\r\n  const context = input.context || {};\r\n  const remark = input.remark ?? context.remark ?? '';\r\n\r\n  const optimizedPrompt = `# Role\r\n你是一名严谨的电信发票备注信息抽取助手。\r\n\r\n# Task\r\n请只根据【remark】字段内容，提取以下两项信息：\r\n1. remarkPhone: 用户实际使用的中国大陆 11 位手机号。\r\n2. billingPeriodStart: 账期、计费周期、服务期间或使用期间的开始月份，标准化为 YYYYMM 数字。\r\n\r\n# Rules\r\n- 优先提取“业务号码”“手机号码”“用户号码”“联系电话”等标签对应的 11 位手机号。\r\n- 排除 10000、10010、10086 等客服短号，排除座机、发票代码、税号、流水号等非手机号数字。\r\n- 如果手机号中有空格、短横线或其他分隔符，请去掉分隔符后返回连续 11 位数字。\r\n- 账期开始时间只取开始月份，不取结束月份。\r\n- 如果 remark 出现完整日期范围，例如 2025/12/01-2026/03/31、2025年12月01日 至 2026年03月31日，也要识别开始月份并返回 202512。\r\n- 如果 remark 写成“账期:202512-202603”“计费周期:2025.12-2026.03”“服务期间2025年12月至2026年3月”，都返回 billingPeriodStart 为 202512。\r\n- 若无法确定手机号，remarkPhone 返回空字符串。\r\n- 若无法确定账期开始月份，billingPeriodStart 返回 null。\r\n\r\n# Examples\r\n- remark: 业务号码:15652828661;账期:202512-202603\r\n  output: {\"remarkPhone\":\"15652828661\",\"billingPeriodStart\":202512}\r\n- remark: 用户号码 156 5282 8661，计费周期 2025年12月01日至2026年03月31日\r\n  output: {\"remarkPhone\":\"15652828661\",\"billingPeriodStart\":202512}\r\n\r\n# Output\r\n你必须只返回 JSON，不要输出任何解释、前后缀或 Markdown。\r\n\r\nJSON 结构严格如下：\r\n{\r\n  \"remarkPhone\": \"11位手机号，未识别时为空字符串\",\r\n  \"billingPeriodStart\": 202512 或 null\r\n}\r\n\r\n# Input Remark\r\n${remark}`;\r\n\r\n  return {\r\n    prompt: optimizedPrompt\r\n  };\r\n};\r\n"
+        "source": "export const handler = async (input) => {\n  const context = input.context || {};\n  const remark = input.remark ?? context.remark ?? '';\n  \n  // 从 submitTime 提取提交年份，计算前一年\n  const submitTime = context.serviceData?.auditInfo?.submitTime ?? '';\n  let submitYear = null;\n  if (submitTime) {\n    const match = String(submitTime).match(/(\\d{4})/);\n    if (match) {\n      submitYear = parseInt(match[1], 10) - 1;\n    }\n  }\n  const submitYearStr = submitYear !== null ? String(submitYear) : '未知';\n  const thresholdMonth = submitYear !== null ? submitYear * 100 + 12 : null;\n\n  const optimizedPrompt = `# Role\n你是一名严谨的电信发票备注信息审核助手。\n\n# Task\n请根据【remark】字段内容，完成以下任务：\n1. remarkPhone: 提取用户实际使用的中国大陆 11 位手机号。\n2. isInvoiceYearMatched: 判断账期中是否包含提交年份前一年的12月及之后的账期。\n3. matchReason: 给出判断原因。\n\n# 关键变量（已注入）\n- submitYear（提交年份的前一年）: ${submitYearStr}\n- 账期匹配阈值（前一年12月）: ${thresholdMonth !== null ? thresholdMonth : '未知'}\n  - 例如 submitYear=2025，则阈值=202512，需要检查是否有 >= 202512 的账期\n  - 例如 submitYear=2024，则阈值=202412，需要检查是否有 >= 202412 的账期\n\n# Rules\n- 优先提取\"业务号码\"\"手机号码\"\"用户号码\"\"联系电话\"等标签对应的 11 位手机号。\n- 排除 10000、10010、10086 等客服短号，排除座机、发票代码、税号、流水号等非手机号数字。\n- 如果手机号中有空格、短横线或其他分隔符，请去掉分隔符后返回连续 11 位数字。\n- 若无法确定手机号，remarkPhone 返回空字符串。\n- isInvoiceYearMatched 判断规则：\n  - 提取 remark 中所有账期月份（YYYYMM 格式），检查是否有任何一个月份 >= 阈值月份（${thresholdMonth !== null ? thresholdMonth : '未知'}）\n  - 如果有，返回 true；否则返回 false\n  - 如果无法确定 submitYear 或无法解析账期，返回 false\n- matchReason 必须清晰说明判断依据，例如：\n  - \"账期包含 202512（>= 阈值 202512），匹配成功\"\n  - \"所有账期均 < 阈值 202512，不匹配\"\n  - \"无法识别账期信息，默认不匹配\"\n\n# Examples\n- remark: 业务号码:15652828661;账期:202512-202603\n  submitYear=2025, threshold=202512\n  output: {\"remarkPhone\":\"15652828661\",\"isInvoiceYearMatched\":true,\"matchReason\":\"账期包含 202512（>= 阈值 202512），匹配成功\"}\n- remark: 用户号码 156 5282 8661，计费周期 2025年12月01日至2026年03月31日\n  submitYear=2025, threshold=202512\n  output: {\"remarkPhone\":\"15652828661\",\"isInvoiceYearMatched\":true,\"matchReason\":\"账期包含 202512（>= 阈值 202512），匹配成功\"}\n- remark: 账期:202504,202505,202506\n  submitYear=2025, threshold=202512\n  output: {\"remarkPhone\":\"\",\"isInvoiceYearMatched\":false,\"matchReason\":\"所有账期 202504,202505,202506 均 < 阈值 202512，不匹配\"}\n- remark: 账期:202511-202512\n  submitYear=2025, threshold=202512\n  output: {\"remarkPhone\":\"\",\"isInvoiceYearMatched\":true,\"matchReason\":\"账期包含 202512（>= 阈值 202512），匹配成功\"}\n\n# Output\n你必须只返回 JSON，不要输出任何解释、前后缀或 Markdown。\n\nJSON 结构严格如下：\n{\n  \"remarkPhone\": \"11位手机号，未识别时为空字符串\",\n  \"isInvoiceYearMatched\": true 或 false,\n  \"matchReason\": \"判断原因的详细说明\"\n}\n\n# Input Remark\n${remark}`;\n\n  return {\n    prompt: optimizedPrompt,\n    submitYear: submitYear,\n    thresholdMonth: thresholdMonth\n  };\n};"
       },
       "id": "6acb7b84-51a3-4d7d-9556-960d459d518d",
       "name": "手机号账期抽取prompt",
@@ -1320,16 +1320,6 @@
       "content": {
         "expressions": [
           {
-            "id": "d24d54ce-07ca-4512-9e88-405a8cf1fd2a",
-            "key": "invoice_date",
-            "value": "llm_status == \"success\" ? number(llm_result.billingPeriodStart ?? 0) : 0"
-          },
-          {
-            "id": "1c4fbcf9-495b-491e-a022-e865c7ee4a1c",
-            "key": "submitYear",
-            "value": "number(serviceData.auditInfo.submitTimeStandard ?? 0) - 100"
-          },
-          {
             "id": "df856c4d-6df3-4401-9bb3-ab53d3f85744",
             "key": "remarkPhone",
             "value": "llm_status == \"success\" ? (llm_result.remarkPhone ?? \"\") : \"\""
@@ -1337,12 +1327,17 @@
           {
             "id": "a0b1bb1e-67e3-4458-a80b-b264500bdbf4",
             "key": "isInvoiceYearMatched",
-            "value": "$.submitYear <= $.invoice_date"
+            "value": "llm_status == \"success\" ? (llm_result.isInvoiceYearMatched ?? false) : false"
           },
           {
             "id": "32dbb6be-b04b-49dd-9247-304869d26f83",
             "key": "isSamePhone",
             "value": "$.remarkPhone == serviceData.auditInfo.verifiUserPhone"
+          },
+          {
+            "id": "88a57be4-bd55-4efc-a5b6-2593eebfae84",
+            "key": "matchReason",
+            "value": "llm_status == \"success\" ? (llm_result.matchReason ?? \"\") : \"LLM调用失败\""
           }
         ],
         "passThrough": true,
@@ -1360,7 +1355,7 @@
     {
       "type": "functionNode",
       "content": {
-        "source": "export const handler = async (input) => {\r\n  // 1. 深度兼容获取拼接好的发票商品内容字符串（兼容顶级和 context 结构）\r\n  const context = input.context || {};\r\n  const contents = input.contents ?? context.contents ?? '无';\r\n\r\n  // 2. 结构化、极度严谨的专家级提示词组装\r\n  const optimizedPrompt = `# Role\r\n你是一位极其严谨的企业财税合规审计专家，负责审查发票商品内容（发票内容）中是否包含公司明令禁止报销的“预付、充值、储值类卡券”项目。\r\n\r\n# 核心审查规则\r\n请仔细阅读给出的【发票内容】。如果内容中包含、涉及或暗示了“预付卡销售”、“话费充值”、“卡券购买”、“预存、储值”等资金前置占用的非即期消费行为，则判定为【不合规】；如果是正常的单次通信服务费、宽带费或实物消费，则判定为【合规】。\r\n\r\n# 核心判据清单\r\n- 【不合规（Passed = false）的特征】词：预付卡、单用途卡、充值、充值卡、预存、储值、面值、卡券。\r\n- 【合规（Passed = true）的特征】词：通信服务费、信息服务费、话费、宽带费、月租费、套餐费。\r\n\r\n# 示例参考 (Few-Shot)\r\n- 输入：*电信服务*通信服务费 ➡️ 返回：{\"passed\": true}\r\n- 输入：*电信服务*话费充值 ➡️ 返回：{\"passed\": false}\r\n- 输入：*现代服务*预付卡销售 ➡️ 返回：{\"passed\": false}\r\n- 输入：*电信服务*移动话费、*电信服务*违约金 ➡️ 返回：{\"passed\": true}\r\n\r\n# 极其严格的输出格式要求\r\n你必须【仅仅且直接】返回一个标准的 JSON 对象，严禁包含任何前言、后记、Markdown 标记（如 json 块标签）或多余的文字解释。\r\n\r\nJSON 结构必须严格如下：\r\n{\r\n  \"passed\": 判定结果（布尔类型 true 或 false，不要带引号）\r\n}\r\n\r\n# 待审查的真实数据\r\n发票内容是：${contents}`;\r\n\r\n  // 3. 返回高准确率的最终大模型提示词\r\n  return {\r\n    prompt: optimizedPrompt\r\n  };\r\n};\r\n"
+        "source": "export const handler = async (input) => {\r\n  // 1. 深度兼容获取拼接好的发票商品内容字符串（兼容顶级和 context 结构）\r\n  const context = input.context || {};\r\n  const contents = input.contents ?? context.contents ?? '无';\r\n\r\n  // 2. 结构化、极度严谨的专家级提示词组装\r\n  const optimizedPrompt = `# Role\r\n你是一位极其严谨的企业财税合规审计专家，负责审查发票商品内容（发票内容）中是否包含公司明令禁止报销的“预付、充值、储值类卡券”项目。\r\n\r\n# 核心审查规则\r\n请仔细阅读给出的【发票内容】。如果内容中包含、涉及或暗示了“预付卡销售”、“话费充值”、“卡券购买”、“预存、储值”等资金前置占用的非即期消费行为，则判定为【不合规】；如果是正常的单次通信服务费、宽带费或实物消费，则判定为【合规】。\r\n\r\n# 核心判据清单\r\n- 【不合规（Passed = false）的特征】词：预付卡、单用途卡、充值、充值卡、预存、储值、面值、卡券。\r\n- 【合规（Passed = true）的特征】词：通信服务费、信息服务费、话费、宽带费、月租费、套餐费。\r\n\r\n# 示例参考 (Few-Shot)\r\n- 输入：*电信服务*通信服务费 ➡️ 返回：{\"passed\": true}\r\n- 输入：*电信服务*话费充值 ➡️ 返回：{\"passed\": false}\r\n- 输入：*现代服务*预付卡销售 ➡️ 返回：{\"passed\": false}\r\n- 输入：*电信服务*违约金 ➡️ 返回：{\"passed\": false}\r\n\r\n# 极其严格的输出格式要求\r\n你必须【仅仅且直接】返回一个标准的 JSON 对象，严禁包含任何前言、后记、Markdown 标记（如 json 块标签）或多余的文字解释。\r\n\r\nJSON 结构必须严格如下：\r\n{\r\n  \"passed\": 判定结果（布尔类型 true 或 false，不要带引号）\r\n}\r\n\r\n# 待审查的真实数据\r\n发票内容是：${contents}`;\r\n\r\n  // 3. 返回高准确率的最终大模型提示词\r\n  return {\r\n    prompt: optimizedPrompt\r\n  };\r\n};\r\n"
       },
       "id": "33a6a837-0964-4c10-b451-e277138820aa",
       "name": "充值卡检查prompt",
@@ -1384,7 +1379,7 @@
     {
       "type": "functionNode",
       "content": {
-        "source": "import http from 'http';\r\n\r\nconst LOCAL_LLM_URL = 'http://127.0.0.1:8091/api/v1/node-gateway/llm/evaluate';\r\n\r\nexport const handler = async (input) => {\r\n  try {\r\n    const context = input && input.context ? input.context : {};\r\n    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\r\n\r\n    if (!prompt) {\r\n      throw new Error('missing prompt from previous component output');\r\n    }\r\n\r\n    const payload = {\r\n      prompt\r\n    };\r\n\r\n    if (input.systemPrompt || context.systemPrompt) {\r\n      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\r\n    }\r\n\r\n    if (input.model || context.llmModel) {\r\n      payload.model = input.model || context.llmModel;\r\n    }\r\n\r\n    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\r\n      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\r\n    }\r\n\r\n    const response = await http.post(LOCAL_LLM_URL, payload);\r\n\r\n    if (!response || response.status < 200 || response.status >= 300) {\r\n      throw new Error('local llm service failed at ' + LOCAL_LLM_URL + ': ' + (response && response.status ? response.status : 'unknown'));\r\n    }\r\n\r\n    const result = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});\r\n\r\n    return {\r\n      llm_status: result.llmStatus || 'error',\r\n      llm_result: result.llmResult || null,\r\n      raw_content: result.rawContent || null,\r\n      error_message: result.errorMessage || null\r\n    };\r\n  } catch (error) {\r\n    return {\r\n      llm_status: 'error',\r\n      error_message: error && error.message ? error.message : String(error)\r\n    };\r\n  }\r\n};"
+        "source": "import http from 'http';\r\n\r\nconst LOCAL_LLM_URL = 'http://127.0.0.1:8091/api/v1/node-gateway/llm/evaluate';\r\n\r\nexport const handler = async (input) => {\r\n  try {\r\n    const context = input && input.context ? input.context : {};\r\n    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\r\n\r\n    if (!prompt) {\r\n      throw new Error('missing prompt from previous component output');\r\n    }\r\n\r\n    const payload = {\r\n      prompt\r\n    };\r\n\r\n    if (input.systemPrompt || context.systemPrompt) {\r\n      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\r\n    }\r\n\r\n    if (input.model || context.llmModel) {\r\n      payload.model = input.model || context.llmModel;\r\n    }\r\n\r\n    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\r\n      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\r\n    }\r\n\r\n    const response = await http.post(LOCAL_LLM_URL, payload);\r\n\r\n    if (!response || response.status < 200 || response.status >= 300) {\r\n      throw new Error('local llm service failed at ' + LOCAL_LLM_URL + ': ' + (response && response.status ? response.status : 'unknown'));\r\n    }\r\n\r\n    const result = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});\r\n\r\n    return {\r\n      llm_status: result.llmStatus || 'error',\r\n      llm_result: result.llmResult || null,\r\n      raw_content: result.rawContent || null,\r\n      error_message: result.errorMessage || null\r\n    };\r\n  } catch (error) {\r\n    return {\r\n      llm_status: 'error',\r\n      llm_result: null,\r\n      error_message: error && error.message ? error.message : String(error)\r\n    };\r\n  }\r\n};"
       },
       "id": "109af3d5-6dec-4cd0-a09e-de43b026c491",
       "name": "调用llm",
@@ -1396,7 +1391,7 @@
     {
       "type": "functionNode",
       "content": {
-        "source": "import http from 'http';\r\n\r\nconst LOCAL_LLM_URL = 'http://127.0.0.1:8091/api/v1/node-gateway/llm/evaluate';\r\n\r\nexport const handler = async (input) => {\r\n  try {\r\n    const context = input && input.context ? input.context : {};\r\n    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\r\n\r\n    if (!prompt) {\r\n      throw new Error('missing prompt from previous component output');\r\n    }\r\n\r\n    const payload = {\r\n      prompt\r\n    };\r\n\r\n    if (input.systemPrompt || context.systemPrompt) {\r\n      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\r\n    }\r\n\r\n    if (input.model || context.llmModel) {\r\n      payload.model = input.model || context.llmModel;\r\n    }\r\n\r\n    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\r\n      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\r\n    }\r\n\r\n    const response = await http.post(LOCAL_LLM_URL, payload);\r\n\r\n    if (!response || response.status < 200 || response.status >= 300) {\r\n      throw new Error('local llm service failed at ' + LOCAL_LLM_URL + ': ' + (response && response.status ? response.status : 'unknown'));\r\n    }\r\n\r\n    const result = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});\r\n\r\n    return {\r\n      llm_status: result.llmStatus || 'error',\r\n      llm_result: result.llmResult || null,\r\n      raw_content: result.rawContent || null,\r\n      error_message: result.errorMessage || null\r\n    };\r\n  } catch (error) {\r\n    return {\r\n      llm_status: 'error',\r\n      error_message: error && error.message ? error.message : String(error)\r\n    };\r\n  }\r\n};"
+        "source": "import http from 'http';\r\n\r\nconst LOCAL_LLM_URL = 'http://127.0.0.1:8091/api/v1/node-gateway/llm/evaluate';\r\n\r\nexport const handler = async (input) => {\r\n  try {\r\n    const context = input && input.context ? input.context : {};\r\n    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\r\n\r\n    if (!prompt) {\r\n      throw new Error('missing prompt from previous component output');\r\n    }\r\n\r\n    const payload = {\r\n      prompt\r\n    };\r\n\r\n    if (input.systemPrompt || context.systemPrompt) {\r\n      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\r\n    }\r\n\r\n    if (input.model || context.llmModel) {\r\n      payload.model = input.model || context.llmModel;\r\n    }\r\n\r\n    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\r\n      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\r\n    }\r\n\r\n    const response = await http.post(LOCAL_LLM_URL, payload);\r\n\r\n    if (!response || response.status < 200 || response.status >= 300) {\r\n      throw new Error('local llm service failed at ' + LOCAL_LLM_URL + ': ' + (response && response.status ? response.status : 'unknown'));\r\n    }\r\n\r\n    const result = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});\r\n\r\n    return {\r\n      llm_status: result.llmStatus || 'error',\r\n      llm_result: result.llmResult || null,\r\n      raw_content: result.rawContent || null,\r\n      error_message: result.errorMessage || null\r\n    };\r\n  } catch (error) {\r\n    return {\r\n      llm_status: 'error',\r\n      llm_result: null,\r\n      error_message: error && error.message ? error.message : String(error)\r\n    };\r\n  }\r\n};"
       },
       "id": "514e15db-3657-4fa3-9228-88b750ea08f8",
       "name": "调用llm",
@@ -1412,12 +1407,12 @@
           {
             "id": "04ae98ab-aee6-4a3f-8452-a81320a3429c",
             "key": "rechargeCardCheck",
-            "value": "llm_result.passed"
+            "value": "llm_status == \"success\" ? (llm_result.passed == true ? \"true\" : \"false\") : \"error\""
           },
           {
             "id": "50871993-19cd-4009-ae64-68ad282cb902",
             "key": "isValidInvoiceAmount",
-            "value": "(llm_result.finalAmount) <= (serviceData.auditInfo.applyAmount)"
+            "value": "llm_status == \"success\" ? ((llm_result.finalAmount <= serviceData.auditInfo.applyAmount) ? \"true\" : \"false\") : \"error\""
           }
         ],
         "passThrough": true,
@@ -1438,9 +1433,23 @@
         "hitPolicy": "first",
         "rules": [
           {
+            "_id": "325bdf4c-e01a-4045-88b7-85343f845549",
+            "_description": "LLM调用失败",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"error\"",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E17\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"FAILED\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票内容是否含充值卡信息等\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"LLM调用失败，无法判断充值卡检查结果\"",
+            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"LLM服务调用失败，充值卡检查无法执行\""
+          },
+          {
             "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
             "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"true\"",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E17\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
@@ -1454,7 +1463,7 @@
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
             "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"false\"",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E17\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
@@ -1538,30 +1547,47 @@
         "hitPolicy": "first",
         "rules": [
           {
+            "_id": "c05ec8d9-671a-4b8c-ad94-235c059c4fa0",
+            "_description": "LLM调用失败",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"error\"",
+            "344a0dff-93a3-4ed3-9e24-0cf2cd544911": "null",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E34\"",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票内容是否属于通讯费报销项目，是否存在异常消费\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"FAILED\"",
+            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"expense-item\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"LLM调用失败，无法判断发票内容金额检查结果\"",
+            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"LLM服务调用失败，发票内容金额检查无法执行\""
+          },
+          {
             "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
             "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
-            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"true\"",
+            "344a0dff-93a3-4ed3-9e24-0cf2cd544911": "llm_result.finalAmount",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E34\"",
-            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票内容是否属于通讯费报销项目，是否存在异常消费\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
-            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"expense-item\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票内容属于通讯费报销项目，且不存在异常消费\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
             "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
-            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"false\"",
+            "344a0dff-93a3-4ed3-9e24-0cf2cd544911": "llm_result.finalAmount",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E34\"",
-            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票内容是否属于通讯费报销项目，是否存在异常消费\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
-            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"expense-item\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票内容不属于通讯费报销项目，或存在异常消费\""
           }
@@ -1575,9 +1601,9 @@
         ],
         "outputs": [
           {
-            "id": "f88cbb46-eb13-4ceb-9c68-0983f58e985f",
-            "name": "核销单号",
-            "field": "instance_code"
+            "id": "344a0dff-93a3-4ed3-9e24-0cf2cd544911",
+            "name": "发票可用额度",
+            "field": "invoice_finalAmount"
           },
           {
             "id": "48a29115-f542-44d3-8c02-3ff71e19ee38",
@@ -1585,14 +1611,24 @@
             "field": "reason_code"
           },
           {
-            "id": "f35ede49-0eae-4dda-b39e-11a11383697a",
-            "name": "识别结果（warning  reject   pass）",
-            "field": "distinguish_result"
+            "id": "f88cbb46-eb13-4ceb-9c68-0983f58e985f",
+            "name": "核销单号",
+            "field": "instance_code"
           },
           {
             "id": "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e",
             "name": "稽核内容",
             "field": "audit_content"
+          },
+          {
+            "id": "f35ede49-0eae-4dda-b39e-11a11383697a",
+            "name": "识别结果（warning  reject   pass）",
+            "field": "distinguish_result"
+          },
+          {
+            "id": "f47902a7-1dc2-41c9-8375-fa15174317bd",
+            "name": "发票文件主键",
+            "field": "invoice_file_id"
           },
           {
             "id": "14801e5c-ebef-43a4-a56a-23cb5adf4a83",
@@ -1603,11 +1639,6 @@
             "id": "d9a8e0e2-8a13-4a39-b50e-c339519e811e",
             "name": "识别内容",
             "field": "distinguish_content"
-          },
-          {
-            "id": "f47902a7-1dc2-41c9-8375-fa15174317bd",
-            "name": "发票文件主键",
-            "field": "invoice_file_id"
           },
           {
             "id": "629d6a9c-0e78-40c1-baef-0abea4b1e67f",

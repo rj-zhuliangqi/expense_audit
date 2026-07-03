@@ -58,6 +58,21 @@ cd /mnt/d/gorules/expense_audit
 .venv/bin/python -m uvicorn node_gateway.api:create_app --factory --host 127.0.0.1 --port 8091
 ```
 
+### 4. 启动 rabbitmq worker（主链路）
+
+```bash
+cd /mnt/d/gorules/expense_audit
+set -a && source .env && set +a
+GRAPH_RUNTIME_URL=http://127.0.0.1:8090 \
+.venv/bin/python rabbitmq_worker.py \
+  --amqp-url "$RABBITMQ_URL" \
+  --audit-service-url https://service-uate-gw.ruijie.com.cn \
+  --graph-path graph-latest-0625-1814.json \
+  --queues audit \
+  --prepared-output-dir output/worker-debug/prepared \
+  --writeback-output-dir output/worker-debug/writeback
+```
+
 当前图里的 node 调用已经统一走：`http://127.0.0.1:8091/api/v1/node-gateway/llm/evaluate`
 
 ## 客户端 / worker 使用方式

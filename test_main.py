@@ -14,9 +14,11 @@ from fastapi.testclient import TestClient
 
 import main
 import mock_server
+from expense_audit_orchestrator import bootstrap as orchestrator_bootstrap
 from expense_audit_orchestrator.application import ReceiptAuditService
 from expense_audit_orchestrator.bootstrap import create_receipt_audit_service as create_orchestrator_service
 from expense_audit_orchestrator.core import ReceiptDataPreparer as OrchestratorReceiptDataPreparer
+from expense_audit_orchestrator.profiles import ExpenseProfile
 from graph_runtime.core import DEFAULT_GRAPH_PATH, load_decision, load_decision_from_content
 from graph_runtime.api import create_app as create_graph_runtime_app
 from graph_runtime.application import normalize_decision_output
@@ -247,7 +249,7 @@ class ReceiptPipelineTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
 
     def test_graph_runtime_writeoff_expression_tolerates_missing_or_null_usage_history(self) -> None:
-        graph_content = json.loads(Path("graph-latest-0616-1505.json").read_text(encoding="utf-8"))
+        graph_content = json.loads(Path("graph-latest-0623-1202.json").read_text(encoding="utf-8"))
         expression_value = None
         for node in graph_content.get("nodes", []):
             if not isinstance(node, dict):
@@ -352,6 +354,40 @@ class ReceiptPipelineTests(unittest.TestCase):
         self.assertIsInstance(service, ReceiptAuditService)
         self.assertIs(service._receipt_result_sink, capture_receipt_result)
         self.assertEqual(published_receipts, [])
+
+    @patch("expense_audit_orchestrator.bootstrap.build_receipt_writeback_sink")
+    @patch("expense_audit_orchestrator.bootstrap.build_receipt_writeback_file_sink")
+    def test_writeback_output_dir_does_not_disable_real_writeback_sink(
+        self,
+        mock_build_file_sink,
+        mock_build_writeback_sink,
+    ) -> None:
+        invoked_sinks: list[str] = []
+
+        def file_sink(_receipt_result: dict[str, Any]) -> None:
+            invoked_sinks.append("file")
+
+        def writeback_sink(_receipt_result: dict[str, Any]) -> None:
+            invoked_sinks.append("writeback")
+
+        mock_build_file_sink.return_value = file_sink
+        mock_build_writeback_sink.return_value = writeback_sink
+
+        sink = orchestrator_bootstrap._resolve_receipt_result_sink(
+            receipt_result_sink=None,
+            enable_writeback=True,
+            writeback_client=None,
+            writeback_output_dir="output/worker-debug/writeback",
+            audit_service_url="https://service.example",
+            profile=ExpenseProfile(name="test"),
+        )
+
+        self.assertIsNotNone(sink)
+        sink({"receiptCode": "REC-001"})
+
+        mock_build_file_sink.assert_called_once()
+        mock_build_writeback_sink.assert_called_once()
+        self.assertEqual(invoked_sinks, ["file", "writeback"])
 
     @patch("expense_audit_orchestrator.bootstrap.fetch_audit_invoice_file_info")
     @patch("expense_audit_orchestrator.bootstrap.fetch_audit_invoice_files")
@@ -641,7 +677,7 @@ class ReceiptPipelineTests(unittest.TestCase):
                     "fid": fid,
                 }
             ],
-            telecom_list_provider=lambda: [],
+            receipt_enrichers={"telecom_list": lambda rc, sd: []},
             field_mappings_provider=provide_field_mappings,
         )
 
@@ -716,7 +752,7 @@ class ReceiptPipelineTests(unittest.TestCase):
                     "fid": fid,
                 }
             ],
-            telecom_list_provider=lambda: [],
+            receipt_enrichers={"telecom_list": lambda rc, sd: []},
             field_mappings_provider=lambda belong_table: [],
         )
 
@@ -785,7 +821,7 @@ class ReceiptPipelineTests(unittest.TestCase):
                     "fid": fid,
                 }
             ],
-            telecom_list_provider=lambda: [],
+            receipt_enrichers={"telecom_list": lambda rc, sd: []},
             field_mappings_provider=lambda belong_table: [],
         )
 
@@ -877,7 +913,7 @@ class ReceiptPipelineTests(unittest.TestCase):
                     "fid": fid,
                 }
             ],
-            telecom_list_provider=lambda: [],
+            receipt_enrichers={"telecom_list": lambda rc, sd: []},
             field_mappings_provider=lambda belong_table: [],
         )
 
@@ -929,7 +965,7 @@ class ReceiptPipelineTests(unittest.TestCase):
                     "fid": fid,
                 }
             ],
-            telecom_list_provider=lambda: [],
+            receipt_enrichers={"telecom_list": lambda rc, sd: []},
             field_mappings_provider=lambda belong_table: [],
         )
 
@@ -1289,6 +1325,9 @@ class ReceiptPipelineTests(unittest.TestCase):
                 "orgName": "锐捷网络股份有限公司",
                 "invoiceNo": "26357000000141826844",
             },
+            receipt_enrichers={
+                "telecom_list": lambda receipt_code, service_data: [["电信", "深圳"]]
+            },
         )
 
         prepared_input = preparer.prepare("REC-001")
@@ -1423,7 +1462,7 @@ class ReceiptPipelineTests(unittest.TestCase):
                     "fid": fid,
                 }
             ],
-            telecom_list_provider=lambda: [["电信", "深圳"]],
+            receipt_enrichers={"telecom_list": lambda rc, sd: [["电信", "深圳"]]},
             field_mappings_provider=lambda belong_table: [],
         )
 
@@ -1506,7 +1545,7 @@ class ReceiptPipelineTests(unittest.TestCase):
                     "fid": fid,
                 }
             ],
-            telecom_list_provider=lambda: [["联通", "北京"]],
+            receipt_enrichers={"telecom_list": lambda rc, sd: [["联通", "北京"]]},
             field_mappings_provider=lambda belong_table: [],
         )
 
@@ -1570,7 +1609,7 @@ class ReceiptPipelineTests(unittest.TestCase):
                     "fid": fid,
                 }
             ],
-            telecom_list_provider=lambda: [],
+            receipt_enrichers={"telecom_list": lambda rc, sd: []},
             field_mappings_provider=lambda belong_table: [],
         )
 

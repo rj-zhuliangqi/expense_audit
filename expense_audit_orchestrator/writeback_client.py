@@ -1,5 +1,5 @@
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
@@ -11,7 +11,12 @@ from .audit_client import (
     _get_service_error_message,
     _is_success_payload,
 )
-from .writeback import assemble_result_audit_info
+from .writeback import (
+    AuditTravelsBuilder,
+    ComplianceRule,
+    FormBuilder,
+    assemble_result_audit_info,
+)
 
 
 AUDIT_INFO_SAVE_PATH = "/api/audit-service/audit/audit-info-save"
@@ -24,12 +29,14 @@ class AuditInfoWritebackClient:
         *,
         service_url: str = DEFAULT_AUDIT_SERVICE_URL,
         timeout: float = DEFAULT_WRITEBACK_TIMEOUT,
+        save_path: str = AUDIT_INFO_SAVE_PATH,
     ) -> None:
         self._service_url = service_url.rstrip("/")
         self._timeout = timeout
+        self._save_path = save_path if save_path.startswith("/") else f"/{save_path}"
 
     def save_result_audit_info(self, payload: Mapping[str, Any]) -> dict[str, Any]:
-        endpoint = f"{self._service_url}{AUDIT_INFO_SAVE_PATH}"
+        endpoint = f"{self._service_url}{self._save_path}"
         print(f"[核销单服务] 回写稽核结果: {endpoint}")
 
         request = Request(
@@ -51,29 +58,67 @@ class AuditInfoWritebackClient:
         return response_payload
 
 
-def build_receipt_writeback_sink(client: AuditInfoWritebackClient) -> ReceiptResultSink:
+WritebackStrategy = Callable[..., dict[str, Any]]
+
+
+def build_writeback_payload(
+    receipt_result: Mapping[str, Any],
+    *,
+    compliance_rule: ComplianceRule | None = None,
+    audit_travels_builder: AuditTravelsBuilder | None = None,
+    form_invoice_tax_views_builder: FormBuilder | None = None,
+) -> dict[str, Any]:
+    prepared_receipt = _build_prepared_receipt_from_result(receipt_result)
+    kwargs: dict[str, Any] = {}
+    if compliance_rule is not None:
+        kwargs["compliance_rule"] = compliance_rule
+    if audit_travels_builder is not None:
+        kwargs["audit_travels_builder"] = audit_travels_builder
+    if form_invoice_tax_views_builder is not None:
+        kwargs["form_invoice_tax_views_builder"] = form_invoice_tax_views_builder
+    return assemble_result_audit_info(prepared_receipt, receipt_result, **kwargs)
+
+
+def build_receipt_writeback_sink(
+    client: AuditInfoWritebackClient,
+    *,
+    compliance_rule: ComplianceRule | None = None,
+    audit_travels_builder: AuditTravelsBuilder | None = None,
+    form_invoice_tax_views_builder: FormBuilder | None = None,
+) -> ReceiptResultSink:
     def sink(receipt_result: dict[str, Any]) -> None:
-        payload = _build_writeback_payload_from_result(receipt_result)
+        payload = build_writeback_payload(
+            receipt_result,
+            compliance_rule=compliance_rule,
+            audit_travels_builder=audit_travels_builder,
+            form_invoice_tax_views_builder=form_invoice_tax_views_builder,
+        )
         client.save_result_audit_info(payload)
 
     return sink
 
 
-def build_receipt_writeback_file_sink(output_dir: Path | str) -> ReceiptResultSink:
+def build_receipt_writeback_file_sink(
+    output_dir: Path | str,
+    *,
+    compliance_rule: ComplianceRule | None = None,
+    audit_travels_builder: AuditTravelsBuilder | None = None,
+    form_invoice_tax_views_builder: FormBuilder | None = None,
+) -> ReceiptResultSink:
     resolved_output_dir = Path(output_dir)
 
     def sink(receipt_result: dict[str, Any]) -> None:
         receipt_code = str(receipt_result.get("receiptCode") or "unknown")
-        payload = _build_writeback_payload_from_result(receipt_result)
+        payload = build_writeback_payload(
+            receipt_result,
+            compliance_rule=compliance_rule,
+            audit_travels_builder=audit_travels_builder,
+            form_invoice_tax_views_builder=form_invoice_tax_views_builder,
+        )
         output_file = resolved_output_dir / f"{receipt_code}.writeback-payload.json"
         _export_json_payload(payload, output_file, "writeback payload")
 
     return sink
-
-
-def _build_writeback_payload_from_result(receipt_result: Mapping[str, Any]) -> dict[str, Any]:
-    prepared_receipt = _build_prepared_receipt_from_result(receipt_result)
-    return assemble_result_audit_info(prepared_receipt, receipt_result)
 
 
 def _build_prepared_receipt_from_result(receipt_result: Mapping[str, Any]) -> dict[str, Any]:
@@ -117,4 +162,5 @@ __all__ = [
     "AuditInfoWritebackClient",
     "build_receipt_writeback_file_sink",
     "build_receipt_writeback_sink",
+    "build_writeback_payload",
 ]

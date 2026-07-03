@@ -267,7 +267,7 @@ class ExecuteGraphCliTests(unittest.TestCase):
             exit_code = execute_graph.main_cli(
                 [
                     "--graph-path",
-                    "graph-latest-0616-1505.json",
+                    "graph-latest-0623-1202.json",
                     "--prepared-input-path",
                     str(input_path),
                 ]
@@ -275,7 +275,7 @@ class ExecuteGraphCliTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(fake_runtime_client.calls[0]["prepared_input"], prepared_input)
-        self.assertEqual(fake_runtime_client.calls[0]["graph_path"], "graph-latest-0616-1505.json")
+        self.assertEqual(fake_runtime_client.calls[0]["graph_path"], "graph-latest-0623-1202.json")
         mock_create_graph_runtime_client.assert_called_once_with(None)
         mock_create_service.assert_not_called()
         mock_ensure_mock_service.assert_not_called()

@@ -1,4 +1,3 @@
-import csv
 import inspect
 import json
 import time
@@ -14,7 +13,6 @@ from expense_audit_orchestrator import audit_client
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OCR_PATH = ROOT / "input.json"
-DEFAULT_OPERATOR_CITY_CSV_PATH = ROOT / "operator_city.csv"
 
 InvoiceFileProvider = Callable[[str], str]
 OCRProvider = Callable[..., dict[str, Any]]
@@ -26,8 +24,8 @@ InvoiceInfoProvider = Callable[[str, str, str | None], list[dict[str, Any]]]
 AuditInvoiceFilesProvider = Callable[[str, int], list[dict[str, Any]]]
 AuditInvoiceFileInfoProvider = Callable[[str], list[dict[str, Any]]]
 FieldMappingsProvider = Callable[[str], list[dict[str, Any]]]
-TelecomListProvider = Callable[[], list[list[str]]]
-DataEnricher = Callable[[str, str, dict[str, Any], dict[str, Any]], dict[str, Any]]
+ReceiptEnricher = Callable[[str, Mapping[str, Any]], Any]
+DataEnricher = Callable[[str, str, dict[str, Any], dict[str, Any]], Any]
 
 
 def get_invoice_file_from_server(receipt_code: str) -> str:
@@ -43,26 +41,6 @@ def call_ocr_service(file_path: str, ocr_sample_path: Path | str = DEFAULT_OCR_P
 
     with Path(ocr_sample_path).open("r", encoding="utf-8") as source:
         return json.load(source)
-
-
-def load_telecom_list(csv_path: Path | str = DEFAULT_OPERATOR_CITY_CSV_PATH) -> list[list[str]]:
-    telecom_list: list[list[str]] = []
-
-    with Path(csv_path).open("r", encoding="utf-8", newline="") as source:
-        reader = csv.DictReader(source)
-        if not reader.fieldnames:
-            raise ValueError("operator_city.csv does not contain headers")
-
-        operator_key = "运营商" if "运营商" in reader.fieldnames else reader.fieldnames[0]
-        city_key = "城市" if "城市" in reader.fieldnames else reader.fieldnames[1]
-
-        for row in reader:
-            operator = (row.get(operator_key) or "").strip()
-            city = (row.get(city_key) or "").strip()
-            if operator and city:
-                telecom_list.append([operator, city])
-
-    return telecom_list
 
 
 def _get_string_value(data: Mapping[str, Any], *keys: str) -> str | None:
@@ -329,7 +307,7 @@ class ReceiptDataPreparer:
     audit_invoice_files_provider: AuditInvoiceFilesProvider = audit_client.fetch_audit_invoice_files
     audit_invoice_file_info_provider: AuditInvoiceFileInfoProvider = audit_client.fetch_audit_invoice_file_info
     field_mappings_provider: FieldMappingsProvider = audit_client.fetch_field_mappings
-    telecom_list_provider: TelecomListProvider = load_telecom_list
+    receipt_enrichers: Mapping[str, ReceiptEnricher] = field(default_factory=dict)
     extra_enrichers: Mapping[str, DataEnricher] = field(default_factory=dict)
 
     def prepare_receipt_context(self, receipt_code: str) -> dict[str, Any]:
@@ -360,8 +338,9 @@ class ReceiptDataPreparer:
             "auditInvoiceFiles": audit_invoice_files,
             "auditInvoiceFileInfo": audit_invoice_file_info,
             "truthCheckFieldMappings": truthcheck_field_mappings,
-            "telecom_list": self.telecom_list_provider(),
         }
+        for enricher_name, enricher in self.receipt_enrichers.items():
+            service_data[enricher_name] = enricher(receipt_code, dict(service_data))
         invoice_files = _build_invoice_files(
             receipt_code,
             audit_invoice_files,

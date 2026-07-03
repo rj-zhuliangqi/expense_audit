@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from expense_audit_orchestrator.profiles.telecom.writeback import telecom_compliance_rule
 from expense_audit_orchestrator.writeback_client import (
     AuditInfoWritebackClient,
     build_receipt_writeback_file_sink,
@@ -55,7 +56,10 @@ class WritebackClientTests(unittest.TestCase):
                     },
                     "preparedInput": {
                         "invoiceNo": "INV-001",
-                        "items": [{"goodsName": "*电信服务*通信服务费"}],
+                        "items": [
+                            {"goodsName": "*电信服务*通信服务费"},
+                            {"goodsName": "*电信服务*违约金"},
+                        ],
                         "serviceData": {
                             "invoiceUsageHistory": [],
                             "truthCheckFieldMappings": {
@@ -113,7 +117,10 @@ class WritebackClientTests(unittest.TestCase):
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            sink = build_receipt_writeback_file_sink(temp_dir)
+            sink = build_receipt_writeback_file_sink(
+                temp_dir,
+                compliance_rule=telecom_compliance_rule,
+            )
 
             sink(receipt_result)
 
@@ -124,6 +131,10 @@ class WritebackClientTests(unittest.TestCase):
             self.assertEqual(payload["auditInvoiceFiles"][0]["type"], 1)
             self.assertTrue(payload["auditInvoiceInfoContents"][0]["aiicid"])
             self.assertEqual(payload["auditInvoiceInfos"][0]["atcrid"], "ATCRID-001")
+            self.assertEqual(
+                [c["compliance"] for c in payload["auditInvoiceInfoContents"]],
+                [True, False],
+            )
             self.assertEqual(len(payload["auditTruthCheckResultBills"]), 1)
             self.assertEqual(len(payload["auditTruthCheckResultItems"]), 1)
             self.assertEqual(len(payload["auditTruthCheckResultItemCols"]), 1)

@@ -7,7 +7,7 @@ import httpx
 
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_GRAPH_PATH = ROOT / "graph-latest-0616-1505.json"
+DEFAULT_GRAPH_PATH = ROOT / "graph-latest-0623-1202.json"
 DEFAULT_GRAPH_RUNTIME_URL = "http://127.0.0.1:8090"
 
 

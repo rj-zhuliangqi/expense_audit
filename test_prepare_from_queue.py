@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import prepare_from_queue
+from expense_audit_orchestrator.profiles.telecom.writeback import telecom_compliance_rule
 from expense_audit_orchestrator.writeback import assemble_result_audit_info
 
 
@@ -208,6 +209,10 @@ class PrepareFromQueueCliTests(unittest.TestCase):
                     },
                     "preparedInput": {
                         "invoiceNo": "INV-001",
+                        "items": [
+                            {"goodsName": "*电信服务*通信服务费"},
+                            {"goodsName": "*电信服务*违约金"},
+                        ],
                         "serviceData": {
                             "invoiceUsageHistory": [],
                             "truthCheckFieldMappings": {
@@ -301,8 +306,16 @@ class PrepareFromQueueCliTests(unittest.TestCase):
                 ]
             )
 
-            expected_payload = assemble_result_audit_info(prepared_receipt, processed_receipt)
+            expected_payload = assemble_result_audit_info(
+                prepared_receipt,
+                processed_receipt,
+                compliance_rule=telecom_compliance_rule,
+            )
             actual_payload = json.loads(output_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                [c["compliance"] for c in actual_payload["auditInvoiceInfoContents"]],
+                [True, False],
+            )
             self.assertTrue(actual_payload["auditTruthCheckLogs"][0]["atclid"])
             self.assertTrue(actual_payload["auditInvoiceFiles"][0]["aifid"])
             self.assertEqual(actual_payload["auditInvoiceInfos"][0]["atcrid"], "ATCRID-001")
@@ -318,9 +331,14 @@ class PrepareFromQueueCliTests(unittest.TestCase):
             expected_payload["auditTruthCheckLogs"][0]["atclid"] = "DYNAMIC"
             expected_payload["auditInvoiceFiles"][0]["aifid"] = "DYNAMIC"
             if actual_payload["auditInvoiceInfoContents"]:
-                self.assertTrue(actual_payload["auditInvoiceInfoContents"][0]["aiicid"])
-                actual_payload["auditInvoiceInfoContents"][0]["aiicid"] = "DYNAMIC"
-                expected_payload["auditInvoiceInfoContents"][0]["aiicid"] = "DYNAMIC"
+                for actual_content, expected_content in zip(
+                    actual_payload["auditInvoiceInfoContents"],
+                    expected_payload["auditInvoiceInfoContents"],
+                    strict=False,
+                ):
+                    self.assertTrue(actual_content["aiicid"])
+                    actual_content["aiicid"] = "DYNAMIC"
+                    expected_content["aiicid"] = "DYNAMIC"
             for actual_row, expected_row in zip(
                 actual_payload["auditTruthCheckResultBills"],
                 expected_payload["auditTruthCheckResultBills"],
