@@ -1,0 +1,22 @@
+[Unit]
+Description=Expense Audit - RabbitMQ Worker (主链路)
+After=network-online.target rabbitmq-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{DEPLOY_USER}}
+WorkingDirectory={{DEPLOY_DIR}}
+EnvironmentFile={{DEPLOY_DIR}}/.env
+# GRAPH_RUNTIME_URL 已在 .env；--audit-service-url 走 AUDIT_SERVICE_URL，由 .env 注入后命令行不再重复传
+# --queues 默认 audit,monthly,delay-process；如只跑主队列可改 --queues audit
+ExecStart={{DEPLOY_DIR}}/.venv/bin/python rabbitmq_worker.py \
+  --graph-runtime-url ${GRAPH_RUNTIME_URL} \
+  --graph-path {{DEPLOY_DIR}}/graph-latest-0625-1814.json \
+  --audit-service-url ${AUDIT_SERVICE_URL} \
+  --queues audit
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

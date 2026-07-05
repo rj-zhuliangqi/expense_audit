@@ -1,6 +1,8 @@
-fastapi
-httpx
-pika
-python-dotenv
-uvicorn
-zen-engine
+# 运行时依赖（版本已对齐本地 .venv 实测可用版本）
+# Python 要求 >= 3.12（见 deploy/README 说明）。已在 3.14.4 验证通过。
+fastapi==0.139.0
+httpx==0.28.1
+pika==1.4.1
+python-dotenv==1.2.2
+uvicorn==0.49.0
+zen-engine==0.53.0
