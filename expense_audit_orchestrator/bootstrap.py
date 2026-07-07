@@ -24,6 +24,7 @@ from expense_audit_orchestrator.runtime_client import (
 from .application import InvoiceResultSink, ReceiptAuditService, ReceiptResultSink
 from .core import ReceiptDataPreparer
 from .kingdee_ocr import create_kingdee_ocr_provider_from_env
+from .observability import build_invoice_result_log_sink, get_logger, resolve_log_dir
 from .writeback_client import (
     AUDIT_INFO_SAVE_PATH,
     AuditInfoWritebackClient,
@@ -65,6 +66,8 @@ def create_receipt_audit_service(
     writeback_client: AuditInfoWritebackClient | None = None,
     writeback_output_dir: Path | str | None = None,
     telecom_asset_dir: Path | str | None = None,
+    enable_invoice_logging: bool | None = None,
+    invoice_log_dir: Path | str | None = None,
 ) -> ReceiptAuditService:
     resolved_profile = _resolve_profile(profile, telecom_asset_dir=telecom_asset_dir)
     resolved_graph_path = None if graph_content is not None else (
@@ -97,14 +100,77 @@ def create_receipt_audit_service(
         audit_service_url=audit_service_url,
         profile=resolved_profile,
     )
+    resolved_invoice_result_sink = _resolve_invoice_result_sink(
+        invoice_result_sink=invoice_result_sink,
+        enable_invoice_logging=enable_invoice_logging,
+        invoice_log_dir=invoice_log_dir,
+    )
     return ReceiptAuditService(
         graph_runtime_client=runtime_client,
         data_preparer=data_preparer,
         graph_path=resolved_graph_path,
         graph_content=graph_content,
-        invoice_result_sink=invoice_result_sink,
+        invoice_result_sink=resolved_invoice_result_sink,
         receipt_result_sink=resolved_receipt_result_sink,
     )
+
+
+def _resolve_invoice_result_sink(
+    *,
+    invoice_result_sink: InvoiceResultSink | None,
+    enable_invoice_logging: bool | None,
+    invoice_log_dir: Path | str | None,
+) -> InvoiceResultSink | None:
+    enabled = _resolve_bool_env("LOG_ENABLED", "LOG_ENABLED", enable_invoice_logging, default=True)
+    if not enabled:
+        return invoice_result_sink
+
+    log_dir = invoice_log_dir if invoice_log_dir is not None else resolve_log_dir()
+    log_sink = _wrap_safe_log_sink(build_invoice_result_log_sink(log_dir))
+    if invoice_result_sink is None:
+        return log_sink
+
+    def composed_sink(receipt_code: str, invoice_result: dict[str, Any]) -> None:
+        log_sink(receipt_code, invoice_result)
+        invoice_result_sink(receipt_code, invoice_result)
+
+    return composed_sink
+
+
+def _wrap_safe_log_sink(log_sink: InvoiceResultSink) -> InvoiceResultSink:
+    """日志 sink 异常绝不能打断审计主链路。"""
+    logger = get_logger("invoice_result_sink")
+
+    def safe_sink(receipt_code: str, invoice_result: dict[str, Any]) -> None:
+        try:
+            log_sink(receipt_code, invoice_result)
+        except Exception:
+            logger.exception(
+                "invoice result log sink failed",
+                extra={
+                    "receipt_code": receipt_code,
+                    "run_id": invoice_result.get("runId"),
+                    "invoice_key": invoice_result.get("invoiceKey"),
+                    "event": "invoice.log_sink.failed",
+                },
+            )
+
+    return safe_sink
+
+
+def _resolve_bool_env(
+    py_name: str,
+    env_name: str,
+    explicit: bool | None,
+    *,
+    default: bool,
+) -> bool:
+    if explicit is not None:
+        return explicit
+    raw = os.getenv(env_name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _resolve_receipt_result_sink(

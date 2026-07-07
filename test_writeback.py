@@ -1,7 +1,11 @@
 import unittest
 import json
 
-from expense_audit_orchestrator.writeback import assemble_result_audit_info
+from expense_audit_orchestrator.writeback import (
+    assemble_result_audit_info,
+    _build_e31_message,
+    _format_amount,
+)
 from expense_audit_orchestrator.profiles.telecom.writeback import telecom_compliance_rule
 
 
@@ -207,6 +211,8 @@ class WritebackAssemblerTests(unittest.TestCase):
                             "invoice_info_id": "AIIID-001",
                             "message": "金额不够",
                             "reason_code": "E31",
+                            "regulation": "",
+                            "suggestion": "E31建议",
                         },
                         "header_result": {
                             "audit_content": "检查使用的发票购买方抬头与公司信息是否一致",
@@ -218,6 +224,8 @@ class WritebackAssemblerTests(unittest.TestCase):
                             "invoice_info_id": "AIIID-001",
                             "message": "通过",
                             "reason_code": "E01",
+                            "regulation": "",
+                            "suggestion": "",
                         },
                     },
                     "decisionStatus": "reject",
@@ -225,6 +233,9 @@ class WritebackAssemblerTests(unittest.TestCase):
                 }
             ],
             "summary": {"overallStatus": "SUCCESS"},
+            "applyAmount": 100.0,
+            "validInvoiceTotal": 40.0,
+            "isAmountSufficient": False,
         }
 
         payload = assemble_result_audit_info(prepared_receipt, processed_receipt)
@@ -232,8 +243,19 @@ class WritebackAssemblerTests(unittest.TestCase):
         self.assertEqual(len(payload["auditLogs"]), 2)
         self.assertEqual(payload["auditLogs"][0]["reasonCode"], "E31")
         self.assertEqual(payload["auditLogs"][0]["distinguishResult"], "reject")
+        # E31 message is overridden with receipt-level real totals
+        self.assertEqual(
+            payload["auditLogs"][0]["message"],
+            "当前核销单有效发票合计金额40元，低于报销单报销金额100元，有效发票金额缺少60元。",
+        )
+        self.assertEqual(payload["auditLogs"][0]["regulation"], "")
+        # REJECT override carries the two-scenario E31 suggestion
+        self.assertIn("场景1", payload["auditLogs"][0]["suggestion"])
+        self.assertIn("场景2", payload["auditLogs"][0]["suggestion"])
         self.assertEqual(payload["auditLogs"][1]["reasonCode"], "E01")
         self.assertEqual(payload["auditLogs"][1]["distinguishResult"], "pass")
+        self.assertEqual(payload["auditLogs"][1]["regulation"], "")
+        self.assertEqual(payload["auditLogs"][1]["suggestion"], "")
         self.assertEqual(payload["auditInvoiceInfos"][0]["reasonCode"], "E31")
 
     def test_assemble_result_audit_info_uses_real_aifid_field_for_invoice_file_id_fallback(self) -> None:
@@ -793,6 +815,9 @@ class WritebackAssemblerTests(unittest.TestCase):
         self.assertEqual(payload["auditLogs"][1]["reasonCode"], "E31")
         self.assertEqual(payload["auditLogs"][1]["distinguishResult"], "pass")
         self.assertEqual(payload["auditLogs"][1]["message"], "发票合计金额充足")
+        # PASS override clears regulation/suggestion
+        self.assertEqual(payload["auditLogs"][1]["regulation"], "")
+        self.assertEqual(payload["auditLogs"][1]["suggestion"], "")
 
         # 2. auditInvoiceInfos validation
         self.assertEqual(len(payload["auditInvoiceInfos"]), 2)
@@ -916,7 +941,12 @@ class WritebackAssemblerTests(unittest.TestCase):
         self.assertEqual(payload["auditLogs"][0]["invoiceFileId"], "AFID-002")
         self.assertEqual(payload["auditLogs"][0]["reasonCode"], "E31")
         self.assertEqual(payload["auditLogs"][0]["distinguishResult"], "reject")
+        # No applyAmount/validInvoiceTotal in processed_receipt -> static fallback message
         self.assertEqual(payload["auditLogs"][0]["message"], "发票合计金额不足")
+        # REJECT override carries the E31 suggestion (two-scenario text) and empty regulation
+        self.assertEqual(payload["auditLogs"][0]["regulation"], "")
+        self.assertIn("场景1", payload["auditLogs"][0]["suggestion"])
+        self.assertIn("场景2", payload["auditLogs"][0]["suggestion"])
 
         # 2. auditInvoiceInfos validation
         self.assertEqual(len(payload["auditInvoiceInfos"]), 2)
@@ -926,6 +956,74 @@ class WritebackAssemblerTests(unittest.TestCase):
         # For FID-002, E31 is overridden to REJECT, so its reasonCode is E31
         self.assertEqual(payload["auditInvoiceInfos"][1]["fid"], "FID-002")
         self.assertEqual(payload["auditInvoiceInfos"][1]["reasonCode"], "E31")
+
+    def test_e31_message_builder_fills_real_totals(self) -> None:
+        # 有真实金额时按 CSV 模板填充
+        self.assertEqual(
+            _build_e31_message(100.0, 40.0),
+            "当前核销单有效发票合计金额40元，低于报销单报销金额100元，有效发票金额缺少60元。",
+        )
+        # shortage 不会出现负数
+        self.assertIn("缺少0元", _build_e31_message(10.0, 187.15))
+        # 金额缺失时退回静态文案
+        self.assertEqual(_build_e31_message(None, None), "发票合计金额不足")
+        self.assertEqual(_build_e31_message(100.0, None), "发票合计金额不足")
+        # 金额格式化去掉无意义尾零
+        self.assertEqual(_format_amount(10.0), "10")
+        self.assertEqual(_format_amount(10.5), "10.5")
+        self.assertEqual(_format_amount(382.2), "382.2")
+
+    def test_assemble_propagates_graph_regulation_and_suggestion(self) -> None:
+        # 图节点产出的 regulation/suggestion 应原样透传到 auditLogs（非 E31 节点）
+        prepared_receipt = {
+            "receiptCode": "REC-REG-001",
+            "serviceData": {"auditInfo": {"instanceCode": "REC-REG-001"}},
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "invoiceFile": {"fid": "FID-001"},
+                    "preparedInput": {
+                        "instance_code": "REC-REG-001",
+                        "invoiceNo": "INV-001",
+                        "serviceData": {
+                            "currentInvoiceInfo": {"aiiid": "AIIID-001"},
+                            "currentAuditInvoiceFile": {"afiid": "AFID-001", "fid": "FID-001"},
+                        },
+                    },
+                }
+            ],
+        }
+        processed_receipt = {
+            "receiptCode": "REC-REG-001",
+            "serviceData": prepared_receipt["serviceData"],
+            "invoiceResults": [
+                {
+                    "invoiceKey": "FID-001",
+                    "preparedInput": prepared_receipt["invoicePreparations"][0]["preparedInput"],
+                    "decisionOutput": {
+                        "company_backlist_result": {
+                            "reason_code": "E09",
+                            "distinguish_result": "REJECT",
+                            "audit_content": "检查销货方黑名单",
+                            "audit_type": "general-rules",
+                            "invoice_file_id": "AFID-001",
+                            "invoice_info_id": "AIIID-001",
+                            "message": "票据发票销货方在黑名单中",
+                            "regulation": "《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范",
+                            "suggestion": "【发票作废】联系销货方作废本发票",
+                        },
+                    },
+                    "decisionStatus": "reject",
+                    "executionStatus": "SUCCEEDED",
+                }
+            ],
+            "summary": {"overallStatus": "SUCCESS"},
+        }
+        payload = assemble_result_audit_info(prepared_receipt, processed_receipt)
+        log = payload["auditLogs"][0]
+        self.assertEqual(log["reasonCode"], "E09")
+        self.assertEqual(log["regulation"], "《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范")
+        self.assertEqual(log["suggestion"], "【发票作废】联系销货方作废本发票")
 
     def test_telecom_compliance_marks_telecom_service_penalty_and_surcharge_noncompliant(self) -> None:
         prepared_receipt = {

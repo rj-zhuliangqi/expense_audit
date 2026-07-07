@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -5,6 +6,10 @@ import httpx
 
 from .application import evaluate_prepared_input
 from .core import DEFAULT_GRAPH_PATH, load_decision, load_decision_from_content
+
+
+def _trace_enabled() -> bool:
+    return os.getenv("GRAPH_TRACE_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
 
 
 class GraphRuntimeClient(Protocol):
@@ -45,7 +50,7 @@ class LocalGraphRuntimeClient:
             if resolved_graph_content is not None
             else load_decision(resolved_graph_path or DEFAULT_GRAPH_PATH)
         )
-        return evaluate_prepared_input(decision_engine, prepared_input)
+        return evaluate_prepared_input(decision_engine, prepared_input, trace=_trace_enabled())
 
 
 class HttpGraphRuntimeClient:

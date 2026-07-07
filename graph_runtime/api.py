@@ -15,6 +15,8 @@ class EvaluateGraphResponse(BaseModel):
     decision_output: dict[str, Any] = Field(alias="decisionOutput")
     prepared_input: dict[str, Any] | None = Field(default=None, alias="preparedInput")
     rule_input: dict[str, Any] | None = Field(default=None, alias="ruleInput")
+    trace: dict[str, Any] | None = Field(default=None)
+    performance: str | None = Field(default=None)
 
 
 class EvaluateGraphRequest(BaseModel):

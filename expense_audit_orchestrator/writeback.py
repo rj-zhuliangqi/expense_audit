@@ -10,6 +10,17 @@ AuditTravelsBuilder = Callable[[list[tuple[dict[str, Any], dict[str, Any]]], Map
 FormBuilder = Callable[[list[tuple[dict[str, Any], dict[str, Any]]], Mapping[str, Any]], list[dict[str, Any]]]
 
 
+# E31 (发票合计金额不足) suggestion text — CSV 第四列，两场景全文。
+# 制度列 CSV 为 "/"（空），故 E31 regulation 恒为空。
+E31_SUGGESTION = (
+    "场景1：前面检查有未通过发票，导致有效金额不足\n"
+    "建议：【整改问题】整改下方标记问题的发票，整改后会重新计入有效金额；\n\n"
+    "场景2：漏传发票或发票识别不清晰，导致有效金额不足\n"
+    "建议：【检查上传】请补充上传电子发票，如为纸质发票，请拍照上传。"
+    "如均已上传发票，请确认纸质发票金额识别是否正确"
+)
+
+
 def _default_compliance(goods_name: str, item: Mapping[str, Any]) -> bool:
     return True
 
@@ -30,9 +41,28 @@ def assemble_result_audit_info(
     invoice_pairs = _pair_invoices(prepared_receipt, processed_receipt)
     is_amount_sufficient = processed_receipt.get("isAmountSufficient")
 
+    # Receipt-level amount context used to build the final E31 message with real
+    # totals (有效发票合计金额 / 报销金额 / 缺少金额). Sourced from the orchestrator's
+    # receipt result; falls back to summing per-invoice finalAmounts when absent.
+    apply_amount = _resolve_receipt_amount(processed_receipt, "applyAmount")
+    valid_invoice_total = _resolve_receipt_amount(processed_receipt, "validInvoiceTotal")
+    if valid_invoice_total is None:
+        remaining = _resolve_receipt_amount(processed_receipt, "remainingApplyAmount")
+        if apply_amount is not None and remaining is not None:
+            valid_invoice_total = apply_amount - remaining
+        else:
+            valid_invoice_total = _sum_invoice_final_amounts(invoice_pairs)
+
     return {
         "instanceCode": instance_code,
-        "auditLogs": _build_audit_logs(instance_code, audit_info, invoice_pairs, is_amount_sufficient=is_amount_sufficient),
+        "auditLogs": _build_audit_logs(
+            instance_code,
+            audit_info,
+            invoice_pairs,
+            is_amount_sufficient=is_amount_sufficient,
+            apply_amount=apply_amount,
+            valid_invoice_total=valid_invoice_total,
+        ),
         "auditInvoiceInfos": _build_audit_invoice_infos(instance_code, audit_info, invoice_pairs, is_amount_sufficient=is_amount_sufficient),
         "auditInvoiceFiles": _build_audit_invoice_files(service_data),
         "auditRelationFiles": _build_audit_relation_files(invoice_pairs),
@@ -76,14 +106,68 @@ def _pair_invoices(
     return pairs
 
 
+def _resolve_receipt_amount(processed_receipt: Mapping[str, Any], key: str) -> float | None:
+    value = processed_receipt.get(key)
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return None
+
+
+def _sum_invoice_final_amounts(
+    invoice_pairs: list[tuple[dict[str, Any], dict[str, Any]]],
+) -> float | None:
+    total = 0.0
+    found = False
+    for preparation, result in invoice_pairs:
+        decision_output = dict(result.get("decisionOutput") or {})
+        final_amount = (
+            decision_output.get("invoice_finalAmount")
+            or (decision_output.get("invoice_content_valid_result") or {}).get("invoice_finalAmount")
+        )
+        if final_amount is not None:
+            try:
+                total += float(final_amount)
+                found = True
+            except (ValueError, TypeError):
+                pass
+    return total if found else None
+
+
+def _build_e31_message(apply_amount: float | None, valid_invoice_total: float | None) -> str:
+    """Build the receipt-level E31 message with real totals.
+
+    CSV 模板：当前核销单有效发票合计金额**元，低于报销单报销金额**元，
+    有效发票金额缺少**元。 当金额不可得时退回静态文案。
+    """
+    if apply_amount is None or valid_invoice_total is None:
+        return "发票合计金额不足"
+    shortage = apply_amount - valid_invoice_total
+    if shortage < 0:
+        shortage = 0.0
+    return (
+        f"当前核销单有效发票合计金额{_format_amount(valid_invoice_total)}元，"
+        f"低于报销单报销金额{_format_amount(apply_amount)}元，"
+        f"有效发票金额缺少{_format_amount(shortage)}元。"
+    )
+
+
+def _format_amount(value: float) -> str:
+    # 保留两位小数，去掉无意义的尾零（10.00 -> 10，10.50 -> 10.5）
+    return f"{value:.2f}".rstrip("0").rstrip(".")
+
+
 def _build_audit_logs(
     instance_code: str,
     audit_info: Mapping[str, Any],
     invoice_pairs: list[tuple[dict[str, Any], dict[str, Any]]],
     *,
     is_amount_sufficient: bool | None = None,
+    apply_amount: float | None = None,
+    valid_invoice_total: float | None = None,
 ) -> list[dict[str, Any]]:
-    del audit_info
     audit_logs: list[dict[str, Any]] = []
     for index, (preparation, result) in enumerate(invoice_pairs):
         is_last = (index == len(invoice_pairs) - 1)
@@ -114,10 +198,16 @@ def _build_audit_logs(
                             rule_result["distinguish_result"] = "PASS"
                             rule_result["distinguishResult"] = "PASS"
                             rule_result["message"] = "发票合计金额充足"
+                            rule_result["regulation"] = ""
+                            rule_result["suggestion"] = ""
                         else:
                             rule_result["distinguish_result"] = "REJECT"
                             rule_result["distinguishResult"] = "REJECT"
-                            rule_result["message"] = "发票合计金额不足"
+                            rule_result["message"] = _build_e31_message(
+                                apply_amount, valid_invoice_total
+                            )
+                            rule_result["regulation"] = ""
+                            rule_result["suggestion"] = E31_SUGGESTION
 
                 audit_logs.append(
                     {
@@ -139,6 +229,8 @@ def _build_audit_logs(
                         )
                         or result.get("decisionStatus"),
                         "message": rule_result.get("message") or result.get("errorMessage"),
+                        "regulation": rule_result.get("regulation"),
+                        "suggestion": rule_result.get("suggestion"),
                     }
                 )
             continue
@@ -154,6 +246,8 @@ def _build_audit_logs(
                 "distinguishContent": decision_output.get("distinguishContent"),
                 "distinguishResult": result.get("decisionStatus"),
                 "message": decision_output.get("message") or result.get("errorMessage"),
+                "regulation": decision_output.get("regulation"),
+                "suggestion": decision_output.get("suggestion"),
             }
         )
     return audit_logs
@@ -242,10 +336,14 @@ def _build_audit_invoice_infos(
                 overridden_amount_result["distinguish_result"] = "PASS"
                 overridden_amount_result["distinguishResult"] = "PASS"
                 overridden_amount_result["message"] = "发票合计金额充足"
+                overridden_amount_result["regulation"] = ""
+                overridden_amount_result["suggestion"] = ""
             else:
                 overridden_amount_result["distinguish_result"] = "REJECT"
                 overridden_amount_result["distinguishResult"] = "REJECT"
                 overridden_amount_result["message"] = "发票合计金额不足"
+                overridden_amount_result["regulation"] = ""
+                overridden_amount_result["suggestion"] = E31_SUGGESTION
             decision_output = {**decision_output, "amount_result": overridden_amount_result}
 
         ignore_codes = [] if is_last else ["E31"]

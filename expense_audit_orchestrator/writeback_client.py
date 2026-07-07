@@ -11,6 +11,10 @@ from .audit_client import (
     _get_service_error_message,
     _is_success_payload,
 )
+from .observability import get_logger
+
+
+_logger = get_logger("writeback")
 from .writeback import (
     AuditTravelsBuilder,
     ComplianceRule,
@@ -37,7 +41,7 @@ class AuditInfoWritebackClient:
 
     def save_result_audit_info(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         endpoint = f"{self._service_url}{self._save_path}"
-        print(f"[核销单服务] 回写稽核结果: {endpoint}")
+        _logger.info("回写稽核结果", extra={"event": "writeback.save", "endpoint": endpoint})
 
         request = Request(
             endpoint,
@@ -153,7 +157,7 @@ def _export_json_payload(payload: dict[str, Any], output_path: Path, label: str)
         json.dumps(payload, ensure_ascii=False, indent=4),
         encoding="utf-8",
     )
-    print(f"[receipt-sink] exported {label} to: {output_path}")
+    _logger.info("exported payload", extra={"event": "writeback.exported", "label": label, "output_path": str(output_path)})
     return output_path
 
 

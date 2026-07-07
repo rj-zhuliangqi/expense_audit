@@ -42,7 +42,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票为该项目适用票种\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -56,7 +58,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票不属于该项目适用票种\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据种类为“\"+(invoiceType??\"\")+\"”不在国内合规票据范围，不符合“税法政策要求”\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【删除发票】删除本票据，并提供真实业务开具的发票\""
           }
         ],
         "inputs": [
@@ -111,6 +115,16 @@
             "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
             "name": "日志内容",
             "field": "message"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-regulation0",
+            "name": "制度",
+            "field": "regulation"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
+            "name": "建议",
+            "field": "suggestion"
           }
         ],
         "passThrough": false,
@@ -157,7 +171,7 @@
           {
             "id": "819b07c4-a9b8-417f-b4f6-ec2bf79d4a80",
             "key": "isWriteOff",
-            "value": "invoiceNo not in map((serviceData.invoiceUsageHistory ?? []) as c, c.miInstanceCode)"
+            "value": "invoiceNo not in map((serviceData.invoiceUsageHistory ?? []) as c, c.chequeNo)"
           },
           {
             "id": "7fe051f0-138b-4658-b318-26503211dd65",
@@ -167,7 +181,7 @@
           {
             "id": "94c8882d-9c36-482e-90b4-5d843bb9bdce",
             "key": "isTelecomOperator",
-            "value": "contains(salerName, \"电信\") or contains(salerName, \"移动\") or contains(salerName, \"中国联合网络通信\") or contains(salerName, \"联通\")"
+            "value": "contains((salerName ?? \"\"), \"电信\") or contains((salerName ?? \"\"), \"移动\") or contains((salerName ?? \"\"), \"中国联合网络通信\") or contains((salerName ?? \"\"), \"联通\")"
           }
         ],
         "passThrough": true,
@@ -199,7 +213,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票购买方抬头与公司信息一致\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -213,7 +229,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票购买方抬头与公司信息不一致\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据购货方名称为“\"+(orgName??\"\")+\"”，正确购货方名称为“\"+(filter((serviceData.companyList??[]) as c,(c.ccode??c.accountingCode)==(accountingCode??\"\"))[0].cname??\"\")+\"”，不符合“税法政策要求”\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2.1.1员工需要确保票据中公司信息的准确性。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票重开】联系销货方或在手机APP重新开具发票\""
           }
         ],
         "inputs": [
@@ -268,6 +286,16 @@
             "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
             "name": "日志内容",
             "field": "message"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-regulation0",
+            "name": "制度",
+            "field": "regulation"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
+            "name": "建议",
+            "field": "suggestion"
           }
         ],
         "passThrough": false,
@@ -299,7 +327,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票购买方纳税人识别号与公司信息一致\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -313,7 +343,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票购买方纳税人识别号与公司信息不一致\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据购货方税号为“\"+(buyerTaxNo??\"\")+\"”，正确购货方统一信用代码为“\"+(filter((serviceData.companyList??[]) as c,(c.ccode??c.accountingCode)==(accountingCode??\"\"))[0].companyTax??\"\")+\"”，不符合“税法政策要求”\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2.1.1员工需要确保票据中公司信息的准确性。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票重开】联系销货方或在手机APP重新开具发票\""
           }
         ],
         "inputs": [
@@ -368,6 +400,16 @@
             "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
             "name": "日志内容",
             "field": "message"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-regulation0",
+            "name": "制度",
+            "field": "regulation"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
+            "name": "建议",
+            "field": "suggestion"
           }
         ],
         "passThrough": false,
@@ -399,7 +441,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票合计金额充足\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -413,7 +457,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票合计金额不足\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票合计金额不足\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"场景1：前面检查有未通过发票，导致有效金额不足\n建议：【整改问题】整改下方标记问题的发票，整改后会重新计入有效金额；\n\n场景2：漏传发票或发票识别不清晰，导致有效金额不足\n建议：【检查上传】请补充上传电子发票，如为纸质发票，请拍照上传。如均已上传发票，请确认纸质发票金额识别是否正确\""
           }
         ],
         "inputs": [
@@ -468,6 +514,16 @@
             "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
             "name": "日志内容",
             "field": "message"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-regulation0",
+            "name": "制度",
+            "field": "regulation"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
+            "name": "建议",
+            "field": "suggestion"
           }
         ],
         "passThrough": false,
@@ -499,7 +555,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票销货方不在公司确认的虚开发票销售方税务局黑名单中\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -513,7 +571,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票销货方在公司确认的虚开发票销售方税务局黑名单中\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，发票销货方为“\"+(salerName??\"\")+\"”在税务局黑名单中，不符合“税法政策要求”\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票作废】联系销货方作废本发票，并提供真实业务开具的发票\""
           }
         ],
         "inputs": [
@@ -568,6 +628,16 @@
             "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
             "name": "日志内容",
             "field": "message"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-regulation0",
+            "name": "制度",
+            "field": "regulation"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
+            "name": "建议",
+            "field": "suggestion"
           }
         ],
         "passThrough": false,
@@ -599,7 +669,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票未被其他核销单重复使用\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -613,7 +685,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票已被其他核销单重复使用\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，发票已被核销单“\"+(filter((serviceData.invoiceUsageHistory??[]) as c,c.chequeNo==(invoiceNo??\"\"))[0].miInstanceCode??\"\")+\"”使用，不符合“税法政策要求”\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【删除发票】删除本票据并提供未使用报销的票据\""
           }
         ],
         "inputs": [
@@ -668,6 +742,16 @@
             "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
             "name": "日志内容",
             "field": "message"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-regulation0",
+            "name": "制度",
+            "field": "regulation"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
+            "name": "建议",
+            "field": "suggestion"
           }
         ],
         "passThrough": false,
@@ -699,7 +783,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票为当年发票\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -713,7 +799,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票不是当年发票\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据开具日期“\"+(invoiceDate??\"\")+\"”不在本年度，不符合“企业内控要求”\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2.2.3除跨年差旅外,票据不允许跨年核销使用\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【无需操作】您的报销行为将被记录，将作为财务事后分析的依据\""
           }
         ],
         "inputs": [
@@ -768,6 +856,16 @@
             "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
             "name": "日志内容",
             "field": "message"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-regulation0",
+            "name": "制度",
+            "field": "regulation"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
+            "name": "建议",
+            "field": "suggestion"
           }
         ],
         "passThrough": false,
@@ -799,7 +897,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据账单年份与报销年份一致\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -813,7 +913,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据账单年份与报销年份不一致\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据账单年份“\"+(remark??\"\")+\"”不在本年度，不符合“企业内控要求”\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n4.1.3.3员工应使用运营商开具的月结费用发票(国际通讯费用票据以当地实际情况为准)在额度内实报实销。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【无需操作】您的报销行为将被记录，将作为财务事后分析的依据\""
           }
         ],
         "inputs": [
@@ -868,6 +970,16 @@
             "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
             "name": "日志内容",
             "field": "message"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-regulation0",
+            "name": "制度",
+            "field": "regulation"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
+            "name": "建议",
+            "field": "suggestion"
           }
         ],
         "passThrough": false,
@@ -926,7 +1038,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票真伪校验通过\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
           },
           {
             "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
@@ -940,7 +1054,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票真伪校验不通过\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据真伪查验不通过，不符合“税法政策要求”\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【稍后报销】发票未上传到税局，请在发票开具24H后再上传使用发票\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -954,7 +1070,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票已被销售方作废\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据已被销货方作废，不符合“税法政策要求”\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票重开】联系销货方或在手机APP重新开具发票\""
           },
           {
             "_id": "75f486cf-bdf6-49cc-8c72-1ae0f6f40f50",
@@ -968,7 +1086,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票已被销售方冲红\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据已被销售方红冲，不符合“税法政策要求”\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票重开】联系销货方或在手机APP重新开具发票\""
           }
         ],
         "inputs": [
@@ -1023,6 +1143,16 @@
             "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
             "name": "日志内容",
             "field": "message"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-regulation0",
+            "name": "制度",
+            "field": "regulation"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
+            "name": "建议",
+            "field": "suggestion"
           }
         ],
         "passThrough": false,
@@ -1054,7 +1184,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票开具方属于运营商\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -1068,7 +1200,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票开具方不属于运营商\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据开具方“\"+(salerName??\"\")+\"”不属于运营商，不符合“企业内控要求”\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n4.1.3.3员工应使用运营商开具的月结费用发票(国际通讯费用票据以当地实际情况为准)在额度内实报实销。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【删除发票】删除本票据并提供属于运营商开具的票据\""
           }
         ],
         "inputs": [
@@ -1123,6 +1257,16 @@
             "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
             "name": "日志内容",
             "field": "message"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-regulation0",
+            "name": "制度",
+            "field": "regulation"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
+            "name": "建议",
+            "field": "suggestion"
           }
         ],
         "passThrough": false,
@@ -1154,7 +1298,7 @@
           {
             "id": "7baa400b-6e9c-449a-9a04-e3318d7c0515",
             "key": "is_in_telecom_list",
-            "value": "some(operatorList ?? [], contains(salerName, #.name) and contains(salerName, #.city))"
+            "value": "some(operatorList ?? [], contains((salerName ?? \"\"), #.name) and contains((salerName ?? \"\"), #.city))"
           },
           {
             "id": "fd203418-999a-4aaa-9712-e9971b09d2f7",
@@ -1196,7 +1340,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票手机号与飞书备案手机号一致\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -1210,7 +1356,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票手机号与飞书备案手机号不一致\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据账单号码“\"+(remarkPhone??\"\")+\"”不是员工公司备案手机号，不符合“企业内控要求”\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n4.1.3.3员工应使用运营商开具的月结费用发票(国际通讯费用票据以当地实际情况为准)在额度内实报实销。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【无需操作】您的报销行为将被记录，将作为财务事后分析的依据\""
           }
         ],
         "inputs": [
@@ -1265,11 +1413,21 @@
             "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
             "name": "日志内容",
             "field": "message"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-regulation0",
+            "name": "制度",
+            "field": "regulation"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
+            "name": "建议",
+            "field": "suggestion"
           }
         ],
         "passThrough": false,
         "inputField": null,
-        "outputPath": "telecom_result",
+        "outputPath": "phone_result",
         "executionMode": "single"
       },
       "id": "bbdba655-bd68-47bd-9944-cca70b73f06d",
@@ -1282,7 +1440,7 @@
     {
       "type": "functionNode",
       "content": {
-        "source": "export const handler = async (input) => {\r\n  // 从输入的原始 JSON 中安全获取 items 数组\r\n  const items = input.items || [];\r\n  \r\n  // 1. 核心循环：把所有 goodsName 用“、”拼接在一起\r\n  const resultText = items\r\n    .map(item => item?.goodsName || '')\r\n    .filter(name => name !== '')\r\n    .join('、');\r\n\r\n  // 2. 核心循环：精简字段，清洗多余的杂乱字段\r\n  const cleanedItems = items.map(item => {\r\n    // 将字符串形式的金额（如 \"476.1\"）安全转换为真正的数字（支持小数）\r\n    const parsedAmount = item?.detailAmount ? parseFloat(item.detailAmount) : 0;\r\n    \r\n    return {\r\n      goodsName: item?.goodsName || '',\r\n      detailAmount: isNaN(parsedAmount) ? 0 : parsedAmount  // 确保万无一失不出现 NaN\r\n    };\r\n  });\r\n\r\n  // 3. 统一返回你需要的所有结果\r\n  return {\r\n    contents: resultText || '无',\r\n    filtered_items: cleanedItems,\r\n    remark: input.remark ?? '',\r\n    invoiceAmount: parseFloat(input.invoiceAmount)\r\n  };\r\n};\r\n"
+        "source": "export const handler = async (input) => {\r\n  // 从输入的原始 JSON 中安全获取 items 数组\r\n  const items = input.items || [];\r\n  \r\n  // 1. 核心循环：把所有 goodsName 用“、”拼接在一起\r\n  const resultText = items\r\n    .map(item => item?.goodsName || '')\r\n    .filter(name => name !== '')\r\n    .join('、');\r\n\r\n  // 2. 核心循环：精简字段，清洗多余的杂乱字段\r\n  const cleanedItems = items.map(item => {\r\n    // 将字符串形式的金额（如 \"476.1\"）安全转换为真正的数字（支持小数）\r\n    const parsedAmount = item?.detailAmount ? parseFloat(item.detailAmount) : 0;\r\n    \r\n    return {\r\n      goodsName: item?.goodsName || '',\r\n      detailAmount: isNaN(parsedAmount) ? 0 : parsedAmount  // 确保万无一失不出现 NaN\r\n    };\r\n  });\r\n\r\n  // 3. 统一返回你需要的所有结果\r\n  return {\r\n\r\n    contents: resultText || '无',\r\n    filtered_items: cleanedItems,\r\n    remark: input.remark ?? '',\r\n    invoiceAmount: parseFloat(input.invoiceAmount),\r\n    context: input.context || {}\r\n  };\r\n};\r\n"
       },
       "id": "06969d8b-16b9-4784-8883-a872f3667838",
       "name": "发票内容预处理",
@@ -1294,7 +1452,7 @@
     {
       "type": "functionNode",
       "content": {
-        "source": "export const handler = async (input) => {\n  const context = input.context || {};\n  const remark = input.remark ?? context.remark ?? '';\n  \n  // 从 submitTime 提取提交年份，计算前一年\n  const submitTime = context.serviceData?.auditInfo?.submitTime ?? '';\n  let submitYear = null;\n  if (submitTime) {\n    const match = String(submitTime).match(/(\\d{4})/);\n    if (match) {\n      submitYear = parseInt(match[1], 10) - 1;\n    }\n  }\n  const submitYearStr = submitYear !== null ? String(submitYear) : '未知';\n  const thresholdMonth = submitYear !== null ? submitYear * 100 + 12 : null;\n\n  const optimizedPrompt = `# Role\n你是一名严谨的电信发票备注信息审核助手。\n\n# Task\n请根据【remark】字段内容，完成以下任务：\n1. remarkPhone: 提取用户实际使用的中国大陆 11 位手机号。\n2. isInvoiceYearMatched: 判断账期中是否包含提交年份前一年的12月及之后的账期。\n3. matchReason: 给出判断原因。\n\n# 关键变量（已注入）\n- submitYear（提交年份的前一年）: ${submitYearStr}\n- 账期匹配阈值（前一年12月）: ${thresholdMonth !== null ? thresholdMonth : '未知'}\n  - 例如 submitYear=2025，则阈值=202512，需要检查是否有 >= 202512 的账期\n  - 例如 submitYear=2024，则阈值=202412，需要检查是否有 >= 202412 的账期\n\n# Rules\n- 优先提取\"业务号码\"\"手机号码\"\"用户号码\"\"联系电话\"等标签对应的 11 位手机号。\n- 排除 10000、10010、10086 等客服短号，排除座机、发票代码、税号、流水号等非手机号数字。\n- 如果手机号中有空格、短横线或其他分隔符，请去掉分隔符后返回连续 11 位数字。\n- 若无法确定手机号，remarkPhone 返回空字符串。\n- isInvoiceYearMatched 判断规则：\n  - 提取 remark 中所有账期月份（YYYYMM 格式），检查是否有任何一个月份 >= 阈值月份（${thresholdMonth !== null ? thresholdMonth : '未知'}）\n  - 如果有，返回 true；否则返回 false\n  - 如果无法确定 submitYear 或无法解析账期，返回 false\n- matchReason 必须清晰说明判断依据，例如：\n  - \"账期包含 202512（>= 阈值 202512），匹配成功\"\n  - \"所有账期均 < 阈值 202512，不匹配\"\n  - \"无法识别账期信息，默认不匹配\"\n\n# Examples\n- remark: 业务号码:15652828661;账期:202512-202603\n  submitYear=2025, threshold=202512\n  output: {\"remarkPhone\":\"15652828661\",\"isInvoiceYearMatched\":true,\"matchReason\":\"账期包含 202512（>= 阈值 202512），匹配成功\"}\n- remark: 用户号码 156 5282 8661，计费周期 2025年12月01日至2026年03月31日\n  submitYear=2025, threshold=202512\n  output: {\"remarkPhone\":\"15652828661\",\"isInvoiceYearMatched\":true,\"matchReason\":\"账期包含 202512（>= 阈值 202512），匹配成功\"}\n- remark: 账期:202504,202505,202506\n  submitYear=2025, threshold=202512\n  output: {\"remarkPhone\":\"\",\"isInvoiceYearMatched\":false,\"matchReason\":\"所有账期 202504,202505,202506 均 < 阈值 202512，不匹配\"}\n- remark: 账期:202511-202512\n  submitYear=2025, threshold=202512\n  output: {\"remarkPhone\":\"\",\"isInvoiceYearMatched\":true,\"matchReason\":\"账期包含 202512（>= 阈值 202512），匹配成功\"}\n\n# Output\n你必须只返回 JSON，不要输出任何解释、前后缀或 Markdown。\n\nJSON 结构严格如下：\n{\n  \"remarkPhone\": \"11位手机号，未识别时为空字符串\",\n  \"isInvoiceYearMatched\": true 或 false,\n  \"matchReason\": \"判断原因的详细说明\"\n}\n\n# Input Remark\n${remark}`;\n\n  return {\n    prompt: optimizedPrompt,\n    submitYear: submitYear,\n    thresholdMonth: thresholdMonth\n  };\n};"
+        "source": "export const handler = async (input) => {\n  const context = input.context || {};\n  const remark = input.remark ?? context.remark ?? '';\n  \n  // 从 submitTime 提取提交年份，计算前一年\n  const submitTime = context.serviceData?.auditInfo?.submitTime ?? '';\n  let submitYear = null;\n  if (submitTime) {\n    const match = String(submitTime).match(/(\\d{4})/);\n    if (match) {\n      submitYear = parseInt(match[1], 10) - 1;\n    }\n  }\n  const submitYearStr = submitYear !== null ? String(submitYear) : '未知';\n  const thresholdMonth = submitYear !== null ? submitYear * 100 + 12 : null;\n\n  const optimizedPrompt = `# Role\n你是一名严谨的电信发票备注信息审核助手。\n\n# Task\n请根据【remark】字段内容，完成以下任务：\n1. remarkPhone: 提取用户实际使用的中国大陆 11 位手机号。\n2. isInvoiceYearMatched: 判断账期中是否包含提交年份前一年的12月及之后的账期。\n3. matchReason: 给出判断原因。\n\n# 关键变量（已注入）\n- submitYear（提交年份的前一年）: ${submitYearStr}\n- 账期匹配阈值（前一年12月）: ${thresholdMonth !== null ? thresholdMonth : '未知'}\n  - 例如 submitYear=2025，则阈值=202512，需要检查是否有 >= 202512 的账期\n  - 例如 submitYear=2024，则阈值=202412，需要检查是否有 >= 202412 的账期\n\n# Rules\n- 优先提取\"业务号码\"\"手机号码\"\"用户号码\"\"联系电话\"等标签对应的 11 位手机号。\n- 排除 10000、10010、10086 等客服短号，排除座机、发票代码、税号、流水号等非手机号数字。\n- 如果手机号中有空格、短横线或其他分隔符，请去掉分隔符后返回连续 11 位数字。\n- 若无法确定手机号，remarkPhone 返回空字符串。\n- isInvoiceYearMatched 判断规则：\n  - 提取 remark 中所有账期月份（YYYYMM 格式），检查是否有任何一个月份 >= 阈值月份（${thresholdMonth !== null ? thresholdMonth : '未知'}）\n  - 如果有，返回 true；否则返回 false\n  - 如果无法确定 submitYear 或无法解析账期，返回 false\n- matchReason 必须清晰说明判断依据，例如：\n  - \"账期包含 202512（>= 阈值 202512），匹配成功\"\n  - \"所有账期均 < 阈值 202512，不匹配\"\n  - \"无法识别账期信息，默认不匹配\"\n\n# Examples\n- remark: 业务号码:15652828661;账期:202512-202603\n  submitYear=2025, threshold=202512\n  output: {\"remarkPhone\":\"15652828661\",\"isInvoiceYearMatched\":true,\"matchReason\":\"账期包含 202512（>= 阈值 202512），匹配成功\"}\n- remark: 用户号码 156 5282 8661，计费周期 2025年12月01日至2026年03月31日\n  submitYear=2025, threshold=202512\n  output: {\"remarkPhone\":\"15652828661\",\"isInvoiceYearMatched\":true,\"matchReason\":\"账期包含 202512（>= 阈值 202512），匹配成功\"}\n- remark: 账期:202504,202505,202506\n  submitYear=2025, threshold=202512\n  output: {\"remarkPhone\":\"\",\"isInvoiceYearMatched\":false,\"matchReason\":\"所有账期 202504,202505,202506 均 < 阈值 202512，不匹配\"}\n- remark: 账期:202511-202512\n  submitYear=2025, threshold=202512\n  output: {\"remarkPhone\":\"\",\"isInvoiceYearMatched\":true,\"matchReason\":\"账期包含 202512（>= 阈值 202512），匹配成功\"}\n\n# Output\n你必须只返回 JSON，不要输出任何解释、前后缀或 Markdown。\n\nJSON 结构严格如下：\n{\n  \"remarkPhone\": \"11位手机号，未识别时为空字符串\",\n  \"isInvoiceYearMatched\": true 或 false,\n  \"matchReason\": \"判断原因的详细说明\"\n}\n\n# Input Remark\n${remark}`;\n\n  return {\r\n\n    prompt: optimizedPrompt,\n    submitYear: submitYear,\n    thresholdMonth: thresholdMonth,\r\n    context: input.context || {}\r\n  };\n};"
       },
       "id": "6acb7b84-51a3-4d7d-9556-960d459d518d",
       "name": "手机号账期抽取prompt",
@@ -1306,7 +1464,7 @@
     {
       "type": "functionNode",
       "content": {
-        "source": "import http from 'http';\r\n\r\nconst LOCAL_LLM_URL = 'http://127.0.0.1:8091/api/v1/node-gateway/llm/evaluate';\r\n\r\nexport const handler = async (input) => {\r\n  try {\r\n    const context = input && input.context ? input.context : {};\r\n    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\r\n\r\n    if (!prompt) {\r\n      throw new Error('missing prompt from previous component output');\r\n    }\r\n\r\n    const payload = {\r\n      prompt\r\n    };\r\n\r\n    if (input.systemPrompt || context.systemPrompt) {\r\n      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\r\n    }\r\n\r\n    if (input.model || context.llmModel) {\r\n      payload.model = input.model || context.llmModel;\r\n    }\r\n\r\n    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\r\n      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\r\n    }\r\n\r\n    const response = await http.post(LOCAL_LLM_URL, payload);\r\n\r\n    if (!response || response.status < 200 || response.status >= 300) {\r\n      throw new Error('local llm service failed at ' + LOCAL_LLM_URL + ': ' + (response && response.status ? response.status : 'unknown'));\r\n    }\r\n\r\n    const result = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});\r\n\r\n    return {\r\n      llm_status: result.llmStatus || 'error',\r\n      llm_result: result.llmResult || null,\r\n      raw_content: result.rawContent || null,\r\n      error_message: result.errorMessage || null\r\n    };\r\n  } catch (error) {\r\n    return {\r\n      llm_status: 'error',\r\n      error_message: error && error.message ? error.message : String(error)\r\n    };\r\n  }\r\n};"
+        "source": "import http from 'http';\r\n\r\nconst LOCAL_LLM_URL = 'http://127.0.0.1:8091/api/v1/node-gateway/llm/evaluate';\r\n\r\nexport const handler = async (input) => {\r\n  try {\r\n    const context = input && input.context ? input.context : {};\r\n    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\r\n\r\n    if (!prompt) {\r\n      throw new Error('missing prompt from previous component output');\r\n    }\r\n\r\n    const payload = {\r\n      prompt\r\n    };\r\n\r\n    if (input.systemPrompt || context.systemPrompt) {\r\n      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\r\n    }\r\n\r\n    if (input.model || context.llmModel) {\r\n      payload.model = input.model || context.llmModel;\r\n    }\r\n\r\n    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\r\n      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\r\n    }\r\n\r\n    if (input.context && input.context.runId) { payload.runId = input.context.runId; }\r\n    if (input.context && input.context.receiptCode) { payload.receiptCode = input.context.receiptCode; }\r\n    if (input.context && input.context.invoiceKey) { payload.invoiceKey = input.context.invoiceKey; }\r\n    const response = await http.post(LOCAL_LLM_URL, payload);\r\n\r\n    if (!response || response.status < 200 || response.status >= 300) {\r\n      throw new Error('local llm service failed at ' + LOCAL_LLM_URL + ': ' + (response && response.status ? response.status : 'unknown'));\r\n    }\r\n\r\n    const result = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});\r\n\r\n    return {\r\n      llm_status: result.llmStatus || 'error',\r\n      llm_result: result.llmResult || null,\r\n      raw_content: result.rawContent || null,\r\n      error_message: result.errorMessage || null\r\n    };\r\n  } catch (error) {\r\n    return {\r\n      llm_status: 'error',\r\n      error_message: error && error.message ? error.message : String(error)\r\n    };\r\n  }\r\n};"
       },
       "id": "c7aa4eb5-df79-49aa-8e16-c5d7e455c903",
       "name": "手机号账期调用llm",
@@ -1355,7 +1513,7 @@
     {
       "type": "functionNode",
       "content": {
-        "source": "export const handler = async (input) => {\r\n  // 1. 深度兼容获取拼接好的发票商品内容字符串（兼容顶级和 context 结构）\r\n  const context = input.context || {};\r\n  const contents = input.contents ?? context.contents ?? '无';\r\n\r\n  // 2. 结构化、极度严谨的专家级提示词组装\r\n  const optimizedPrompt = `# Role\r\n你是一位极其严谨的企业财税合规审计专家，负责审查发票商品内容（发票内容）中是否包含公司明令禁止报销的“预付、充值、储值类卡券”项目。\r\n\r\n# 核心审查规则\r\n请仔细阅读给出的【发票内容】。如果内容中包含、涉及或暗示了“预付卡销售”、“话费充值”、“卡券购买”、“预存、储值”等资金前置占用的非即期消费行为，则判定为【不合规】；如果是正常的单次通信服务费、宽带费或实物消费，则判定为【合规】。\r\n\r\n# 核心判据清单\r\n- 【不合规（Passed = false）的特征】词：预付卡、单用途卡、充值、充值卡、预存、储值、面值、卡券。\r\n- 【合规（Passed = true）的特征】词：通信服务费、信息服务费、话费、宽带费、月租费、套餐费。\r\n\r\n# 示例参考 (Few-Shot)\r\n- 输入：*电信服务*通信服务费 ➡️ 返回：{\"passed\": true}\r\n- 输入：*电信服务*话费充值 ➡️ 返回：{\"passed\": false}\r\n- 输入：*现代服务*预付卡销售 ➡️ 返回：{\"passed\": false}\r\n- 输入：*电信服务*违约金 ➡️ 返回：{\"passed\": false}\r\n\r\n# 极其严格的输出格式要求\r\n你必须【仅仅且直接】返回一个标准的 JSON 对象，严禁包含任何前言、后记、Markdown 标记（如 json 块标签）或多余的文字解释。\r\n\r\nJSON 结构必须严格如下：\r\n{\r\n  \"passed\": 判定结果（布尔类型 true 或 false，不要带引号）\r\n}\r\n\r\n# 待审查的真实数据\r\n发票内容是：${contents}`;\r\n\r\n  // 3. 返回高准确率的最终大模型提示词\r\n  return {\r\n    prompt: optimizedPrompt\r\n  };\r\n};\r\n"
+        "source": "export const handler = async (input) => {\r\n  // 1. 深度兼容获取拼接好的发票商品内容字符串（兼容顶级和 context 结构）\r\n  const context = input.context || {};\r\n  const contents = input.contents ?? context.contents ?? '无';\r\n\r\n  // 2. 结构化、极度严谨的专家级提示词组装\r\n  const optimizedPrompt = `# Role\r\n你是一位极其严谨的企业财税合规审计专家，负责审查发票商品内容（发票内容）中是否包含公司明令禁止报销的“预付、充值、储值类卡券”项目。\r\n\r\n# 核心审查规则\r\n请仔细阅读给出的【发票内容】。如果内容中包含、涉及或暗示了“预付卡销售”、“话费充值”、“卡券购买”、“预存、储值”等资金前置占用的非即期消费行为，则判定为【不合规】；如果是正常的单次通信服务费、宽带费或实物消费，则判定为【合规】。\r\n\r\n# 核心判据清单\r\n- 【不合规（Passed = false）的特征】词：预付卡、单用途卡、充值、充值卡、预存、储值、面值、卡券。\r\n- 【合规（Passed = true）的特征】词：通信服务费、信息服务费、话费、宽带费、月租费、套餐费。\r\n\r\n# 示例参考 (Few-Shot)\r\n- 输入：*电信服务*通信服务费 ➡️ 返回：{\"passed\": true}\r\n- 输入：*电信服务*话费充值 ➡️ 返回：{\"passed\": false}\r\n- 输入：*现代服务*预付卡销售 ➡️ 返回：{\"passed\": false}\r\n- 输入：*电信服务*违约金 ➡️ 返回：{\"passed\": false}\r\n\r\n# 极其严格的输出格式要求\r\n你必须【仅仅且直接】返回一个标准的 JSON 对象，严禁包含任何前言、后记、Markdown 标记（如 json 块标签）或多余的文字解释。\r\n\r\nJSON 结构必须严格如下：\r\n{\r\n  \"passed\": 判定结果（布尔类型 true 或 false，不要带引号）\r\n}\r\n\r\n# 待审查的真实数据\r\n发票内容是：${contents}`;\r\n\r\n  // 3. 返回高准确率的最终大模型提示词\r\n  return {\r\n\r\n    prompt: optimizedPrompt,\r\n    context: input.context || {}\r\n  };\r\n};\r\n"
       },
       "id": "33a6a837-0964-4c10-b451-e277138820aa",
       "name": "充值卡检查prompt",
@@ -1367,7 +1525,7 @@
     {
       "type": "functionNode",
       "content": {
-        "source": "export const handler = async (input) => {\r\n  // 1. 获取您传入的 filtered_items 数组\r\n  const filteredItems = input.filtered_items || [];\r\n\r\n  // 2. 🔥 深度兼容获取发票总额：依次尝试从顶级、context 中获取原始值\r\n  const context = input.context || {};\r\n  const rawInvoiceAmount = input.invoiceAmount ?? context.invoiceAmount ?? input.invoice_amount ?? 0;\r\n  \r\n  // 将拿到的值（哪怕是带双引号的字符串 \"482.2\"）安全转换为数字，若失败则保留原始字符串显示\r\n  const invoiceAmount = isNaN(parseFloat(rawInvoiceAmount)) ? rawInvoiceAmount : parseFloat(rawInvoiceAmount);\r\n\r\n  // 3. 组装更新后的多行提示词\r\n  const fullPrompt = `# Role\r\n你是一位极其严谨的企业财务审计专家，负责对员工提交的发票明细（filtered_items）和发票总额（invoiceAmount）进行合规性单条核减审计。\r\n\r\n# 原始已知数据\r\n【发票总额 (invoiceAmount)】：${invoiceAmount}\r\n\r\n# 核心审查与单条核减规则\r\n请逐一扫描下方 filtered_items 中的明细项目。如果某项商品的名称（goodsName）中含有以下【禁止报销内容清单】，则判定该项目为不合规项目，必须执行【单条核减】——即直接用发票总额（invoiceAmount）减去该不合规单项的金额（detailAmount）！\r\n\r\n【禁止报销内容清单】：\r\n1. 互联网宽带、电视安装、调测、移机、服务费用\r\n2. 各类广播影视套餐服务（例如：会员服务、视频、游戏、音乐流媒体使用产生的服务费用）\r\n3. 业务解约费、违约金、滞纳金、代收费项目\r\n4. 其他信息技术服务、现代服务\r\n\r\n# 任务要求\r\n根据上述规则，对不合规单项进行单条核减计算，得出最终核减后的可报销金额，并给出详细的原因。\r\n\r\n# 计算步骤约束\r\n1. 锁定初始的【发票总额 (invoiceAmount)】为基准计算起点。\r\n2. 逐一判定明细中的每一项。若命中清单，则将该项视为不合规项目。\r\n3. 执行减法：最终可报销金额 = 发票总额 - 每一个不合规单项的 detailAmount。\r\n4. 确保最终输出的 finalAmount 为纯数字，最多保留两位小数。\r\n\r\n# 极其严格的输出格式要求\r\n你必须【仅仅且直接】返回一个标准的 JSON 对象，不要包含任何前言、后记、Markdown 标记（如 json 块标签）或解释性文本。\r\n\r\nJSON 结构如下：\r\n{\r\n  \"finalAmount\": 最终核减计算后的数值(Number类型，不要带引号),\r\n  \"reason\": \"一段清晰的财务审计说明，必须写明：1. 原始发票总额是多少；2. 识别出哪些单项不合规并进行了核减，列出它们各自的金额；3. 扣减的依据是什么。\"\r\n}\r\n\r\n# 待审查的发票明细输入\r\nfiltered_items: ${JSON.stringify(filteredItems, null, 2)}`;\r\n\r\n  // 4. 严格只返回组装好的最终大模型提示词结果\r\n  return {\r\n    prompt: fullPrompt\r\n  };\r\n};\r\n"
+        "source": "export const handler = async (input) => {\r\n  // 1. 获取您传入的 filtered_items 数组\r\n  const filteredItems = input.filtered_items || [];\r\n\r\n  // 2. 🔥 深度兼容获取发票总额：依次尝试从顶级、context 中获取原始值\r\n  const context = input.context || {};\r\n  const rawInvoiceAmount = input.invoiceAmount ?? context.invoiceAmount ?? input.invoice_amount ?? 0;\r\n  \r\n  // 将拿到的值（哪怕是带双引号的字符串 \"482.2\"）安全转换为数字，若失败则保留原始字符串显示\r\n  const invoiceAmount = isNaN(parseFloat(rawInvoiceAmount)) ? rawInvoiceAmount : parseFloat(rawInvoiceAmount);\r\n\r\n  // 3. 组装更新后的多行提示词\r\n  const fullPrompt = `# Role\r\n你是一位极其严谨的企业财务审计专家，负责对员工提交的发票明细（filtered_items）和发票总额（invoiceAmount）进行合规性单条核减审计。\r\n\r\n# 原始已知数据\r\n【发票总额 (invoiceAmount)】：${invoiceAmount}\r\n\r\n# 核心审查与单条核减规则\r\n请逐一扫描下方 filtered_items 中的明细项目。如果某项商品的名称（goodsName）中含有以下【禁止报销内容清单】，则判定该项目为不合规项目，必须执行【单条核减】——即直接用发票总额（invoiceAmount）减去该不合规单项的金额（detailAmount）！\r\n\r\n【禁止报销内容清单】：\r\n1. 互联网宽带、电视安装、调测、移机、服务费用\r\n2. 各类广播影视套餐服务（例如：会员服务、视频、游戏、音乐流媒体使用产生的服务费用）\r\n3. 业务解约费、违约金、滞纳金、代收费项目\r\n4. 其他信息技术服务、现代服务\r\n\r\n# 任务要求\r\n根据上述规则，对不合规单项进行单条核减计算，得出最终核减后的可报销金额，并给出详细的原因。\r\n\r\n# 计算步骤约束\r\n1. 锁定初始的【发票总额 (invoiceAmount)】为基准计算起点。\r\n2. 逐一判定明细中的每一项。若命中清单，则将该项视为不合规项目。\r\n3. 执行减法：最终可报销金额 = 发票总额 - 每一个不合规单项的 detailAmount。\r\n4. 确保最终输出的 finalAmount 为纯数字，最多保留两位小数。\r\n\r\n# 极其严格的输出格式要求\r\n你必须【仅仅且直接】返回一个标准的 JSON 对象，不要包含任何前言、后记、Markdown 标记（如 json 块标签）或解释性文本。\r\n\r\nJSON 结构如下：\r\n{\r\n  \"finalAmount\": 最终核减计算后的数值(Number类型，不要带引号),\r\n  \"reason\": \"一段清晰的财务审计说明，必须写明：1. 原始发票总额是多少；2. 识别出哪些单项不合规并进行了核减，列出它们各自的金额；3. 扣减的依据是什么。\"\r\n}\r\n\r\n# 待审查的发票明细输入\r\nfiltered_items: ${JSON.stringify(filteredItems, null, 2)}`;\r\n\r\n  // 4. 严格只返回组装好的最终大模型提示词结果\r\n  return {\r\n\r\n    prompt: fullPrompt,\r\n    context: input.context || {}\r\n  };\r\n};\r\n"
       },
       "id": "c442459e-4762-485c-b4bf-deae05a2b896",
       "name": "发票合规prompt",
@@ -1379,7 +1537,7 @@
     {
       "type": "functionNode",
       "content": {
-        "source": "import http from 'http';\r\n\r\nconst LOCAL_LLM_URL = 'http://127.0.0.1:8091/api/v1/node-gateway/llm/evaluate';\r\n\r\nexport const handler = async (input) => {\r\n  try {\r\n    const context = input && input.context ? input.context : {};\r\n    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\r\n\r\n    if (!prompt) {\r\n      throw new Error('missing prompt from previous component output');\r\n    }\r\n\r\n    const payload = {\r\n      prompt\r\n    };\r\n\r\n    if (input.systemPrompt || context.systemPrompt) {\r\n      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\r\n    }\r\n\r\n    if (input.model || context.llmModel) {\r\n      payload.model = input.model || context.llmModel;\r\n    }\r\n\r\n    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\r\n      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\r\n    }\r\n\r\n    const response = await http.post(LOCAL_LLM_URL, payload);\r\n\r\n    if (!response || response.status < 200 || response.status >= 300) {\r\n      throw new Error('local llm service failed at ' + LOCAL_LLM_URL + ': ' + (response && response.status ? response.status : 'unknown'));\r\n    }\r\n\r\n    const result = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});\r\n\r\n    return {\r\n      llm_status: result.llmStatus || 'error',\r\n      llm_result: result.llmResult || null,\r\n      raw_content: result.rawContent || null,\r\n      error_message: result.errorMessage || null\r\n    };\r\n  } catch (error) {\r\n    return {\r\n      llm_status: 'error',\r\n      llm_result: null,\r\n      error_message: error && error.message ? error.message : String(error)\r\n    };\r\n  }\r\n};"
+        "source": "import http from 'http';\r\n\r\nconst LOCAL_LLM_URL = 'http://127.0.0.1:8091/api/v1/node-gateway/llm/evaluate';\r\n\r\nexport const handler = async (input) => {\r\n  try {\r\n    const context = input && input.context ? input.context : {};\r\n    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\r\n\r\n    if (!prompt) {\r\n      throw new Error('missing prompt from previous component output');\r\n    }\r\n\r\n    const payload = {\r\n      prompt\r\n    };\r\n\r\n    if (input.systemPrompt || context.systemPrompt) {\r\n      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\r\n    }\r\n\r\n    if (input.model || context.llmModel) {\r\n      payload.model = input.model || context.llmModel;\r\n    }\r\n\r\n    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\r\n      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\r\n    }\r\n\r\n    if (input.context && input.context.runId) { payload.runId = input.context.runId; }\r\n    if (input.context && input.context.receiptCode) { payload.receiptCode = input.context.receiptCode; }\r\n    if (input.context && input.context.invoiceKey) { payload.invoiceKey = input.context.invoiceKey; }\r\n    const response = await http.post(LOCAL_LLM_URL, payload);\r\n\r\n    if (!response || response.status < 200 || response.status >= 300) {\r\n      throw new Error('local llm service failed at ' + LOCAL_LLM_URL + ': ' + (response && response.status ? response.status : 'unknown'));\r\n    }\r\n\r\n    const result = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});\r\n\r\n    return {\r\n      llm_status: result.llmStatus || 'error',\r\n      llm_result: result.llmResult || null,\r\n      raw_content: result.rawContent || null,\r\n      error_message: result.errorMessage || null\r\n    };\r\n  } catch (error) {\r\n    return {\r\n      llm_status: 'error',\r\n      llm_result: null,\r\n      error_message: error && error.message ? error.message : String(error)\r\n    };\r\n  }\r\n};"
       },
       "id": "109af3d5-6dec-4cd0-a09e-de43b026c491",
       "name": "调用llm",
@@ -1391,7 +1549,7 @@
     {
       "type": "functionNode",
       "content": {
-        "source": "import http from 'http';\r\n\r\nconst LOCAL_LLM_URL = 'http://127.0.0.1:8091/api/v1/node-gateway/llm/evaluate';\r\n\r\nexport const handler = async (input) => {\r\n  try {\r\n    const context = input && input.context ? input.context : {};\r\n    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\r\n\r\n    if (!prompt) {\r\n      throw new Error('missing prompt from previous component output');\r\n    }\r\n\r\n    const payload = {\r\n      prompt\r\n    };\r\n\r\n    if (input.systemPrompt || context.systemPrompt) {\r\n      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\r\n    }\r\n\r\n    if (input.model || context.llmModel) {\r\n      payload.model = input.model || context.llmModel;\r\n    }\r\n\r\n    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\r\n      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\r\n    }\r\n\r\n    const response = await http.post(LOCAL_LLM_URL, payload);\r\n\r\n    if (!response || response.status < 200 || response.status >= 300) {\r\n      throw new Error('local llm service failed at ' + LOCAL_LLM_URL + ': ' + (response && response.status ? response.status : 'unknown'));\r\n    }\r\n\r\n    const result = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});\r\n\r\n    return {\r\n      llm_status: result.llmStatus || 'error',\r\n      llm_result: result.llmResult || null,\r\n      raw_content: result.rawContent || null,\r\n      error_message: result.errorMessage || null\r\n    };\r\n  } catch (error) {\r\n    return {\r\n      llm_status: 'error',\r\n      llm_result: null,\r\n      error_message: error && error.message ? error.message : String(error)\r\n    };\r\n  }\r\n};"
+        "source": "import http from 'http';\r\n\r\nconst LOCAL_LLM_URL = 'http://127.0.0.1:8091/api/v1/node-gateway/llm/evaluate';\r\n\r\nexport const handler = async (input) => {\r\n  try {\r\n    const context = input && input.context ? input.context : {};\r\n    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\r\n\r\n    if (!prompt) {\r\n      throw new Error('missing prompt from previous component output');\r\n    }\r\n\r\n    const payload = {\r\n      prompt\r\n    };\r\n\r\n    if (input.systemPrompt || context.systemPrompt) {\r\n      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\r\n    }\r\n\r\n    if (input.model || context.llmModel) {\r\n      payload.model = input.model || context.llmModel;\r\n    }\r\n\r\n    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\r\n      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\r\n    }\r\n\r\n    if (input.context && input.context.runId) { payload.runId = input.context.runId; }\r\n    if (input.context && input.context.receiptCode) { payload.receiptCode = input.context.receiptCode; }\r\n    if (input.context && input.context.invoiceKey) { payload.invoiceKey = input.context.invoiceKey; }\r\n    const response = await http.post(LOCAL_LLM_URL, payload);\r\n\r\n    if (!response || response.status < 200 || response.status >= 300) {\r\n      throw new Error('local llm service failed at ' + LOCAL_LLM_URL + ': ' + (response && response.status ? response.status : 'unknown'));\r\n    }\r\n\r\n    const result = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});\r\n\r\n    return {\r\n      llm_status: result.llmStatus || 'error',\r\n      llm_result: result.llmResult || null,\r\n      raw_content: result.rawContent || null,\r\n      error_message: result.errorMessage || null\r\n    };\r\n  } catch (error) {\r\n    return {\r\n      llm_status: 'error',\r\n      llm_result: null,\r\n      error_message: error && error.message ? error.message : String(error)\r\n    };\r\n  }\r\n};"
       },
       "id": "514e15db-3657-4fa3-9228-88b750ea08f8",
       "name": "调用llm",
@@ -1412,7 +1570,7 @@
           {
             "id": "50871993-19cd-4009-ae64-68ad282cb902",
             "key": "isValidInvoiceAmount",
-            "value": "llm_status == \"success\" ? ((llm_result.finalAmount <= serviceData.auditInfo.applyAmount) ? \"true\" : \"false\") : \"error\""
+            "value": "llm_status == \"success\" ? ((number(llm_result.finalAmount ?? 999999999) <= number(serviceData.auditInfo.applyAmount ?? 0)) ? \"true\" : \"false\") : \"error\""
           }
         ],
         "passThrough": true,
@@ -1444,7 +1602,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"LLM调用失败，无法判断充值卡检查结果\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"LLM服务调用失败，充值卡检查无法执行\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"LLM服务调用失败，充值卡检查无法执行\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
           },
           {
             "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
@@ -1458,7 +1618,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票内容不含充值卡信息等\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -1472,7 +1634,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票内容包含充值卡信息等\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，发票明细内容包含“\"+(contents??\"\")+\"”部分为公司禁止报销项，不符合“企业内控要求”\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n4.1.2.2禁止报销：预付卡销售、充值卡、流量/通话费预存;\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票重开】联系销货方或在手机APP重新开具发票（月结发票）\""
           }
         ],
         "inputs": [
@@ -1527,6 +1691,16 @@
             "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
             "name": "日志内容",
             "field": "message"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-regulation0",
+            "name": "制度",
+            "field": "regulation"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
+            "name": "建议",
+            "field": "suggestion"
           }
         ],
         "passThrough": false,
@@ -1559,7 +1733,9 @@
             "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"expense-item\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"LLM调用失败，无法判断发票内容金额检查结果\"",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"LLM服务调用失败，发票内容金额检查无法执行\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"LLM服务调用失败，发票内容金额检查无法执行\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
           },
           {
             "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
@@ -1574,7 +1750,9 @@
             "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"expense-item\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票内容属于通讯费报销项目，且不存在异常消费\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -1589,7 +1767,9 @@
             "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"expense-item\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票内容不属于通讯费报销项目，或存在异常消费\""
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，发票明细内容包含“\"+(contents??\"\")+\"”部分为公司禁止报销项，不符合“企业内控要求”\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n4.1.2.2禁止报销:\n互联网宽带/电视安装、调测、移机、服务费用:\n各类广播影视套餐服务,如会员服务、视频、游戏、音乐流媒体使用产生的服务费用:\n业务解约费、违约金、滞纳金、代收费项目:\n其他信息技术服务、现代服务。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【扣减金额】扣减禁止报销部分的发票金额\""
           }
         ],
         "inputs": [
@@ -1649,6 +1829,16 @@
             "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
             "name": "日志内容",
             "field": "message"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-regulation0",
+            "name": "制度",
+            "field": "regulation"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
+            "name": "建议",
+            "field": "suggestion"
           }
         ],
         "passThrough": false,
@@ -1909,6 +2099,18 @@
       "id": "0c4736c0-b294-4720-8ba4-3df00bec7490",
       "sourceId": "e0603963-d6e9-47da-adbc-a23c0841d087",
       "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
+      "type": "edge"
+    },
+    {
+      "id": "edge-发票充值卡检查-contents",
+      "sourceId": "06969d8b-16b9-4784-8883-a872f3667838",
+      "targetId": "b49e3359-766d-4ff3-9115-423eb06cebe7",
+      "type": "edge"
+    },
+    {
+      "id": "edge-发票内容金额检查-contents",
+      "sourceId": "06969d8b-16b9-4784-8883-a872f3667838",
+      "targetId": "e0603963-d6e9-47da-adbc-a23c0841d087",
       "type": "edge"
     }
   ]

@@ -9,10 +9,13 @@ from pathlib import Path
 from typing import Any
 
 from expense_audit_orchestrator import audit_client
+from expense_audit_orchestrator.observability import get_logger
 
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OCR_PATH = ROOT / "input.json"
+
+_logger = get_logger("data_prep")
 
 InvoiceFileProvider = Callable[[str], str]
 OCRProvider = Callable[..., dict[str, Any]]
@@ -30,13 +33,16 @@ DataEnricher = Callable[[str, str, dict[str, Any], dict[str, Any]], Any]
 
 def get_invoice_file_from_server(receipt_code: str) -> str:
     """模拟从文件服务器获取发票文件路径或流"""
-    print(f"[文件服务] 成功获取单据 {receipt_code} 的发票文件路径: /storage/pdf/2026/001.pdf")
+    _logger.info(
+        "获取发票文件路径",
+        extra={"receipt_code": receipt_code, "event": "data_prep.invoice_file", "file_path": "/storage/pdf/2026/001.pdf"},
+    )
     return "/storage/pdf/2026/001.pdf"
 
 
 def call_ocr_service(file_path: str, ocr_sample_path: Path | str = DEFAULT_OCR_PATH) -> dict[str, Any]:
     """模拟调用 OCR 识别能力，并清洗转化为标准的业务结构"""
-    print(f"[OCR服务] 正在识别发票: {file_path} ...")
+    _logger.info("OCR 识别发票", extra={"event": "data_prep.ocr", "file_path": file_path})
     time.sleep(0.5)
 
     with Path(ocr_sample_path).open("r", encoding="utf-8") as source:
@@ -311,7 +317,7 @@ class ReceiptDataPreparer:
     extra_enrichers: Mapping[str, DataEnricher] = field(default_factory=dict)
 
     def prepare_receipt_context(self, receipt_code: str) -> dict[str, Any]:
-        print("[数据准备] 开始聚合单据级外部数据...")
+        _logger.info("开始聚合单据级外部数据", extra={"receipt_code": receipt_code, "event": "data_prep.aggregate.start"})
         audit_info = self.audit_info_provider(receipt_code)
         company_blacklist = self.company_blacklist_provider()
         company_list = self.company_list_provider()
@@ -347,7 +353,10 @@ class ReceiptDataPreparer:
             audit_invoice_file_info,
         )
 
-        print(f"[数据准备] 已完成单据级服务聚合: {', '.join(service_data.keys())}")
+        _logger.info(
+            "已完成单据级服务聚合",
+            extra={"receipt_code": receipt_code, "event": "data_prep.aggregate.done", "service_keys": list(service_data.keys())},
+        )
         return {
             "receiptCode": receipt_code,
             "serviceData": service_data,

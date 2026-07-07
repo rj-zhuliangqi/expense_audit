@@ -11,6 +11,10 @@ from urllib.request import Request, urlopen
 
 from dotenv import dotenv_values, load_dotenv
 
+from expense_audit_orchestrator.observability import get_logger
+
+
+_logger = get_logger("audit_client")
 
 DEFAULT_AUDIT_SERVICE_URL = "http://127.0.0.1:8080"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -320,7 +324,7 @@ def _fetch_service_data(
             query_string = f"?{urlencode(normalized_query)}"
 
     endpoint = f"{service_url.rstrip('/')}{path}{query_string}"
-    print(f"[核销单服务] 查询{description}: {endpoint}")
+    _logger.info("核销单服务查询", extra={"event": "audit_client.get", "description": description, "endpoint": endpoint})
 
     request: str | Request = endpoint
     if headers:
@@ -348,7 +352,7 @@ def _post_service_payload(
     headers: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     endpoint = f"{service_url.rstrip('/')}{path}"
-    print(f"[核销单服务] 提交{description}: {endpoint}")
+    _logger.info("核销单服务提交", extra={"event": "audit_client.post", "description": description, "endpoint": endpoint})
 
     request = Request(
         endpoint,

@@ -26,8 +26,11 @@ from expense_audit_orchestrator import (
     DEFAULT_OCR_PATH,
     create_receipt_audit_service,
 )
+from expense_audit_orchestrator.observability import configure_logging, get_logger
 from expense_audit_orchestrator.writeback_client import build_receipt_writeback_file_sink
 
+
+_logger = get_logger("rabbitmq")
 
 DEFAULT_AMQP_URL = "amqp://guest:guest@127.0.0.1:5672/%2F"
 DEFAULT_DELAY_TIME_MILLIS = 300000
@@ -236,7 +239,10 @@ class ReceiptAuditWorker:
         try:
             receipt_code = parse_receipt_code(body)
             source = getattr(method, "routing_key", "unknown")
-            print(f"[rabbitmq] received receipt_code={receipt_code} source={source}")
+            _logger.info(
+                "received receipt",
+                extra={"receipt_code": receipt_code, "source": source, "event": "rabbitmq.received"},
+            )
 
             if not self._should_process_receipt(receipt_code):
                 channel.basic_ack(delivery_tag=method.delivery_tag)
@@ -245,20 +251,30 @@ class ReceiptAuditWorker:
             prepared_receipt = self._prepare_receipt(receipt_code)
             if prepared_receipt is not None:
                 self._export_prepared_receipt(receipt_code, prepared_receipt)
-                print(
-                    f"[rabbitmq] prepared receipt_code={receipt_code} "
-                    f"invoice_count={_resolve_invoice_count(prepared_receipt)}"
+                _logger.info(
+                    "prepared receipt",
+                    extra={
+                        "receipt_code": receipt_code,
+                        "invoice_count": _resolve_invoice_count(prepared_receipt),
+                        "event": "rabbitmq.prepared",
+                    },
                 )
 
             result = self._process_receipt(receipt_code, prepared_receipt)
-            print(
-                f"[rabbitmq] completed receipt_code={receipt_code} "
-                f"invoice_count={_resolve_invoice_count(result)}"
+            _logger.info(
+                "completed receipt",
+                extra={
+                    "receipt_code": receipt_code,
+                    "invoice_count": _resolve_invoice_count(result),
+                    "event": "rabbitmq.completed",
+                },
             )
             channel.basic_ack(delivery_tag=method.delivery_tag)
         except Exception as exc:
-            print(f"[rabbitmq] failed to process message: {exc}", file=sys.stderr)
-            traceback.print_exc()
+            _logger.exception(
+                "failed to process message",
+                extra={"event": "rabbitmq.failed"},
+            )
             channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
     def _supports_two_stage_processing(self) -> bool:
@@ -296,7 +312,10 @@ class ReceiptAuditWorker:
 
     def _should_process_receipt(self, receipt_code: str) -> bool:
         if self._bypass_task_gate:
-            print(f"[rabbitmq] bypassed task gate for receipt_code={receipt_code}")
+            _logger.info(
+                "bypassed task gate",
+                extra={"receipt_code": receipt_code, "event": "rabbitmq.task_gate.bypassed"},
+            )
             return True
 
         if not callable(self._task_info_list_provider) or not callable(self._task_status_update_provider):
@@ -305,7 +324,10 @@ class ReceiptAuditWorker:
         task_info_list = self._task_info_list_provider(receipt_code)
         matched_task = _select_pending_ruijie_task(task_info_list)
         if matched_task is None:
-            print(f"[rabbitmq] skipped receipt_code={receipt_code} reason=no pending ruijieAI task")
+            _logger.info(
+                "skipped receipt",
+                extra={"receipt_code": receipt_code, "event": "rabbitmq.skipped", "reason": "no pending ruijieAI task"},
+            )
             return False
 
         system_identifier = _resolve_task_int(matched_task, "systemIdentifier") or 4
@@ -316,13 +338,25 @@ class ReceiptAuditWorker:
                 system_identifier=system_identifier,
             )
         except Exception as exc:
-            print(f"[rabbitmq] skipped receipt_code={receipt_code} reason=task status update failed: {exc}")
+            _logger.warning(
+                "skipped receipt",
+                extra={
+                    "receipt_code": receipt_code,
+                    "event": "rabbitmq.skipped",
+                    "reason": "task status update failed",
+                    "error": str(exc),
+                },
+            )
             return False
 
         if not _is_task_status_update_success(update_result):
-            print(
-                f"[rabbitmq] skipped receipt_code={receipt_code} "
-                "reason=task status update reported unsuccessful result"
+            _logger.warning(
+                "skipped receipt",
+                extra={
+                    "receipt_code": receipt_code,
+                    "event": "rabbitmq.skipped",
+                    "reason": "task status update reported unsuccessful result",
+                },
             )
             return False
 
@@ -338,7 +372,10 @@ class ReceiptAuditWorker:
             json.dumps(prepared_receipt, ensure_ascii=False, indent=4),
             encoding="utf-8",
         )
-        print(f"[rabbitmq] exported prepared receipt to: {output_file}")
+        _logger.info(
+            "exported prepared receipt",
+            extra={"receipt_code": receipt_code, "event": "rabbitmq.exported", "output_path": str(output_file)},
+        )
 
     def run_forever(self) -> None:
         connection = create_blocking_connection(self._settings)
@@ -354,11 +391,11 @@ class ReceiptAuditWorker:
                     on_message_callback=self.handle_delivery,
                     auto_ack=False,
                 )
-                print(f"[rabbitmq] consuming queue={queue_name}")
+                _logger.info("consuming queue", extra={"queue": queue_name, "event": "rabbitmq.consuming"})
 
             channel.start_consuming()
         except KeyboardInterrupt:
-            print("[rabbitmq] received interrupt, stopping consumer")
+            _logger.info("received interrupt, stopping consumer", extra={"event": "rabbitmq.interrupt"})
         finally:
             if getattr(channel, "is_open", False):
                 try:
@@ -534,6 +571,7 @@ def build_cli_parser() -> argparse.ArgumentParser:
 
 
 def main_cli(argv: Sequence[str] | None = None) -> int:
+    configure_logging()
     parser = build_cli_parser()
     args = parser.parse_args(argv)
 

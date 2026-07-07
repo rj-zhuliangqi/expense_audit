@@ -7,6 +7,7 @@ from typing import Any
 from expense_audit_orchestrator.runtime_client import DEFAULT_GRAPH_PATH, GraphRuntimeClient
 
 from .core import DEFAULT_OCR_PATH, ReceiptDataPreparer
+from .observability import new_run_id, run_context
 
 
 InvoiceResultSink = Callable[[str, dict[str, Any]], None]
@@ -23,6 +24,7 @@ class ReceiptAuditService:
         graph_content: dict[str, Any] | str | None = None,
         invoice_result_sink: InvoiceResultSink | None = None,
         receipt_result_sink: ReceiptResultSink | None = None,
+        run_id_factory: Callable[[], str] = new_run_id,
     ) -> None:
         if (graph_path is None) == (graph_content is None):
             raise ValueError("exactly one of graph_path or graph_content is required")
@@ -33,6 +35,7 @@ class ReceiptAuditService:
         self._graph_content = graph_content
         self._invoice_result_sink = invoice_result_sink or _noop_invoice_result_sink
         self._receipt_result_sink = receipt_result_sink or _noop_receipt_result_sink
+        self._run_id_factory = run_id_factory
 
     def prepare_input(
         self,
@@ -115,6 +118,11 @@ class ReceiptAuditService:
             "invoiceResults": invoice_results,
             "summary": _build_receipt_summary(invoice_results),
             "isAmountSufficient": (remaining_apply_amount is None or remaining_apply_amount <= 0),
+            # Receipt-level amount context used by writeback to build the final
+            # E31 message with real totals (有效发票合计 / 报销金额 / 缺少金额).
+            "applyAmount": _resolve_initial_apply_amount(prepared_receipt),
+            "remainingApplyAmount": remaining_apply_amount,
+            "validInvoiceTotal": _resolve_valid_invoice_total(invoice_results, _resolve_initial_apply_amount(prepared_receipt), remaining_apply_amount),
         }
         self._receipt_result_sink(receipt_result)
         return receipt_result
@@ -125,17 +133,26 @@ class ReceiptAuditService:
         invoice_preparation: Mapping[str, Any],
     ) -> dict[str, Any]:
         started_at = _utc_now_isoformat()
+        run_id = self._run_id_factory()
         prepared_input = _resolve_prepared_input(invoice_preparation)
+        invoice_key = str(invoice_preparation.get("invoiceKey") or _resolve_invoice_key(_resolve_invoice_file(invoice_preparation)))
+        _inject_run_context(
+            prepared_input,
+            receipt_code=receipt_code,
+            run_id=run_id,
+            invoice_key=invoice_key,
+        )
 
         try:
             if not prepared_input:
                 raise ValueError("preparedInput is required for invoice execution")
 
-            runtime_result = self._graph_runtime_client.evaluate(
-                prepared_input=prepared_input,
-                graph_path=self._graph_path,
-                graph_content=self._graph_content,
-            )
+            with run_context(receipt_code=receipt_code, run_id=run_id, invoice_key=invoice_key):
+                runtime_result = self._graph_runtime_client.evaluate(
+                    prepared_input=prepared_input,
+                    graph_path=self._graph_path,
+                    graph_content=self._graph_content,
+                )
         except Exception as exc:
             return _build_invoice_result(
                 receipt_code=receipt_code,
@@ -147,6 +164,7 @@ class ReceiptAuditService:
                 error_message=str(exc),
                 started_at=started_at,
                 finished_at=_utc_now_isoformat(),
+                run_id=run_id,
             )
 
         return _build_invoice_result(
@@ -159,6 +177,7 @@ class ReceiptAuditService:
             error_message=None,
             started_at=started_at,
             finished_at=_utc_now_isoformat(),
+            run_id=run_id,
         )
 
     def evaluate(
@@ -225,6 +244,25 @@ def _build_failed_decision_output(error_message: str) -> dict[str, Any]:
     }
 
 
+def _inject_run_context(
+    prepared_input: dict[str, Any],
+    *,
+    receipt_code: str,
+    run_id: str,
+    invoice_key: str,
+) -> None:
+    """把 runId/receiptCode/invoiceKey 注入 preparedInput.context，供图内 LLM 节点透传给 node_gateway。"""
+    if not isinstance(prepared_input, dict):
+        return
+    context = prepared_input.get("context")
+    if not isinstance(context, dict):
+        context = {}
+        prepared_input["context"] = context
+    context.setdefault("runId", run_id)
+    context.setdefault("receiptCode", receipt_code)
+    context.setdefault("invoiceKey", invoice_key)
+
+
 def _build_invoice_result(
     *,
     receipt_code: str,
@@ -236,10 +274,12 @@ def _build_invoice_result(
     error_message: str | None,
     started_at: str,
     finished_at: str,
+    run_id: str = "",
 ) -> dict[str, Any]:
     invoice_file = _resolve_invoice_file(invoice_preparation)
     return {
         "receiptCode": receipt_code,
+        "runId": run_id,
         "invoiceKey": str(invoice_preparation.get("invoiceKey") or _resolve_invoice_key(invoice_file)),
         "invoiceFile": invoice_file,
         "preparedInput": prepared_input,
@@ -379,3 +419,26 @@ def _extract_invoice_final_amount(invoice_result: dict[str, Any]) -> float | Non
             pass
 
     return None
+
+
+def _resolve_valid_invoice_total(
+    invoice_results: list[dict[str, Any]],
+    apply_amount: float | None,
+    remaining_apply_amount: float | None,
+) -> float | None:
+    """Sum of valid-invoice final amounts (the amount that counted toward the
+    receipt). Reconstructs the total from the applyAmount / remaining shortfall
+    so the writeback E31 message can report 有效发票合计金额 / 缺少金额 even when
+    individual invoice finalAmounts are unavailable.
+    """
+    if apply_amount is None or remaining_apply_amount is None:
+        # Fall back to summing per-invoice finalAmounts where available.
+        total = 0.0
+        found = False
+        for invoice_result in invoice_results:
+            final_amount = _extract_invoice_final_amount(invoice_result)
+            if final_amount is not None:
+                total += final_amount
+                found = True
+        return total if found else None
+    return apply_amount - remaining_apply_amount

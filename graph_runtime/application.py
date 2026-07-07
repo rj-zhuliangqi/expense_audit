@@ -2,7 +2,11 @@ from typing import Any, Protocol
 
 
 class DecisionEngine(Protocol):
-    def evaluate(self, rule_input: dict[str, Any]) -> dict[str, Any]:
+    def evaluate(
+        self,
+        rule_input: dict[str, Any],
+        options: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         ...
 
 
@@ -129,8 +133,13 @@ def evaluate_prepared_input(
     prepared_input: dict[str, Any],
     *,
     receipt_code: str | None = None,
+    trace: bool = True,
+    max_depth: int | None = None,
 ) -> dict[str, Any]:
-    rule_result = decision_engine.evaluate(prepared_input)
+    options: dict[str, Any] = {"trace": trace}
+    if max_depth is not None:
+        options["max_depth"] = max_depth
+    rule_result = decision_engine.evaluate(prepared_input, options)
     decision_output = normalize_decision_output(rule_result.get("result", {}))
 
     return {
@@ -140,4 +149,6 @@ def evaluate_prepared_input(
         "decisionOutput": decision_output,
         "preparedInput": prepared_input,
         "ruleInput": prepared_input,
+        "trace": rule_result.get("trace"),
+        "performance": rule_result.get("performance"),
     }
