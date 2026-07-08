@@ -44,7 +44,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -60,7 +61,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据种类为“\"+(invoiceType??\"\")+\"”不在国内合规票据范围，不符合“税法政策要求”\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【删除发票】删除本票据，并提供真实业务开具的发票\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【删除发票】删除本票据，并提供真实业务开具的发票\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           }
         ],
         "inputs": [
@@ -125,6 +127,11 @@
             "id": "a1b2c3d4-0000-0000-0000-suggestion0",
             "name": "建议",
             "field": "employeeSuggestionTips"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,
@@ -215,7 +222,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -231,7 +239,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据购货方名称为“\"+(orgName??\"\")+\"”，正确购货方名称为“\"+(filter((serviceData.companyList??[]) as c,(c.ccode??c.accountingCode)==(accountingCode??\"\"))[0].cname??\"\")+\"”，不符合“税法政策要求”\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2.1.1员工需要确保票据中公司信息的准确性。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票重开】联系销货方或在手机APP重新开具发票\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票重开】联系销货方或在手机APP重新开具发票\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           }
         ],
         "inputs": [
@@ -296,6 +305,11 @@
             "id": "a1b2c3d4-0000-0000-0000-suggestion0",
             "name": "建议",
             "field": "employeeSuggestionTips"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,
@@ -329,7 +343,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -345,7 +360,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据购货方税号为“\"+(buyerTaxNo??\"\")+\"”，正确购货方统一信用代码为“\"+(filter((serviceData.companyList??[]) as c,(c.ccode??c.accountingCode)==(accountingCode??\"\"))[0].companyTax??\"\")+\"”，不符合“税法政策要求”\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2.1.1员工需要确保票据中公司信息的准确性。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票重开】联系销货方或在手机APP重新开具发票\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票重开】联系销货方或在手机APP重新开具发票\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           }
         ],
         "inputs": [
@@ -410,6 +426,11 @@
             "id": "a1b2c3d4-0000-0000-0000-suggestion0",
             "name": "建议",
             "field": "employeeSuggestionTips"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,
@@ -443,7 +464,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -459,7 +481,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票合计金额不足\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"场景1：前面检查有未通过发票，导致有效金额不足\n建议：【整改问题】整改下方标记问题的发票，整改后会重新计入有效金额；\n\n场景2：漏传发票或发票识别不清晰，导致有效金额不足\n建议：【检查上传】请补充上传电子发票，如为纸质发票，请拍照上传。如均已上传发票，请确认纸质发票金额识别是否正确\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"场景1：前面检查有未通过发票，导致有效金额不足\n建议：【整改问题】整改下方标记问题的发票，整改后会重新计入有效金额；\n\n场景2：漏传发票或发票识别不清晰，导致有效金额不足\n建议：【检查上传】请补充上传电子发票，如为纸质发票，请拍照上传。如均已上传发票，请确认纸质发票金额识别是否正确\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           }
         ],
         "inputs": [
@@ -524,6 +547,11 @@
             "id": "a1b2c3d4-0000-0000-0000-suggestion0",
             "name": "建议",
             "field": "employeeSuggestionTips"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,
@@ -557,7 +585,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -573,7 +602,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，发票销货方为“\"+(salerName??\"\")+\"”在税务局黑名单中，不符合“税法政策要求”\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票作废】联系销货方作废本发票，并提供真实业务开具的发票\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票作废】联系销货方作废本发票，并提供真实业务开具的发票\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           }
         ],
         "inputs": [
@@ -638,6 +668,11 @@
             "id": "a1b2c3d4-0000-0000-0000-suggestion0",
             "name": "建议",
             "field": "employeeSuggestionTips"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,
@@ -671,7 +706,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -687,7 +723,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，发票已被核销单“\"+(filter((serviceData.invoiceUsageHistory??[]) as c,c.chequeNo==(invoiceNo??\"\"))[0].miInstanceCode??\"\")+\"”使用，不符合“税法政策要求”\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【删除发票】删除本票据并提供未使用报销的票据\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【删除发票】删除本票据并提供未使用报销的票据\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           }
         ],
         "inputs": [
@@ -752,6 +789,11 @@
             "id": "a1b2c3d4-0000-0000-0000-suggestion0",
             "name": "建议",
             "field": "employeeSuggestionTips"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,
@@ -785,7 +827,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -801,7 +844,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据开具日期“\"+(invoiceDate??\"\")+\"”不在本年度，不符合“企业内控要求”\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2.2.3除跨年差旅外,票据不允许跨年核销使用\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【无需操作】您的报销行为将被记录，将作为财务事后分析的依据\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【无需操作】您的报销行为将被记录，将作为财务事后分析的依据\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           }
         ],
         "inputs": [
@@ -866,6 +910,11 @@
             "id": "a1b2c3d4-0000-0000-0000-suggestion0",
             "name": "建议",
             "field": "employeeSuggestionTips"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,
@@ -899,7 +948,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -915,7 +965,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据账单年份“\"+(remark??\"\")+\"”不在本年度，不符合“企业内控要求”\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n4.1.3.3员工应使用运营商开具的月结费用发票(国际通讯费用票据以当地实际情况为准)在额度内实报实销。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【无需操作】您的报销行为将被记录，将作为财务事后分析的依据\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【无需操作】您的报销行为将被记录，将作为财务事后分析的依据\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           }
         ],
         "inputs": [
@@ -980,6 +1031,11 @@
             "id": "a1b2c3d4-0000-0000-0000-suggestion0",
             "name": "建议",
             "field": "employeeSuggestionTips"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,
@@ -1040,7 +1096,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
             "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
@@ -1056,7 +1113,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据真伪查验不通过，不符合“税法政策要求”\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【稍后报销】发票未上传到税局，请在发票开具24H后再上传使用发票\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【稍后报销】发票未上传到税局，请在发票开具24H后再上传使用发票\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -1072,7 +1130,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据已被销货方作废，不符合“税法政策要求”\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票重开】联系销货方或在手机APP重新开具发票\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票重开】联系销货方或在手机APP重新开具发票\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
             "_id": "75f486cf-bdf6-49cc-8c72-1ae0f6f40f50",
@@ -1088,7 +1147,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据已被销售方红冲，不符合“税法政策要求”\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票重开】联系销货方或在手机APP重新开具发票\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票重开】联系销货方或在手机APP重新开具发票\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           }
         ],
         "inputs": [
@@ -1153,6 +1213,11 @@
             "id": "a1b2c3d4-0000-0000-0000-suggestion0",
             "name": "建议",
             "field": "employeeSuggestionTips"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,
@@ -1186,7 +1251,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -1202,7 +1268,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据开具方“\"+(salerName??\"\")+\"”不属于运营商，不符合“企业内控要求”\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n4.1.3.3员工应使用运营商开具的月结费用发票(国际通讯费用票据以当地实际情况为准)在额度内实报实销。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【删除发票】删除本票据并提供属于运营商开具的票据\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【删除发票】删除本票据并提供属于运营商开具的票据\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           }
         ],
         "inputs": [
@@ -1267,6 +1334,11 @@
             "id": "a1b2c3d4-0000-0000-0000-suggestion0",
             "name": "建议",
             "field": "employeeSuggestionTips"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,
@@ -1342,7 +1414,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -1358,7 +1431,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据账单号码“\"+(remarkPhone??\"\")+\"”不是员工公司备案手机号，不符合“企业内控要求”\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n4.1.3.3员工应使用运营商开具的月结费用发票(国际通讯费用票据以当地实际情况为准)在额度内实报实销。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【无需操作】您的报销行为将被记录，将作为财务事后分析的依据\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【无需操作】您的报销行为将被记录，将作为财务事后分析的依据\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           }
         ],
         "inputs": [
@@ -1423,6 +1497,11 @@
             "id": "a1b2c3d4-0000-0000-0000-suggestion0",
             "name": "建议",
             "field": "employeeSuggestionTips"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,
@@ -1604,7 +1683,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"LLM服务调用失败，充值卡检查无法执行\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
             "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
@@ -1620,7 +1700,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -1636,7 +1717,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，发票明细内容包含“\"+(contents??\"\")+\"”部分为公司禁止报销项，不符合“企业内控要求”\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n4.1.2.2禁止报销：预付卡销售、充值卡、流量/通话费预存;\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票重开】联系销货方或在手机APP重新开具发票（月结发票）\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票重开】联系销货方或在手机APP重新开具发票（月结发票）\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           }
         ],
         "inputs": [
@@ -1701,6 +1783,11 @@
             "id": "a1b2c3d4-0000-0000-0000-suggestion0",
             "name": "建议",
             "field": "employeeSuggestionTips"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,
@@ -1735,7 +1822,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"LLM服务调用失败，发票内容金额检查无法执行\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
             "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
@@ -1752,7 +1840,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -1769,7 +1858,8 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，发票明细内容包含“\"+(contents??\"\")+\"”部分为公司禁止报销项，不符合“企业内控要求”\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n4.1.2.2禁止报销:\n互联网宽带/电视安装、调测、移机、服务费用:\n各类广播影视套餐服务,如会员服务、视频、游戏、音乐流媒体使用产生的服务费用:\n业务解约费、违约金、滞纳金、代收费项目:\n其他信息技术服务、现代服务。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【扣减金额】扣减禁止报销部分的发票金额\""
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【扣减金额】扣减禁止报销部分的发票金额\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           }
         ],
         "inputs": [
@@ -1839,6 +1929,11 @@
             "id": "a1b2c3d4-0000-0000-0000-suggestion0",
             "name": "建议",
             "field": "employeeSuggestionTips"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,

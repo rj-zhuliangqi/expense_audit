@@ -1090,6 +1090,60 @@ class WritebackAssemblerTests(unittest.TestCase):
         self.assertEqual(log["policiesIndex"], "《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范")
         self.assertEqual(log["employeeSuggestionTips"], "【发票作废】联系销货方作废本发票")
 
+    def test_assemble_propagates_create_time_from_rule_result(self) -> None:
+        """图内各稽核点输出的 create_time（取自 context.executionTime）应原样透传到
+        auditLogs 的 createTime；缺失时为 None（回写层不另行生成时间戳）。
+        """
+        prepared_receipt = {
+            "receiptCode": "REC-CT-PROP-001",
+            "serviceData": {"auditInfo": {"instanceCode": "REC-CT-PROP-001"}},
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "invoiceFile": {"fid": "FID-001"},
+                    "preparedInput": {
+                        "instance_code": "REC-CT-PROP-001",
+                        "serviceData": {
+                            "currentInvoiceInfo": {"aiiid": "AIIID-001"},
+                            "currentAuditInvoiceFile": {"afiid": "AFID-001", "fid": "FID-001"},
+                        },
+                    },
+                }
+            ],
+        }
+        processed_receipt = {
+            "receiptCode": "REC-CT-PROP-001",
+            "serviceData": prepared_receipt["serviceData"],
+            "invoiceResults": [
+                {
+                    "invoiceKey": "FID-001",
+                    "preparedInput": prepared_receipt["invoicePreparations"][0]["preparedInput"],
+                    "decisionOutput": {
+                        "header_result": {
+                            "reason_code": "E01",
+                            "distinguish_result": "REJECT",
+                            "audit_content": "抬头检查",
+                            "audit_type": "general-rules",
+                            "invoice_file_id": "AFID-001",
+                            "invoice_info_id": "AIIID-001",
+                            "message": "抬头不一致",
+                            "create_time": "2026-07-08T21:35:00+08:00",
+                        }
+                    },
+                    "decisionStatus": "reject",
+                    "executionStatus": "SUCCEEDED",
+                }
+            ],
+            "summary": {"overallStatus": "SUCCESS"},
+        }
+        payload = assemble_result_audit_info(prepared_receipt, processed_receipt)
+        self.assertEqual(payload["auditLogs"][0]["createTime"], "2026-07-08T21:35:00+08:00")
+
+        # 缺失 create_time 时 createTime 为 None（回写层不兜底生成时间戳）
+        processed_receipt["invoiceResults"][0]["decisionOutput"]["header_result"].pop("create_time")
+        payload_without = assemble_result_audit_info(prepared_receipt, processed_receipt)
+        self.assertIsNone(payload_without["auditLogs"][0]["createTime"])
+
     def test_assemble_includes_overall_suggestion_when_present(self) -> None:
         prepared_receipt = {
             "receiptCode": "REC-OVERALL-001",

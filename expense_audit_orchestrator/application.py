@@ -146,6 +146,7 @@ class ReceiptAuditService:
             receipt_code=receipt_code,
             run_id=run_id,
             invoice_key=invoice_key,
+            execution_time=started_at,
         )
 
         try:
@@ -284,8 +285,14 @@ def _inject_run_context(
     receipt_code: str,
     run_id: str,
     invoice_key: str,
+    execution_time: str | None = None,
 ) -> None:
-    """把 runId/receiptCode/invoiceKey 注入 preparedInput.context，供图内 LLM 节点透传给 node_gateway。"""
+    """把 runId/receiptCode/invoiceKey/executionTime 注入 preparedInput.context。
+
+    runId/receiptCode/invoiceKey 供图内 LLM 节点透传给 node_gateway；
+    executionTime 作为各稽核点 decisionTable 输出列 create_time 的取值来源
+    （图内规则用 `context.executionTime` 引用），即「该发票本次执行的时刻」。
+    """
     if not isinstance(prepared_input, dict):
         return
     context = prepared_input.get("context")
@@ -295,6 +302,8 @@ def _inject_run_context(
     context.setdefault("runId", run_id)
     context.setdefault("receiptCode", receipt_code)
     context.setdefault("invoiceKey", invoice_key)
+    if execution_time is not None:
+        context.setdefault("executionTime", execution_time)
 
 
 def _build_invoice_result(

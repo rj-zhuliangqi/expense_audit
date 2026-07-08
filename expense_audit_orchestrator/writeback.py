@@ -214,6 +214,8 @@ def _build_audit_logs(
                             rule_result["policiesIndex"] = ""
                             rule_result["employeeSuggestionTips"] = E31_SUGGESTION
 
+                # createTime 取图内各稽核点输出的 create_time（来自 context.executionTime），
+                # 兼容 create_time / createTime 两种键名；回写层不另行生成时间戳。
                 audit_logs.append(
                     {
                         "instanceCode": _get_string_value(rule_result, "instance_code")
@@ -236,6 +238,7 @@ def _build_audit_logs(
                         "message": rule_result.get("message") or result.get("errorMessage"),
                         "policiesIndex": rule_result.get("policiesIndex"),
                         "employeeSuggestionTips": rule_result.get("employeeSuggestionTips"),
+                        "createTime": rule_result.get("create_time") or rule_result.get("createTime"),
                     }
                 )
             continue
@@ -253,6 +256,7 @@ def _build_audit_logs(
                 "message": decision_output.get("message") or result.get("errorMessage"),
                 "policiesIndex": decision_output.get("policiesIndex"),
                 "employeeSuggestionTips": decision_output.get("employeeSuggestionTips"),
+                "createTime": decision_output.get("create_time") or decision_output.get("createTime"),
             }
         )
     return audit_logs

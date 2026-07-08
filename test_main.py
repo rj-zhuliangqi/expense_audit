@@ -2715,6 +2715,61 @@ class FormalServiceTests(unittest.TestCase):
         self.assertEqual(result["remainingApplyAmount"], 1000.0)
         self.assertFalse(result["isAmountSufficient"])
 
+    def test_process_invoice_preparation_injects_execution_time_into_context(self) -> None:
+        """每张发票执行前，编排层把该次执行时刻注入 preparedInput.context.executionTime，
+        供图内各稽核点 decisionTable 的 create_time 输出列引用（context.executionTime）。
+        """
+        captured: list[dict[str, Any]] = []
+
+        class CapturingGraphRuntimeClient:
+            def evaluate(self, *, prepared_input: dict[str, Any], graph_path=None, graph_content=None) -> dict[str, Any]:
+                del graph_path, graph_content
+                captured.append(prepared_input)
+                return {
+                    "receiptCode": "REC-CT-001",
+                    "decisionOutput": {"checkStatus": "passed", "message": "ok"},
+                    "preparedInput": prepared_input,
+                }
+
+        prepared_receipt = {
+            "receiptCode": "REC-CT-001",
+            "serviceData": {"auditInfo": {"applyAmount": 100.0}},
+            "receiptContext": {"receiptCode": "REC-CT-001"},
+            "invoiceCount": 1,
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "invoiceFile": {"fid": "FID-001"},
+                    "preparedInput": {
+                        "serviceData": {
+                            "auditInfo": {"applyAmount": 100.0},
+                            "auditInvoiceFile": {"fid": "FID-001"},
+                        }
+                    },
+                },
+            ],
+        }
+
+        service = ReceiptAuditService(
+            graph_runtime_client=CapturingGraphRuntimeClient(),
+            data_preparer=MagicMock(),
+        )
+
+        service.process_prepared_receipt(prepared_receipt)
+
+        self.assertEqual(len(captured), 1)
+        context = captured[0].get("context") or {}
+        self.assertIn("executionTime", context)
+        # executionTime 是 ISO-8601 字符串，与发票结果 startedAt 对齐
+        execution_time = context["executionTime"]
+        self.assertIsInstance(execution_time, str)
+        self.assertTrue(execution_time)
+        # 既有 runId/receiptCode/invoiceKey 注入不受 executionTime 影响
+        self.assertEqual(context.get("receiptCode"), "REC-CT-001")
+        self.assertEqual(context.get("invoiceKey"), "FID-001")
+        self.assertIn("runId", context)
+
+
     @patch("expense_audit_orchestrator.bootstrap.create_kingdee_ocr_provider_from_env")
     def test_orchestrator_runs_custom_receipt_sink_before_real_writeback(
         self,
