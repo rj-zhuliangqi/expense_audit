@@ -2338,6 +2338,68 @@ class FormalServiceTests(unittest.TestCase):
             300.0,
         )
 
+    def test_receipt_audit_service_deducts_finalAmount_nested_under_invoice_content_valid_result(self) -> None:
+        """真实图里 E34 节点 outputPath=invoice_content_valid_result，finalAmount 嵌套在
+        decisionOutput['invoice_content_valid_result'] 下，而非顶层。验证该形状下扣减生效
+        （476 计入 → 剩 24 → isAmountSufficient=False → validInvoiceTotal=476）。
+
+        回归用例：此前 _extract_invoice_final_amount 从 runtime_result 下读嵌套路径，
+        取不到 → 扣减失败 → E31 message 报「有效发票合计金额 0 元」。
+        """
+        prepared_receipt = {
+            "receiptCode": "REC-NESTED-001",
+            "serviceData": {"auditInfo": {"applyAmount": 500.0}},
+            "receiptContext": {"receiptCode": "REC-NESTED-001"},
+            "invoiceCount": 1,
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "invoiceFile": {"fid": "FID-001"},
+                    "preparedInput": {
+                        "serviceData": {
+                            "auditInfo": {"applyAmount": 500.0},
+                            "auditInvoiceFile": {"fid": "FID-001"},
+                        }
+                    },
+                },
+            ],
+        }
+
+        class NestedFinalAmountGraphRuntimeClient:
+            def evaluate(self, *, prepared_input: dict[str, Any], graph_path=None, graph_content=None) -> dict[str, Any]:
+                del graph_path, graph_content
+                return {
+                    "receiptCode": "REC-NESTED-001",
+                    "decisionOutput": {
+                        "checkStatus": "passed",
+                        "message": "ok",
+                        "amount_result": {
+                            "reason_code": "E31",
+                            "distinguish_result": "PASS",
+                            "message": "",
+                        },
+                        "invoice_content_valid_result": {
+                            "reason_code": "E34",
+                            "distinguish_result": "PASS",
+                            "invoice_finalAmount": 476.0,
+                        },
+                    },
+                    "preparedInput": prepared_input,
+                }
+
+        service = ReceiptAuditService(
+            graph_runtime_client=NestedFinalAmountGraphRuntimeClient(),
+            data_preparer=MagicMock(),
+        )
+
+        result = service.process_prepared_receipt(prepared_receipt)
+
+        self.assertEqual(result["summary"]["overallStatus"], "SUCCESS")
+        self.assertFalse(result["isAmountSufficient"])
+        self.assertEqual(result["remainingApplyAmount"], 24.0)
+        self.assertEqual(result["validInvoiceTotal"], 476.0)
+        self.assertEqual(result["applyAmount"], 500.0)
+
     def test_receipt_audit_service_process_prepared_receipt_skips_deduction_for_failed_invoice(self) -> None:
         prepared_receipt = {
             "receiptCode": "REC-FAIL-001",
@@ -2484,6 +2546,174 @@ class FormalServiceTests(unittest.TestCase):
             invoice_results[1]["preparedInput"]["serviceData"]["auditInfo"]["applyAmount"],
             1000.0,
         )
+
+    def test_receipt_audit_service_counts_e34_rejected_invoice_final_amount_as_valid(self) -> None:
+        """E34（发票明细含禁止报销项）reject 时，LLM 返回的扣减后 finalAmount 仍应计入
+        E31 有效合计。场景：申请 1000，一张票面 500 的发票其中 200 为禁止项，LLM 扣减后
+        finalAmount=300；E34 reject 但 300 计入 → 剩 700 → isAmountSufficient=False，
+        validInvoiceTotal=300。
+        """
+        prepared_receipt = {
+            "receiptCode": "REC-E34-DEDUCT-001",
+            "serviceData": {"auditInfo": {"applyAmount": 1000.0}},
+            "receiptContext": {"receiptCode": "REC-E34-DEDUCT-001"},
+            "invoiceCount": 1,
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "invoiceFile": {"fid": "FID-001"},
+                    "preparedInput": {
+                        "serviceData": {
+                            "auditInfo": {"applyAmount": 1000.0},
+                            "auditInvoiceFile": {"fid": "FID-001"},
+                        }
+                    },
+                },
+            ],
+        }
+
+        class E34RejectGraphRuntimeClient:
+            def evaluate(self, *, prepared_input: dict[str, Any], graph_path=None, graph_content=None) -> dict[str, Any]:
+                del graph_path, graph_content
+                return {
+                    "receiptCode": "REC-E34-DEDUCT-001",
+                    "decisionOutput": {
+                        "checkStatus": "reject",
+                        "message": "含禁止报销项",
+                        "amount_result": {
+                            "reason_code": "E31",
+                            "distinguish_result": "REJECT",
+                            "message": "发票合计金额不足",
+                        },
+                        "invoice_content_valid_result": {
+                            "reason_code": "E34",
+                            "distinguish_result": "REJECT",
+                            "invoice_finalAmount": 300.0,
+                            "message": "扣减禁止报销部分",
+                        },
+                    },
+                    "preparedInput": prepared_input,
+                }
+
+        service = ReceiptAuditService(
+            graph_runtime_client=E34RejectGraphRuntimeClient(),
+            data_preparer=MagicMock(),
+        )
+
+        result = service.process_prepared_receipt(prepared_receipt)
+
+        self.assertFalse(result["isAmountSufficient"])
+        self.assertEqual(result["remainingApplyAmount"], 700.0)
+        self.assertEqual(result["validInvoiceTotal"], 300.0)
+
+    def test_receipt_audit_service_excludes_invoice_when_e34_reject_and_other_rule_rejects(self) -> None:
+        """当发票同时被 E34 与其他严重规则（如 E09 黑名单）reject 时，整张无效，
+        扣减后 finalAmount 也不计入（计 0）。
+        """
+        prepared_receipt = {
+            "receiptCode": "REC-E34-BL-001",
+            "serviceData": {"auditInfo": {"applyAmount": 1000.0}},
+            "receiptContext": {"receiptCode": "REC-E34-BL-001"},
+            "invoiceCount": 1,
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "invoiceFile": {"fid": "FID-001"},
+                    "preparedInput": {
+                        "serviceData": {
+                            "auditInfo": {"applyAmount": 1000.0},
+                            "auditInvoiceFile": {"fid": "FID-001"},
+                        }
+                    },
+                },
+            ],
+        }
+
+        class E34AndBlacklistGraphRuntimeClient:
+            def evaluate(self, *, prepared_input: dict[str, Any], graph_path=None, graph_content=None) -> dict[str, Any]:
+                del graph_path, graph_content
+                return {
+                    "receiptCode": "REC-E34-BL-001",
+                    "decisionOutput": {
+                        "checkStatus": "reject",
+                        "message": "黑名单+禁止项",
+                        "company_backlist_result": {
+                            "reason_code": "E09",
+                            "distinguish_result": "REJECT",
+                        },
+                        "invoice_content_valid_result": {
+                            "reason_code": "E34",
+                            "distinguish_result": "REJECT",
+                            "invoice_finalAmount": 300.0,
+                        },
+                    },
+                    "preparedInput": prepared_input,
+                }
+
+        service = ReceiptAuditService(
+            graph_runtime_client=E34AndBlacklistGraphRuntimeClient(),
+            data_preparer=MagicMock(),
+        )
+
+        result = service.process_prepared_receipt(prepared_receipt)
+
+        # E09 是整张无效的硬规则 → finalAmount 不计入；validInvoiceTotal 退回
+        # applyAmount - remainingApplyAmount = 1000 - 1000 = 0（缺 1000）。
+        self.assertEqual(result["validInvoiceTotal"], 0.0)
+        self.assertEqual(result["remainingApplyAmount"], 1000.0)
+        self.assertFalse(result["isAmountSufficient"])
+
+    def test_receipt_audit_service_excludes_e34_rejected_invoice_when_finalAmount_missing(self) -> None:
+        """E34 reject 但 LLM 失败（finalAmount 缺失）时该张不计入（计 0）。
+        """
+        prepared_receipt = {
+            "receiptCode": "REC-E34-NOFA-001",
+            "serviceData": {"auditInfo": {"applyAmount": 1000.0}},
+            "receiptContext": {"receiptCode": "REC-E34-NOFA-001"},
+            "invoiceCount": 1,
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "invoiceFile": {"fid": "FID-001"},
+                    "preparedInput": {
+                        "serviceData": {
+                            "auditInfo": {"applyAmount": 1000.0},
+                            "auditInvoiceFile": {"fid": "FID-001"},
+                        }
+                    },
+                },
+            ],
+        }
+
+        class E34RejectNoFinalAmountGraphRuntimeClient:
+            def evaluate(self, *, prepared_input: dict[str, Any], graph_path=None, graph_content=None) -> dict[str, Any]:
+                del graph_path, graph_content
+                return {
+                    "receiptCode": "REC-E34-NOFA-001",
+                    "decisionOutput": {
+                        "checkStatus": "reject",
+                        "message": "LLM 失败",
+                        "invoice_content_valid_result": {
+                            "reason_code": "E34",
+                            "distinguish_result": "FAILED",
+                            "invoice_finalAmount": None,
+                        },
+                    },
+                    "preparedInput": prepared_input,
+                }
+
+        service = ReceiptAuditService(
+            graph_runtime_client=E34RejectNoFinalAmountGraphRuntimeClient(),
+            data_preparer=MagicMock(),
+        )
+
+        result = service.process_prepared_receipt(prepared_receipt)
+
+        # E34 reject 但 finalAmount 缺失 → 该张不计入（计 0）；validInvoiceTotal 退回
+        # applyAmount - remainingApplyAmount = 0。
+        self.assertEqual(result["validInvoiceTotal"], 0.0)
+        self.assertEqual(result["remainingApplyAmount"], 1000.0)
+        self.assertFalse(result["isAmountSufficient"])
 
     @patch("expense_audit_orchestrator.bootstrap.create_kingdee_ocr_provider_from_env")
     def test_orchestrator_runs_custom_receipt_sink_before_real_writeback(

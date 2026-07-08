@@ -973,6 +973,71 @@ class WritebackAssemblerTests(unittest.TestCase):
         self.assertEqual(_format_amount(10.5), "10.5")
         self.assertEqual(_format_amount(382.2), "382.2")
 
+    def test_assemble_e31_message_uses_receipt_real_totals(self) -> None:
+        """端到端：processed_receipt 带真实 applyAmount/validInvoiceTotal 时，E31 message
+        按 CSV 模板填入真实金额（476 有效 / 500 报销 / 缺 24）。
+
+        回归用例：图里 E34 的 invoice_finalAmount 嵌套在
+        decisionOutput['invoice_content_valid_result'] 下；此前 application 层读不到 →
+        validInvoiceTotal 算成 0 → message 报「有效发票合计金额 0 元」。
+        """
+        prepared_receipt = {
+            "receiptCode": "REC-E31-REAL-001",
+            "serviceData": {"auditInfo": {"instanceCode": "REC-E31-REAL-001"}},
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "invoiceFile": {"fid": "FID-001"},
+                    "preparedInput": {
+                        "instance_code": "REC-E31-REAL-001",
+                        "serviceData": {
+                            "currentInvoiceInfo": {"aiiid": "AIIID-001"},
+                            "currentAuditInvoiceFile": {"afiid": "AFID-001", "fid": "FID-001"},
+                        },
+                    },
+                }
+            ],
+        }
+        processed_receipt = {
+            "receiptCode": "REC-E31-REAL-001",
+            "serviceData": prepared_receipt["serviceData"],
+            "invoiceResults": [
+                {
+                    "invoiceKey": "FID-001",
+                    "preparedInput": prepared_receipt["invoicePreparations"][0]["preparedInput"],
+                    "decisionOutput": {
+                        "amount_result": {
+                            "reason_code": "E31",
+                            "distinguish_result": "REJECT",
+                            "audit_content": "检查使用发票合计金额是否充足",
+                            "audit_type": "verification-form",
+                            "invoice_file_id": "AFID-001",
+                            "invoice_info_id": "AIIID-001",
+                            "message": "发票合计金额不足",
+                            "policiesIndex": "",
+                            "employeeSuggestionTips": "",
+                        },
+                    },
+                    "decisionStatus": "reject",
+                    "executionStatus": "SUCCEEDED",
+                }
+            ],
+            "summary": {"overallStatus": "SUCCESS"},
+            "applyAmount": 500.0,
+            "validInvoiceTotal": 476.0,
+            "remainingApplyAmount": 24.0,
+            "isAmountSufficient": False,
+        }
+
+        payload = assemble_result_audit_info(prepared_receipt, processed_receipt)
+        log = payload["auditLogs"][0]
+        self.assertEqual(log["reasonCode"], "E31")
+        self.assertEqual(log["distinguishResult"], "reject")
+        self.assertEqual(
+            log["message"],
+            "当前核销单有效发票合计金额476元，低于报销单报销金额500元，有效发票金额缺少24元。",
+        )
+
     def test_assemble_propagates_graph_regulation_and_suggestion(self) -> None:
         # 图节点产出的 regulation/suggestion 应原样透传到 auditLogs（非 E31 节点）
         prepared_receipt = {

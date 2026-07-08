@@ -394,64 +394,84 @@ def _update_preparation_apply_amount(
         context["serviceData"] = updated_service_data
 
 
-def _is_invoice_valid_excluding_e31(invoice_result: dict[str, Any]) -> bool:
+# reject/failed 时仍允许发票「扣减后 finalAmount」计入 E31 有效合计的稽核码。
+# - E31：金额充足度本身，不否定发票内容有效性（单据级判定，回写层单独处理）。
+# - E34：发票明细含禁止报销项，LLM 已扣减并返回扣减后 finalAmount；按扣减后金额计入。
+# 其余 reject/failed（sys-001 伪造 / E09 黑名单 / E05 重复 / sys-003 作废 / sys-004 红冲 /
+# E17 充值卡 / E01 抬头 / E02 税号 …）视为整张无效，finalAmount 不计入（计 0）。
+_INVOICE_FINAL_AMOUNT_EXEMPT_RULE_CODES = frozenset({"E31", "E34"})
+
+
+def _iter_decision_rule_results(decision_output: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """提取 decisionOutput 下各决策表节点产出的结构化规则结果。"""
+    rule_results: list[dict[str, Any]] = []
+    for value in decision_output.values():
+        if isinstance(value, Mapping) and any(
+            key in value
+            for key in ("distinguish_result", "reason_code", "audit_content", "audit_type")
+        ):
+            rule_results.append(dict(value))
+    return rule_results
+
+
+def _invoice_contributes_valid_amount(invoice_result: Mapping[str, Any]) -> bool:
+    """该发票的扣减后 finalAmount 是否计入 E31 有效合计。
+
+    - 执行失败（executionStatus != SUCCEEDED）→ 不计入。
+    - 整体 reject/failed 时，若存在豁免集之外的 reject/failed 规则 → 整张无效，不计入。
+    - 仅 E31（金额充足度）或 E34（内容扣减）reject/failed 时仍计入：
+      E31 不否定内容；E34 按 LLM 返回的扣减后 finalAmount 计入（取不到时计 0）。
+    - 无结构化子规则结果时，保守视为不计入（与历史行为一致）。
+    """
     if invoice_result.get("executionStatus") != "SUCCEEDED":
         return False
 
-    decision_status = invoice_result.get("decisionStatus", "").lower()
-    if decision_status in ("failed", "reject"):
-        # We need to make sure the rejection/failure was not caused solely by E31.
-        # If there are other rule results that reject/fail, then the invoice is invalid.
-        # If the only rejecting/failing rule is E31, then we consider it valid (we ignore E31).
-        decision_output = invoice_result.get("decisionOutput") or {}
-        has_other_rejections = False
-        rule_results = []
-        for value in decision_output.values():
-            if isinstance(value, Mapping) and any(
-                key in value
-                for key in ("distinguish_result", "reason_code", "audit_content", "audit_type")
-            ):
-                rule_results.append(value)
+    decision_status = str(invoice_result.get("decisionStatus") or "").lower()
+    if decision_status not in ("failed", "reject"):
+        return True
 
-        # If there are no structured sub-rule results, fall back to decisionStatus check
-        if not rule_results:
+    decision_output = invoice_result.get("decisionOutput") or {}
+    rule_results = _iter_decision_rule_results(decision_output)
+    # 无结构化子规则结果时，保守视为不可计入（与历史行为一致）。
+    if not rule_results:
+        return False
+
+    for rule_result in rule_results:
+        reason_code = rule_result.get("reason_code") or rule_result.get("reasonCode")
+        distinguish_result = str(
+            rule_result.get("distinguish_result") or rule_result.get("distinguishResult") or ""
+        ).lower()
+        if (
+            reason_code not in _INVOICE_FINAL_AMOUNT_EXEMPT_RULE_CODES
+            and distinguish_result in ("reject", "failed")
+        ):
             return False
-
-        for r in rule_results:
-            reason_code = r.get("reason_code") or r.get("reasonCode")
-            distinguish_result = r.get("distinguish_result") or r.get("distinguishResult")
-            if reason_code != "E31" and str(distinguish_result).lower() in ("reject", "failed"):
-                has_other_rejections = True
-                break
-
-        if has_other_rejections:
-            return False
-
     return True
 
 
-def _extract_invoice_final_amount(invoice_result: dict[str, Any]) -> float | None:
-    if not _is_invoice_valid_excluding_e31(invoice_result):
+def _extract_invoice_final_amount(invoice_result: Mapping[str, Any]) -> float | None:
+    if not _invoice_contributes_valid_amount(invoice_result):
         return None
 
-    runtime_result = invoice_result.get("runtimeResult") or {}
-    decision_output = runtime_result.get("decisionOutput") or {}
+    # decisionOutput 既在 invoice_result 顶层、也在 runtimeResult 下（两处等价）。
+    # 真实图里 E34 节点 outputPath=invoice_content_valid_result，引擎把它的输出嵌套在
+    # decisionOutput["invoice_content_valid_result"] 下；扁平 mock 则把 finalAmount 放在
+    # decisionOutput 顶层。两处形状都兼容，与 writeback._sum_invoice_final_amounts 对齐。
+    decision_output = invoice_result.get("decisionOutput")
+    if not isinstance(decision_output, Mapping):
+        decision_output = (invoice_result.get("runtimeResult") or {}).get("decisionOutput") or {}
 
-    final_amount = decision_output.get("invoice_finalAmount")
-    if final_amount is not None:
+    candidates = [
+        decision_output.get("invoice_finalAmount"),
+        (decision_output.get("invoice_content_valid_result") or {}).get("invoice_finalAmount"),
+    ]
+    for final_amount in candidates:
+        if final_amount is None:
+            continue
         try:
             return float(final_amount)
         except (ValueError, TypeError):
-            pass
-
-    invoice_content_result = runtime_result.get("invoice_content_valid_result") or {}
-    final_amount = invoice_content_result.get("invoice_finalAmount")
-    if final_amount is not None:
-        try:
-            return float(final_amount)
-        except (ValueError, TypeError):
-            pass
-
+            continue
     return None
 
 
