@@ -47,7 +47,7 @@ def _rule(reason_code, status, *, message="m", suggestion="s"):
         "audit_content": "c",
         "audit_type": "general-rules",
         "message": message,
-        "suggestion": suggestion,
+        "employeeSuggestionTips": suggestion,
     }
 
 
@@ -89,7 +89,7 @@ class LlmOverallAdviceProviderTests(unittest.TestCase):
                 200,
                 json={
                     "llmStatus": "success",
-                    "llmResult": {"suggestion": "本核销单建议补传合规发票"},
+                    "llmResult": {"aiAuditAdvice": "本核销单建议补传合规发票"},
                     "rawContent": None,
                     "errorMessage": None,
                 },
@@ -125,7 +125,7 @@ class LlmOverallAdviceProviderTests(unittest.TestCase):
                 json={
                     "llmStatus": "success",
                     "llmResult": None,
-                    "rawContent": '```json\n{"suggestion": "回退建议"}\n```',
+                    "rawContent": '```json\n{"aiAuditAdvice": "回退建议"}\n```',
                 },
             )
 
@@ -151,7 +151,7 @@ class LlmOverallAdviceProviderTests(unittest.TestCase):
 
         def handler(request):
             calls["n"] += 1
-            return httpx.Response(200, json={"llmStatus": "success", "llmResult": {"suggestion": "均合规"}})
+            return httpx.Response(200, json={"llmStatus": "success", "llmResult": {"aiAuditAdvice": "均合规"}})
 
         provider = _make_provider(handler)
         suggestion = provider("REC-001", [_invoice("INV-1", {"r": _rule("E01", "PASS")})])

@@ -211,8 +211,8 @@ class WritebackAssemblerTests(unittest.TestCase):
                             "invoice_info_id": "AIIID-001",
                             "message": "金额不够",
                             "reason_code": "E31",
-                            "regulation": "",
-                            "suggestion": "E31建议",
+                            "policiesIndex": "",
+                            "employeeSuggestionTips": "E31建议",
                         },
                         "header_result": {
                             "audit_content": "检查使用的发票购买方抬头与公司信息是否一致",
@@ -224,8 +224,8 @@ class WritebackAssemblerTests(unittest.TestCase):
                             "invoice_info_id": "AIIID-001",
                             "message": "通过",
                             "reason_code": "E01",
-                            "regulation": "",
-                            "suggestion": "",
+                            "policiesIndex": "",
+                            "employeeSuggestionTips": "",
                         },
                     },
                     "decisionStatus": "reject",
@@ -248,14 +248,14 @@ class WritebackAssemblerTests(unittest.TestCase):
             payload["auditLogs"][0]["message"],
             "当前核销单有效发票合计金额40元，低于报销单报销金额100元，有效发票金额缺少60元。",
         )
-        self.assertEqual(payload["auditLogs"][0]["regulation"], "")
+        self.assertEqual(payload["auditLogs"][0]["policiesIndex"], "")
         # REJECT override carries the two-scenario E31 suggestion
-        self.assertIn("场景1", payload["auditLogs"][0]["suggestion"])
-        self.assertIn("场景2", payload["auditLogs"][0]["suggestion"])
+        self.assertIn("场景1", payload["auditLogs"][0]["employeeSuggestionTips"])
+        self.assertIn("场景2", payload["auditLogs"][0]["employeeSuggestionTips"])
         self.assertEqual(payload["auditLogs"][1]["reasonCode"], "E01")
         self.assertEqual(payload["auditLogs"][1]["distinguishResult"], "pass")
-        self.assertEqual(payload["auditLogs"][1]["regulation"], "")
-        self.assertEqual(payload["auditLogs"][1]["suggestion"], "")
+        self.assertEqual(payload["auditLogs"][1]["policiesIndex"], "")
+        self.assertEqual(payload["auditLogs"][1]["employeeSuggestionTips"], "")
         self.assertEqual(payload["auditInvoiceInfos"][0]["reasonCode"], "E31")
 
     def test_assemble_result_audit_info_uses_real_aifid_field_for_invoice_file_id_fallback(self) -> None:
@@ -815,9 +815,9 @@ class WritebackAssemblerTests(unittest.TestCase):
         self.assertEqual(payload["auditLogs"][1]["reasonCode"], "E31")
         self.assertEqual(payload["auditLogs"][1]["distinguishResult"], "pass")
         self.assertEqual(payload["auditLogs"][1]["message"], "发票合计金额充足")
-        # PASS override clears regulation/suggestion
-        self.assertEqual(payload["auditLogs"][1]["regulation"], "")
-        self.assertEqual(payload["auditLogs"][1]["suggestion"], "")
+        # PASS override clears policiesIndex/employeeSuggestionTips
+        self.assertEqual(payload["auditLogs"][1]["policiesIndex"], "")
+        self.assertEqual(payload["auditLogs"][1]["employeeSuggestionTips"], "")
 
         # 2. auditInvoiceInfos validation
         self.assertEqual(len(payload["auditInvoiceInfos"]), 2)
@@ -943,10 +943,10 @@ class WritebackAssemblerTests(unittest.TestCase):
         self.assertEqual(payload["auditLogs"][0]["distinguishResult"], "reject")
         # No applyAmount/validInvoiceTotal in processed_receipt -> static fallback message
         self.assertEqual(payload["auditLogs"][0]["message"], "发票合计金额不足")
-        # REJECT override carries the E31 suggestion (two-scenario text) and empty regulation
-        self.assertEqual(payload["auditLogs"][0]["regulation"], "")
-        self.assertIn("场景1", payload["auditLogs"][0]["suggestion"])
-        self.assertIn("场景2", payload["auditLogs"][0]["suggestion"])
+        # REJECT override carries the E31 suggestion (two-scenario text) and empty policiesIndex
+        self.assertEqual(payload["auditLogs"][0]["policiesIndex"], "")
+        self.assertIn("场景1", payload["auditLogs"][0]["employeeSuggestionTips"])
+        self.assertIn("场景2", payload["auditLogs"][0]["employeeSuggestionTips"])
 
         # 2. auditInvoiceInfos validation
         self.assertEqual(len(payload["auditInvoiceInfos"]), 2)
@@ -1009,8 +1009,8 @@ class WritebackAssemblerTests(unittest.TestCase):
                             "invoice_file_id": "AFID-001",
                             "invoice_info_id": "AIIID-001",
                             "message": "票据发票销货方在黑名单中",
-                            "regulation": "《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范",
-                            "suggestion": "【发票作废】联系销货方作废本发票",
+                            "policiesIndex": "《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范",
+                            "employeeSuggestionTips": "【发票作废】联系销货方作废本发票",
                         },
                     },
                     "decisionStatus": "reject",
@@ -1022,8 +1022,8 @@ class WritebackAssemblerTests(unittest.TestCase):
         payload = assemble_result_audit_info(prepared_receipt, processed_receipt)
         log = payload["auditLogs"][0]
         self.assertEqual(log["reasonCode"], "E09")
-        self.assertEqual(log["regulation"], "《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范")
-        self.assertEqual(log["suggestion"], "【发票作废】联系销货方作废本发票")
+        self.assertEqual(log["policiesIndex"], "《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范")
+        self.assertEqual(log["employeeSuggestionTips"], "【发票作废】联系销货方作废本发票")
 
     def test_assemble_includes_overall_suggestion_when_present(self) -> None:
         prepared_receipt = {
@@ -1060,8 +1060,8 @@ class WritebackAssemblerTests(unittest.TestCase):
                             "invoice_file_id": "AFID-001",
                             "invoice_info_id": "AIIID-001",
                             "message": "黑名单",
-                            "regulation": "",
-                            "suggestion": "作废",
+                            "policiesIndex": "",
+                            "employeeSuggestionTips": "作废",
                         },
                     },
                     "decisionStatus": "reject",
@@ -1069,11 +1069,11 @@ class WritebackAssemblerTests(unittest.TestCase):
                 }
             ],
             "summary": {"overallStatus": "SUCCESS"},
-            "overallSuggestion": "本核销单建议统一联系销货方作废黑名单发票。",
+            "aiAuditAdvice": "本核销单建议统一联系销货方作废黑名单发票。",
         }
         payload = assemble_result_audit_info(prepared_receipt, processed_receipt)
         self.assertEqual(
-            payload["overallSuggestion"],
+            payload["aiAuditAdvice"],
             "本核销单建议统一联系销货方作废黑名单发票。",
         )
 
@@ -1121,22 +1121,22 @@ class WritebackAssemblerTests(unittest.TestCase):
         }
         # absent
         payload = assemble_result_audit_info(prepared_receipt, dict(base_processed))
-        self.assertNotIn("overallSuggestion", payload)
+        self.assertNotIn("aiAuditAdvice", payload)
         # empty string
         payload = assemble_result_audit_info(
-            prepared_receipt, {**base_processed, "overallSuggestion": ""}
+            prepared_receipt, {**base_processed, "aiAuditAdvice": ""}
         )
-        self.assertNotIn("overallSuggestion", payload)
+        self.assertNotIn("aiAuditAdvice", payload)
         # whitespace
         payload = assemble_result_audit_info(
-            prepared_receipt, {**base_processed, "overallSuggestion": "   "}
+            prepared_receipt, {**base_processed, "aiAuditAdvice": "   "}
         )
-        self.assertNotIn("overallSuggestion", payload)
+        self.assertNotIn("aiAuditAdvice", payload)
         # None
         payload = assemble_result_audit_info(
-            prepared_receipt, {**base_processed, "overallSuggestion": None}
+            prepared_receipt, {**base_processed, "aiAuditAdvice": None}
         )
-        self.assertNotIn("overallSuggestion", payload)
+        self.assertNotIn("aiAuditAdvice", payload)
 
     def test_telecom_compliance_marks_telecom_service_penalty_and_surcharge_noncompliant(self) -> None:
         prepared_receipt = {

@@ -198,7 +198,7 @@ class ReceiptAuditService:
         )
 
     def _augment_with_overall_advice(self, receipt_result: dict[str, Any]) -> None:
-        """调用整体建议 provider，把结果挂到 receipt_result['overallSuggestion']。
+        """调用整体建议 provider，把结果挂到 receipt_result['aiAuditAdvice']。
 
         任何异常都吞掉并记日志——整体建议是增强项，绝不能打断审计主链路。
         """
@@ -209,7 +209,7 @@ class ReceiptAuditService:
         invoice_results = receipt_result.get("invoiceResults") or []
         try:
             with run_context(receipt_code=receipt_code, run_id=None, invoice_key=None):
-                suggestion = provider(
+                advice = provider(
                     receipt_code,
                     invoice_results,
                     receipt_context=receipt_result.get("receiptContext"),
@@ -223,8 +223,8 @@ class ReceiptAuditService:
                 },
             )
             return
-        if isinstance(suggestion, str) and suggestion.strip():
-            receipt_result["overallSuggestion"] = suggestion.strip()
+        if isinstance(advice, str) and advice.strip():
+            receipt_result["aiAuditAdvice"] = advice.strip()
 
 
 def _resolve_invoice_key(invoice_file: Mapping[str, Any]) -> str:

@@ -115,7 +115,11 @@ def _build_problems_digest(
                 continue
             reason_code = rule_result.get("reason_code") or rule_result.get("reasonCode") or "?"
             message = (rule_result.get("message") or "").strip()
-            suggestion = (rule_result.get("suggestion") or "").strip()
+            suggestion = (
+                rule_result.get("employeeSuggestionTips")
+                or rule_result.get("suggestion")
+                or ""
+            ).strip()
             line = f"- 发票 {invoice_key} [{reason_code} {status}] {message}"
             if suggestion:
                 line += f" | 建议: {suggestion}"
@@ -133,10 +137,10 @@ def _build_problems_digest(
     return "\n".join(lines)
 
 
-def _extract_suggestion(response_json: Mapping[str, Any]) -> str | None:
-    """从 node_gateway 响应里稳健取出 suggestion 字符串。
+def _extract_advice(response_json: Mapping[str, Any]) -> str | None:
+    """从 node_gateway 响应里稳健取出 aiAuditAdvice 字符串。
 
-    优先 llmResult.suggestion；否则回退到 rawContent 去 fence 后 JSON parse。
+    优先 llmResult.aiAuditAdvice；否则回退到 rawContent 去 fence 后 JSON parse。
     """
     if str(response_json.get("llmStatus") or "").lower() != "success":
         return None
@@ -155,9 +159,9 @@ def _extract_suggestion(response_json: Mapping[str, Any]) -> str | None:
         if not isinstance(llm_result, Mapping):
             return None
 
-    suggestion = llm_result.get("suggestion")
-    if isinstance(suggestion, str) and suggestion.strip():
-        return suggestion.strip()
+    advice = llm_result.get("aiAuditAdvice")
+    if isinstance(advice, str) and advice.strip():
+        return advice.strip()
     return None
 
 
@@ -265,10 +269,10 @@ class LlmOverallAdviceProvider:
                 )
                 return None
 
-        suggestion = _extract_suggestion(response_json)
+        suggestion = _extract_advice(response_json)
         if suggestion is None:
             _logger.info(
-                "overall advice produced no suggestion",
+                "overall advice produced no advice",
                 extra={
                     "receipt_code": receipt_code,
                     "run_id": run_id,
@@ -285,7 +289,7 @@ class LlmOverallAdviceProvider:
                 "run_id": run_id,
                 "event": "overall_advice.success",
                 "model": self._model,
-                "suggestion_length": len(suggestion),
+                "advice_length": len(suggestion),
             },
         )
         return suggestion

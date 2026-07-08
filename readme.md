@@ -67,7 +67,7 @@ GRAPH_RUNTIME_URL=http://127.0.0.1:8090 \
 .venv/bin/python rabbitmq_worker.py \
   --amqp-url "$RABBITMQ_URL" \
   --audit-service-url https://service-uate-gw.ruijie.com.cn \
-  --graph-path graph-latest-0625-1814.json \
+  --graph-path graph-latest-0707-2301.json \
   --queues audit \
   --prepared-output-dir output/worker-debug/prepared \
   --writeback-output-dir output/worker-debug/writeback

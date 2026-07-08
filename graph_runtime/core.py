@@ -10,7 +10,7 @@ import zen
 
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_GRAPH_PATH = ROOT / "graph-latest-0625-1814.json"
+DEFAULT_GRAPH_PATH = ROOT / "graph-latest-0707-2301.json"
 
 _COMPILED_GRAPH_CACHE: OrderedDict[str, zen.ZenDecision] = OrderedDict()
 _COMPILED_GRAPH_CACHE_LOCK = RLock()

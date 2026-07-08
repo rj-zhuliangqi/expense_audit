@@ -62,7 +62,7 @@ git pull && bash deploy/install.sh && sudo systemctl restart expense-graph-runti
 
 ## 关于 graph JSON
 
-worker 的 `--graph-path` 在 unit 模板里指向仓库根的 `graph-latest-0625-1814.json`。换图时改 `deploy/expense-rabbitmq-worker.service` 里的路径，或换掉根目录的图文件后重启 worker。
+worker 的 `--graph-path` 在 unit 模板里指向仓库根的 `graph-latest-0707-2301.json`。换图时改 `deploy/expense-rabbitmq-worker.service` 里的路径，或换掉根目录的图文件后重启 worker。
 
 ## 关于进程守护
 

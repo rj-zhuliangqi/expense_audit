@@ -2173,8 +2173,8 @@ class FormalServiceTests(unittest.TestCase):
             overall_advice_provider=provider,
         )
         result = service.process_prepared_receipt(prepared_receipt)
-        self.assertEqual(result["overallSuggestion"], "本核销单建议补传合规发票")
-        self.assertEqual(published[0]["overallSuggestion"], "本核销单建议补传合规发票")
+        self.assertEqual(result["aiAuditAdvice"], "本核销单建议补传合规发票")
+        self.assertEqual(published[0]["aiAuditAdvice"], "本核销单建议补传合规发票")
 
     def test_process_prepared_receipt_does_not_raise_when_provider_throws(self) -> None:
         prepared_receipt = {
@@ -2209,7 +2209,7 @@ class FormalServiceTests(unittest.TestCase):
             overall_advice_provider=boom,
         )
         result = service.process_prepared_receipt(prepared_receipt)  # must NOT raise
-        self.assertNotIn("overallSuggestion", result)
+        self.assertNotIn("aiAuditAdvice", result)
         self.assertEqual(len(published), 1)  # sink still called exactly once
 
     def test_process_prepared_receipt_omits_overall_suggestion_when_provider_returns_none(self) -> None:
@@ -2236,7 +2236,7 @@ class FormalServiceTests(unittest.TestCase):
             overall_advice_provider=lambda rc, irs, *, receipt_context=None: None,
         )
         result = service.process_prepared_receipt(prepared_receipt)
-        self.assertNotIn("overallSuggestion", result)
+        self.assertNotIn("aiAuditAdvice", result)
 
     def test_receipt_audit_service_process_prepared_receipt_deducts_apply_amount_across_invoices(self) -> None:
         prepared_receipt = {

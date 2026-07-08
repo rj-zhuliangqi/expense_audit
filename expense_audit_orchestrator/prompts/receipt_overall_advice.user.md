@@ -5,4 +5,4 @@
 
 {{problemsDigest}}
 
-请基于上述问题，给出该核销单的整体整改建议。严格输出 JSON：{"suggestion": "..."}
+请基于上述问题，给出该核销单的整体整改建议。严格输出 JSON：{"aiAuditAdvice": "..."}

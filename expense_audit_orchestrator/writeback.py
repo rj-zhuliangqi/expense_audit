@@ -10,8 +10,8 @@ AuditTravelsBuilder = Callable[[list[tuple[dict[str, Any], dict[str, Any]]], Map
 FormBuilder = Callable[[list[tuple[dict[str, Any], dict[str, Any]]], Mapping[str, Any]], list[dict[str, Any]]]
 
 
-# E31 (发票合计金额不足) suggestion text — CSV 第四列，两场景全文。
-# 制度列 CSV 为 "/"（空），故 E31 regulation 恒为空。
+# E31 (发票合计金额不足) employeeSuggestionTips 文本 — CSV 第四列，两场景全文。
+# 制度列 CSV 为 "/"（空），故 E31 policiesIndex 恒为空。
 E31_SUGGESTION = (
     "场景1：前面检查有未通过发票，导致有效金额不足\n"
     "建议：【整改问题】整改下方标记问题的发票，整改后会重新计入有效金额；\n\n"
@@ -79,9 +79,9 @@ def assemble_result_audit_info(
         "auditTruthCheckResultItemCols": _build_audit_truthcheck_result_item_cols(instance_code, invoice_pairs),
     }
     # 核销单级整体建议：仅在非空时输出，避免给下游送 null。
-    overall_suggestion = processed_receipt.get("overallSuggestion")
-    if isinstance(overall_suggestion, str) and overall_suggestion.strip():
-        result["overallSuggestion"] = overall_suggestion.strip()
+    overall_advice = processed_receipt.get("aiAuditAdvice")
+    if isinstance(overall_advice, str) and overall_advice.strip():
+        result["aiAuditAdvice"] = overall_advice.strip()
     return result
 
 
@@ -203,16 +203,16 @@ def _build_audit_logs(
                             rule_result["distinguish_result"] = "PASS"
                             rule_result["distinguishResult"] = "PASS"
                             rule_result["message"] = "发票合计金额充足"
-                            rule_result["regulation"] = ""
-                            rule_result["suggestion"] = ""
+                            rule_result["policiesIndex"] = ""
+                            rule_result["employeeSuggestionTips"] = ""
                         else:
                             rule_result["distinguish_result"] = "REJECT"
                             rule_result["distinguishResult"] = "REJECT"
                             rule_result["message"] = _build_e31_message(
                                 apply_amount, valid_invoice_total
                             )
-                            rule_result["regulation"] = ""
-                            rule_result["suggestion"] = E31_SUGGESTION
+                            rule_result["policiesIndex"] = ""
+                            rule_result["employeeSuggestionTips"] = E31_SUGGESTION
 
                 audit_logs.append(
                     {
@@ -234,8 +234,8 @@ def _build_audit_logs(
                         )
                         or result.get("decisionStatus"),
                         "message": rule_result.get("message") or result.get("errorMessage"),
-                        "regulation": rule_result.get("regulation"),
-                        "suggestion": rule_result.get("suggestion"),
+                        "policiesIndex": rule_result.get("policiesIndex"),
+                        "employeeSuggestionTips": rule_result.get("employeeSuggestionTips"),
                     }
                 )
             continue
@@ -251,8 +251,8 @@ def _build_audit_logs(
                 "distinguishContent": decision_output.get("distinguishContent"),
                 "distinguishResult": result.get("decisionStatus"),
                 "message": decision_output.get("message") or result.get("errorMessage"),
-                "regulation": decision_output.get("regulation"),
-                "suggestion": decision_output.get("suggestion"),
+                "policiesIndex": decision_output.get("policiesIndex"),
+                "employeeSuggestionTips": decision_output.get("employeeSuggestionTips"),
             }
         )
     return audit_logs
@@ -341,14 +341,14 @@ def _build_audit_invoice_infos(
                 overridden_amount_result["distinguish_result"] = "PASS"
                 overridden_amount_result["distinguishResult"] = "PASS"
                 overridden_amount_result["message"] = "发票合计金额充足"
-                overridden_amount_result["regulation"] = ""
-                overridden_amount_result["suggestion"] = ""
+                overridden_amount_result["policiesIndex"] = ""
+                overridden_amount_result["employeeSuggestionTips"] = ""
             else:
                 overridden_amount_result["distinguish_result"] = "REJECT"
                 overridden_amount_result["distinguishResult"] = "REJECT"
                 overridden_amount_result["message"] = "发票合计金额不足"
-                overridden_amount_result["regulation"] = ""
-                overridden_amount_result["suggestion"] = E31_SUGGESTION
+                overridden_amount_result["policiesIndex"] = ""
+                overridden_amount_result["employeeSuggestionTips"] = E31_SUGGESTION
             decision_output = {**decision_output, "amount_result": overridden_amount_result}
 
         ignore_codes = [] if is_last else ["E31"]
