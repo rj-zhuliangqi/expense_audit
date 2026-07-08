@@ -53,7 +53,7 @@ def assemble_result_audit_info(
         else:
             valid_invoice_total = _sum_invoice_final_amounts(invoice_pairs)
 
-    return {
+    result = {
         "instanceCode": instance_code,
         "auditLogs": _build_audit_logs(
             instance_code,
@@ -78,6 +78,11 @@ def assemble_result_audit_info(
         "auditTruthCheckResultItems": _build_audit_truthcheck_result_items(instance_code, invoice_pairs),
         "auditTruthCheckResultItemCols": _build_audit_truthcheck_result_item_cols(instance_code, invoice_pairs),
     }
+    # 核销单级整体建议：仅在非空时输出，避免给下游送 null。
+    overall_suggestion = processed_receipt.get("overallSuggestion")
+    if isinstance(overall_suggestion, str) and overall_suggestion.strip():
+        result["overallSuggestion"] = overall_suggestion.strip()
+    return result
 
 
 def _pair_invoices(

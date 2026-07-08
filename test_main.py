@@ -2130,7 +2130,7 @@ class FormalServiceTests(unittest.TestCase):
         )
 
         result = service.process_prepared_receipt(prepared_receipt)
-        
+
         self.assertEqual(result["summary"]["overallStatus"], "SUCCESS")
         self.assertEqual(len(published_receipts), 1)
         self.assertEqual(published_receipts[0]["receiptCode"], "REC-RECEIPT-SINK-001")
@@ -2139,6 +2139,104 @@ class FormalServiceTests(unittest.TestCase):
             [item["invoiceKey"] for item in published_receipts[0]["invoiceResults"]],
             ["FID-001", "FID-002"],
         )
+
+    def test_process_prepared_receipt_sets_overall_suggestion_when_provider_returns_string(self) -> None:
+        prepared_receipt = {
+            "receiptCode": "REC-OVERALL-001",
+            "serviceData": {"auditInfo": {"instanceCode": "REC-OVERALL-001"}},
+            "receiptContext": {"receiptCode": "REC-OVERALL-001"},
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "invoiceFile": {"fid": "FID-001"},
+                    "preparedInput": {"serviceData": {"auditInvoiceFile": {"fid": "FID-001"}}},
+                },
+            ],
+        }
+
+        class _StubRuntime:
+            def evaluate(self, *, prepared_input, graph_path=None, graph_content=None):
+                return {"decisionOutput": {"checkStatus": "passed"}, "preparedInput": prepared_input}
+
+        published: list[dict[str, Any]] = []
+
+        def capture(receipt_result):
+            published.append(receipt_result)
+
+        def provider(receipt_code, invoice_results, *, receipt_context=None):
+            return "本核销单建议补传合规发票"
+
+        service = ReceiptAuditService(
+            graph_runtime_client=_StubRuntime(),
+            data_preparer=MagicMock(),
+            receipt_result_sink=capture,
+            overall_advice_provider=provider,
+        )
+        result = service.process_prepared_receipt(prepared_receipt)
+        self.assertEqual(result["overallSuggestion"], "本核销单建议补传合规发票")
+        self.assertEqual(published[0]["overallSuggestion"], "本核销单建议补传合规发票")
+
+    def test_process_prepared_receipt_does_not_raise_when_provider_throws(self) -> None:
+        prepared_receipt = {
+            "receiptCode": "REC-OVERALL-002",
+            "serviceData": {"auditInfo": {"instanceCode": "REC-OVERALL-002"}},
+            "receiptContext": {"receiptCode": "REC-OVERALL-002"},
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "invoiceFile": {"fid": "FID-001"},
+                    "preparedInput": {"serviceData": {"auditInvoiceFile": {"fid": "FID-001"}}},
+                },
+            ],
+        }
+
+        class _StubRuntime:
+            def evaluate(self, *, prepared_input, graph_path=None, graph_content=None):
+                return {"decisionOutput": {"checkStatus": "passed"}, "preparedInput": prepared_input}
+
+        published: list[dict[str, Any]] = []
+
+        def capture(receipt_result):
+            published.append(receipt_result)
+
+        def boom(receipt_code, invoice_results, *, receipt_context=None):
+            raise RuntimeError("explode")
+
+        service = ReceiptAuditService(
+            graph_runtime_client=_StubRuntime(),
+            data_preparer=MagicMock(),
+            receipt_result_sink=capture,
+            overall_advice_provider=boom,
+        )
+        result = service.process_prepared_receipt(prepared_receipt)  # must NOT raise
+        self.assertNotIn("overallSuggestion", result)
+        self.assertEqual(len(published), 1)  # sink still called exactly once
+
+    def test_process_prepared_receipt_omits_overall_suggestion_when_provider_returns_none(self) -> None:
+        prepared_receipt = {
+            "receiptCode": "REC-OVERALL-003",
+            "serviceData": {"auditInfo": {"instanceCode": "REC-OVERALL-003"}},
+            "receiptContext": {"receiptCode": "REC-OVERALL-003"},
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "invoiceFile": {"fid": "FID-001"},
+                    "preparedInput": {"serviceData": {"auditInvoiceFile": {"fid": "FID-001"}}},
+                },
+            ],
+        }
+
+        class _StubRuntime:
+            def evaluate(self, *, prepared_input, graph_path=None, graph_content=None):
+                return {"decisionOutput": {"checkStatus": "passed"}, "preparedInput": prepared_input}
+
+        service = ReceiptAuditService(
+            graph_runtime_client=_StubRuntime(),
+            data_preparer=MagicMock(),
+            overall_advice_provider=lambda rc, irs, *, receipt_context=None: None,
+        )
+        result = service.process_prepared_receipt(prepared_receipt)
+        self.assertNotIn("overallSuggestion", result)
 
     def test_receipt_audit_service_process_prepared_receipt_deducts_apply_amount_across_invoices(self) -> None:
         prepared_receipt = {

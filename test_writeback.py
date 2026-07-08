@@ -1025,6 +1025,119 @@ class WritebackAssemblerTests(unittest.TestCase):
         self.assertEqual(log["regulation"], "《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范")
         self.assertEqual(log["suggestion"], "【发票作废】联系销货方作废本发票")
 
+    def test_assemble_includes_overall_suggestion_when_present(self) -> None:
+        prepared_receipt = {
+            "receiptCode": "REC-OVERALL-001",
+            "serviceData": {"auditInfo": {"instanceCode": "REC-OVERALL-001"}},
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "invoiceFile": {"fid": "FID-001"},
+                    "preparedInput": {
+                        "instance_code": "REC-OVERALL-001",
+                        "invoiceNo": "INV-001",
+                        "serviceData": {
+                            "currentInvoiceInfo": {"aiiid": "AIIID-001"},
+                            "currentAuditInvoiceFile": {"afiid": "AFID-001", "fid": "FID-001"},
+                        },
+                    },
+                }
+            ],
+        }
+        processed_receipt = {
+            "receiptCode": "REC-OVERALL-001",
+            "serviceData": prepared_receipt["serviceData"],
+            "invoiceResults": [
+                {
+                    "invoiceKey": "FID-001",
+                    "preparedInput": prepared_receipt["invoicePreparations"][0]["preparedInput"],
+                    "decisionOutput": {
+                        "company_backlist_result": {
+                            "reason_code": "E09",
+                            "distinguish_result": "REJECT",
+                            "audit_content": "检查销货方黑名单",
+                            "audit_type": "general-rules",
+                            "invoice_file_id": "AFID-001",
+                            "invoice_info_id": "AIIID-001",
+                            "message": "黑名单",
+                            "regulation": "",
+                            "suggestion": "作废",
+                        },
+                    },
+                    "decisionStatus": "reject",
+                    "executionStatus": "SUCCEEDED",
+                }
+            ],
+            "summary": {"overallStatus": "SUCCESS"},
+            "overallSuggestion": "本核销单建议统一联系销货方作废黑名单发票。",
+        }
+        payload = assemble_result_audit_info(prepared_receipt, processed_receipt)
+        self.assertEqual(
+            payload["overallSuggestion"],
+            "本核销单建议统一联系销货方作废黑名单发票。",
+        )
+
+    def test_assemble_omits_overall_suggestion_when_absent_or_empty(self) -> None:
+        prepared_receipt = {
+            "receiptCode": "REC-OVERALL-002",
+            "serviceData": {"auditInfo": {"instanceCode": "REC-OVERALL-002"}},
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "invoiceFile": {"fid": "FID-001"},
+                    "preparedInput": {
+                        "instance_code": "REC-OVERALL-002",
+                        "serviceData": {
+                            "currentInvoiceInfo": {"aiiid": "AIIID-001"},
+                            "currentAuditInvoiceFile": {"afiid": "AFID-001", "fid": "FID-001"},
+                        },
+                    },
+                }
+            ],
+        }
+        base_processed = {
+            "receiptCode": "REC-OVERALL-002",
+            "serviceData": prepared_receipt["serviceData"],
+            "invoiceResults": [
+                {
+                    "invoiceKey": "FID-001",
+                    "preparedInput": prepared_receipt["invoicePreparations"][0]["preparedInput"],
+                    "decisionOutput": {
+                        "company_backlist_result": {
+                            "reason_code": "E09",
+                            "distinguish_result": "REJECT",
+                            "audit_content": "c",
+                            "audit_type": "general-rules",
+                            "invoice_file_id": "AFID-001",
+                            "invoice_info_id": "AIIID-001",
+                            "message": "m",
+                        },
+                    },
+                    "decisionStatus": "reject",
+                    "executionStatus": "SUCCEEDED",
+                }
+            ],
+            "summary": {"overallStatus": "SUCCESS"},
+        }
+        # absent
+        payload = assemble_result_audit_info(prepared_receipt, dict(base_processed))
+        self.assertNotIn("overallSuggestion", payload)
+        # empty string
+        payload = assemble_result_audit_info(
+            prepared_receipt, {**base_processed, "overallSuggestion": ""}
+        )
+        self.assertNotIn("overallSuggestion", payload)
+        # whitespace
+        payload = assemble_result_audit_info(
+            prepared_receipt, {**base_processed, "overallSuggestion": "   "}
+        )
+        self.assertNotIn("overallSuggestion", payload)
+        # None
+        payload = assemble_result_audit_info(
+            prepared_receipt, {**base_processed, "overallSuggestion": None}
+        )
+        self.assertNotIn("overallSuggestion", payload)
+
     def test_telecom_compliance_marks_telecom_service_penalty_and_surcharge_noncompliant(self) -> None:
         prepared_receipt = {
             "receiptCode": "REC-COMPLIANCE-001",

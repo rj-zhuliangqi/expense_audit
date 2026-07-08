@@ -7,7 +7,8 @@ from typing import Any
 from expense_audit_orchestrator.runtime_client import DEFAULT_GRAPH_PATH, GraphRuntimeClient
 
 from .core import DEFAULT_OCR_PATH, ReceiptDataPreparer
-from .observability import new_run_id, run_context
+from .observability import get_logger, new_run_id, run_context
+from .overall_advice import OverallAdviceProvider
 
 
 InvoiceResultSink = Callable[[str, dict[str, Any]], None]
@@ -25,6 +26,7 @@ class ReceiptAuditService:
         invoice_result_sink: InvoiceResultSink | None = None,
         receipt_result_sink: ReceiptResultSink | None = None,
         run_id_factory: Callable[[], str] = new_run_id,
+        overall_advice_provider: OverallAdviceProvider | None = None,
     ) -> None:
         if (graph_path is None) == (graph_content is None):
             raise ValueError("exactly one of graph_path or graph_content is required")
@@ -36,6 +38,7 @@ class ReceiptAuditService:
         self._invoice_result_sink = invoice_result_sink or _noop_invoice_result_sink
         self._receipt_result_sink = receipt_result_sink or _noop_receipt_result_sink
         self._run_id_factory = run_id_factory
+        self._overall_advice_provider = overall_advice_provider
 
     def prepare_input(
         self,
@@ -124,6 +127,8 @@ class ReceiptAuditService:
             "remainingApplyAmount": remaining_apply_amount,
             "validInvoiceTotal": _resolve_valid_invoice_total(invoice_results, _resolve_initial_apply_amount(prepared_receipt), remaining_apply_amount),
         }
+        # 核销单级整体建议：所有发票跑完后、回写 sink 前生成。
+        self._augment_with_overall_advice(receipt_result)
         self._receipt_result_sink(receipt_result)
         return receipt_result
 
@@ -191,6 +196,35 @@ class ReceiptAuditService:
             graph_path=self._graph_path,
             graph_content=self._graph_content,
         )
+
+    def _augment_with_overall_advice(self, receipt_result: dict[str, Any]) -> None:
+        """调用整体建议 provider，把结果挂到 receipt_result['overallSuggestion']。
+
+        任何异常都吞掉并记日志——整体建议是增强项，绝不能打断审计主链路。
+        """
+        provider = self._overall_advice_provider
+        if provider is None:
+            return
+        receipt_code = str(receipt_result.get("receiptCode") or "")
+        invoice_results = receipt_result.get("invoiceResults") or []
+        try:
+            with run_context(receipt_code=receipt_code, run_id=None, invoice_key=None):
+                suggestion = provider(
+                    receipt_code,
+                    invoice_results,
+                    receipt_context=receipt_result.get("receiptContext"),
+                )
+        except Exception:
+            get_logger("overall_advice").exception(
+                "overall advice provider raised",
+                extra={
+                    "receipt_code": receipt_code,
+                    "event": "overall_advice.invocation_failed",
+                },
+            )
+            return
+        if isinstance(suggestion, str) and suggestion.strip():
+            receipt_result["overallSuggestion"] = suggestion.strip()
 
 
 def _resolve_invoice_key(invoice_file: Mapping[str, Any]) -> str:

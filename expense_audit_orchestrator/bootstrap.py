@@ -25,6 +25,7 @@ from .application import InvoiceResultSink, ReceiptAuditService, ReceiptResultSi
 from .core import ReceiptDataPreparer
 from .kingdee_ocr import create_kingdee_ocr_provider_from_env
 from .observability import build_invoice_result_log_sink, get_logger, resolve_log_dir
+from .overall_advice import OverallAdviceProvider, create_overall_advice_provider_from_env
 from .writeback_client import (
     AUDIT_INFO_SAVE_PATH,
     AuditInfoWritebackClient,
@@ -68,6 +69,7 @@ def create_receipt_audit_service(
     telecom_asset_dir: Path | str | None = None,
     enable_invoice_logging: bool | None = None,
     invoice_log_dir: Path | str | None = None,
+    overall_advice_provider: OverallAdviceProvider | None = None,
 ) -> ReceiptAuditService:
     resolved_profile = _resolve_profile(profile, telecom_asset_dir=telecom_asset_dir)
     resolved_graph_path = None if graph_content is not None else (
@@ -105,6 +107,9 @@ def create_receipt_audit_service(
         enable_invoice_logging=enable_invoice_logging,
         invoice_log_dir=invoice_log_dir,
     )
+    resolved_overall_advice_provider = (
+        overall_advice_provider or create_overall_advice_provider_from_env()
+    )
     return ReceiptAuditService(
         graph_runtime_client=runtime_client,
         data_preparer=data_preparer,
@@ -112,6 +117,7 @@ def create_receipt_audit_service(
         graph_content=graph_content,
         invoice_result_sink=resolved_invoice_result_sink,
         receipt_result_sink=resolved_receipt_result_sink,
+        overall_advice_provider=resolved_overall_advice_provider,
     )
 
 
