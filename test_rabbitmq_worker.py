@@ -149,7 +149,7 @@ class RabbitMQWorkerTests(unittest.TestCase):
     def test_main_cli_requires_explicit_real_audit_service_url(self, mock_create_worker: MagicMock) -> None:
         with patch.dict("os.environ", {"RABBITMQ_URL": "amqp://guest:guest@example:5672/%2F"}, clear=True):
             with self.assertRaises(ValueError) as context:
-                rabbitmq_worker.main_cli(["--graph-path", "graph-latest-0623-1202.json", "--queues", "audit"])
+                rabbitmq_worker.main_cli(["--queues", "audit"])
 
         self.assertIn("不允许使用本地 mock", str(context.exception))
         mock_create_worker.assert_not_called()
@@ -163,8 +163,6 @@ class RabbitMQWorkerTests(unittest.TestCase):
             [
                 "--amqp-url",
                 "amqp://guest:guest@example:5672/%2F",
-                "--graph-path",
-                "graph-latest-0623-1202.json",
                 "--audit-service-url",
                 "https://service.example",
                 "--queues",
@@ -182,7 +180,6 @@ class RabbitMQWorkerTests(unittest.TestCase):
         mock_create_service.return_value = service
 
         worker = rabbitmq_worker.create_worker(
-            graph_path="graph-latest-0623-1202.json",
             audit_service_url="https://service.example",
             graph_runtime_url="http://127.0.0.1:8090",
         )

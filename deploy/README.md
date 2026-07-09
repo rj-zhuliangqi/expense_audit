@@ -70,4 +70,4 @@ worker 的 `--graph-path` 在 unit 模板里指向仓库根的 `graph-latest-070
 
 ## 不需要部署的文件
 
-`mock_server.py`、`execute_graph.py`、`prepare_from_queue.py`、`main.py`、`build_telecom_list.py`、`call_audit_invoice_files.py`、`integration_test.py`、`test_*.py` 都是本地联调/调试/测试用，生产运行时不加载，保留在仓库里无害，但 systemd 不会启动它们。
+`execute_graph.py`、`prepare_from_queue.py`、`main.py`、`build_telecom_list.py`、`call_audit_invoice_files.py`、`integration_test.py`、`test_*.py` 都是本地联调/调试/测试用，生产运行时不加载，保留在仓库里无害，但 systemd 不会启动它们。

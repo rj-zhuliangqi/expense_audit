@@ -17,24 +17,17 @@
 
 当前仓库里，`expense_audit_orchestrator` 是可复用的客户端库；`execute_graph.py` 只是这个客户端库的本地 CLI 调试入口；`graph_runtime` HTTP 服务统一通过 `graph_runtime.api:create_app` 启动，不代表生产形态应该对外提供一个审单 HTTP 服务。
 
-如果需要本地 mock 上游业务接口，再单独启动：`mock_server.py`
+上游业务接口走真实网关（默认 `DEFAULT_AUDIT_SERVICE_URL`，可用环境变量 `AUDIT_SERVICE_URL` 覆盖），不再需要本地 mock。
 
 ## 推荐端口
 
 - 图运行时服务：`8090`
 - 节点调用网关：`8091`
-- mock 上游服务：`8080`
+- 上游核销单服务：`8080`（真实网关地址由 `AUDIT_SERVICE_URL` 指定）
 
 ## 服务启动
 
-### 1. 启动 mock 上游服务
-
-```bash
-cd /mnt/d/gorules/expense_audit
-.venv/bin/python mock_server.py
-```
-
-### 2. 启动图运行时服务
+### 1. 启动图运行时服务
 
 ```bash
 cd /mnt/d/gorules/expense_audit
@@ -48,7 +41,7 @@ curl -sS http://127.0.0.1:8090/health
 
 curl -sS -X POST http://127.0.0.1:8090/api/v1/graph-runtime/evaluations \
   -H 'Content-Type: application/json' \
-  -d '{"graphPath":"graph-latest-0610-2018.json","preparedInput":{"context":{"receiptCode":"REC-001"}},"includePreparedInput":true}'
+  -d '{"graphPath":"graph-latest-0707-2301.json","preparedInput":{"context":{"receiptCode":"REC-001"}},"includePreparedInput":true}'
 ```
 
 ### 3. 启动节点调用网关
@@ -98,24 +91,23 @@ GRAPH_RUNTIME_URL=http://127.0.0.1:8090 \
 ```bash
 cd /mnt/d/gorules/expense_audit
 GRAPH_RUNTIME_URL=http://127.0.0.1:8090 \
-.venv/bin/python execute_graph.py --graph-path graph-latest-0610-2018.json --receipt-code REC20260603001
+.venv/bin/python execute_graph.py --receipt-code REC20260603001
 ```
 
 ### 2. 使用现成 preparedInput 直接执行图
 
 ```bash
 cd /mnt/d/gorules/expense_audit
-.venv/bin/python execute_graph.py --graph-path graph-latest-0610-2018.json --prepared-input-path prepared-input2.json
+.venv/bin/python execute_graph.py --prepared-input-path prepared-input.json
 ```
 
 ### 3. 只导出 preparedInput JSON
 
-导出的 `preparedInput` 会自动把 `operator_city.csv` 装入 `serviceData.telecom_list`，格式与 `prepared-input2.json` 保持一致，方便在 UI 中直接模拟。
+导出的 `preparedInput` 会自动把 `operator_city.csv` 装入 `serviceData.telecom_list`，方便在 UI 中直接模拟。
 
 ```bash
 cd /mnt/d/gorules/expense_audit
 .venv/bin/python execute_graph.py \
-  --graph-path graph-latest-0610-2018.json \
   --receipt-code REC20260603001 \
   --prepare-only \
   --prepared-output-path prepared-input.json
@@ -298,14 +290,7 @@ set -a && source .env && set +a
 
 ### 用本地 mock 上游做“队列 -> 数据准备”联调
 
-先启动本地 mock：
-
-```bash
-cd /mnt/d/gorules/expense_audit
-.venv/bin/python mock_server.py
-```
-
-再执行：
+> 本仓库已移除 `mock_server.py`，上游统一走真实网关。下面这段保留为历史参考，实际联调请直接用「真实网关」小节的方式，通过 `AUDIT_SERVICE_URL` 或 `--audit-service-url` 指定上游地址。
 
 ```bash
 cd /mnt/d/gorules/expense_audit

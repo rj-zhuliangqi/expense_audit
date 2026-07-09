@@ -28,8 +28,9 @@ class FakeDecisionEngine:
         self.result = result or {"checkStatus": "passed", "message": "ok"}
         self.received_input = None
 
-    def evaluate(self, rule_input: dict) -> dict:
+    def evaluate(self, rule_input: dict, options: dict | None = None) -> dict:
         self.received_input = rule_input
+        self.received_options = options
         return {"result": self.result}
 
 
@@ -75,12 +76,12 @@ class ExecuteGraphCliTests(unittest.TestCase):
         mock_create_service.return_value = fake_service
 
         @contextmanager
-        def fake_ensure_mock_audit_service_url():
+        def fake_ensure_audit_service_url():
             yield execute_graph.DEFAULT_AUDIT_SERVICE_URL
 
         with patch(
-            "execute_graph.ensure_mock_audit_service_url",
-            fake_ensure_mock_audit_service_url,
+            "execute_graph.ensure_audit_service_url",
+            fake_ensure_audit_service_url,
             create=True,
         ):
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -91,7 +92,7 @@ class ExecuteGraphCliTests(unittest.TestCase):
                         "--receipt-code",
                         "REC-EXEC",
                         "--graph-path",
-                        "graph-llm-latest.json",
+                        str(execute_graph.DEFAULT_GRAPH_PATH),
                         "--prepared-output-path",
                         str(output_path),
                     ]
@@ -109,7 +110,7 @@ class ExecuteGraphCliTests(unittest.TestCase):
         self.assertEqual(Path(fake_service.calls[0][1]), execute_graph.DEFAULT_OCR_PATH)
         self.assertEqual(
             Path(mock_create_service.call_args.kwargs["graph_path"]),
-            Path("graph-llm-latest.json"),
+            Path(execute_graph.DEFAULT_GRAPH_PATH),
         )
         self.assertEqual(
             mock_create_service.call_args.kwargs["audit_service_url"],
@@ -130,12 +131,12 @@ class ExecuteGraphCliTests(unittest.TestCase):
         mock_create_service.return_value = fake_service
 
         @contextmanager
-        def fake_ensure_mock_audit_service_url():
+        def fake_ensure_audit_service_url():
             yield execute_graph.DEFAULT_AUDIT_SERVICE_URL
 
         with patch(
-            "execute_graph.ensure_mock_audit_service_url",
-            fake_ensure_mock_audit_service_url,
+            "execute_graph.ensure_audit_service_url",
+            fake_ensure_audit_service_url,
             create=True,
         ):
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -162,14 +163,14 @@ class ExecuteGraphCliTests(unittest.TestCase):
         self.assertEqual(Path(fake_service.prepare_calls[0][1]), execute_graph.DEFAULT_OCR_PATH)
         self.assertEqual(fake_service.calls, [])
 
-    @patch("execute_graph.ensure_mock_audit_service_url")
+    @patch("execute_graph.ensure_audit_service_url")
     @patch("execute_graph.create_receipt_audit_service")
     @patch("execute_graph.create_graph_runtime_client")
     def test_main_cli_can_execute_graph_from_prepared_input_json(
         self,
         mock_create_graph_runtime_client,
         mock_create_service,
-        mock_ensure_mock_service,
+        mock_ensure_audit_service,
     ) -> None:
         prepared_input = {
             "invoiceType": "26",
@@ -203,7 +204,7 @@ class ExecuteGraphCliTests(unittest.TestCase):
             exit_code = execute_graph.main_cli(
                 [
                     "--graph-path",
-                    "graph-llm-latest.json",
+                    str(execute_graph.DEFAULT_GRAPH_PATH),
                     "--prepared-input-path",
                     str(input_path),
                 ]
@@ -211,19 +212,22 @@ class ExecuteGraphCliTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(fake_runtime_client.calls[0]["prepared_input"], prepared_input)
-        self.assertEqual(fake_runtime_client.calls[0]["graph_path"], "graph-llm-latest.json")
+        self.assertEqual(
+            fake_runtime_client.calls[0]["graph_path"],
+            str(execute_graph.DEFAULT_GRAPH_PATH),
+        )
         mock_create_graph_runtime_client.assert_called_once_with(None)
         mock_create_service.assert_not_called()
-        mock_ensure_mock_service.assert_not_called()
+        mock_ensure_audit_service.assert_not_called()
 
-    @patch("execute_graph.ensure_mock_audit_service_url")
+    @patch("execute_graph.ensure_audit_service_url")
     @patch("execute_graph.create_receipt_audit_service")
     @patch("execute_graph.create_graph_runtime_client")
     def test_main_cli_can_execute_graph_from_wrapped_prepared_receipt_json(
         self,
         mock_create_graph_runtime_client,
         mock_create_service,
-        mock_ensure_mock_service,
+        mock_ensure_audit_service,
     ) -> None:
         prepared_input = {
             "invoiceType": "26",
@@ -267,7 +271,7 @@ class ExecuteGraphCliTests(unittest.TestCase):
             exit_code = execute_graph.main_cli(
                 [
                     "--graph-path",
-                    "graph-latest-0623-1202.json",
+                    str(execute_graph.DEFAULT_GRAPH_PATH),
                     "--prepared-input-path",
                     str(input_path),
                 ]
@@ -275,10 +279,13 @@ class ExecuteGraphCliTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(fake_runtime_client.calls[0]["prepared_input"], prepared_input)
-        self.assertEqual(fake_runtime_client.calls[0]["graph_path"], "graph-latest-0623-1202.json")
+        self.assertEqual(
+            fake_runtime_client.calls[0]["graph_path"],
+            str(execute_graph.DEFAULT_GRAPH_PATH),
+        )
         mock_create_graph_runtime_client.assert_called_once_with(None)
         mock_create_service.assert_not_called()
-        mock_ensure_mock_service.assert_not_called()
+        mock_ensure_audit_service.assert_not_called()
 
 
 if __name__ == "__main__":
