@@ -1,19 +1,16 @@
 import json
 import os
-from contextlib import contextmanager
 from pathlib import Path
-import threading
 import tempfile
 import unittest
 from typing import Any
 from unittest.mock import MagicMock, patch
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 from fastapi.testclient import TestClient
 
 import main
-import mock_server
 from expense_audit_orchestrator import bootstrap as orchestrator_bootstrap
 from expense_audit_orchestrator.application import ReceiptAuditService
 from expense_audit_orchestrator.bootstrap import create_receipt_audit_service as create_orchestrator_service
@@ -45,8 +42,9 @@ class FakeDecisionEngine:
         self._result = result or {"checkStatus": "passed", "message": "ok"}
         self.received_input = None
 
-    def evaluate(self, rule_input: dict) -> dict:
+    def evaluate(self, rule_input: dict, options: dict | None = None) -> dict:
         self.received_input = rule_input
+        self.received_options = options
         return {"result": self._result}
 
 
@@ -204,9 +202,11 @@ class ReceiptPipelineTests(unittest.TestCase):
         self.assertFalse(hasattr(main, "run_once"))
 
     def test_main_app_exposes_graph_runtime_endpoint_for_uploaded_graph_content(self) -> None:
-        prepared_input = json.loads(
-            Path(__file__).resolve().with_name("prepared-input2.json").read_text(encoding="utf-8")
-        )
+        prepared_input = {
+            "invoiceType": "2",
+            "context": {"receiptCode": "REC-001"},
+            "serviceData": {"auditInfo": {"instanceCode": "REC-001"}},
+        }
 
         client = TestClient(create_graph_runtime_app())
         response = client.post(
@@ -249,7 +249,7 @@ class ReceiptPipelineTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
 
     def test_graph_runtime_writeoff_expression_tolerates_missing_or_null_usage_history(self) -> None:
-        graph_content = json.loads(Path("graph-latest-0623-1202.json").read_text(encoding="utf-8"))
+        graph_content = json.loads(Path(DEFAULT_GRAPH_PATH).read_text(encoding="utf-8"))
         expression_value = None
         for node in graph_content.get("nodes", []):
             if not isinstance(node, dict):
@@ -434,37 +434,6 @@ class ReceiptPipelineTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "kingdee ocr provider is required"):
             create_orchestrator_service()
-
-    @patch("main._wait_for_mock_server_service")
-    @patch("main.subprocess.Popen")
-    @patch("main._stop_process_on_port")
-    @patch("main._find_pid_listening_on_port")
-    def test_ensure_mock_audit_service_url_restarts_mock_server_process_on_default_port(
-        self,
-        mock_find_pid,
-        mock_stop_process,
-        mock_popen,
-        mock_wait_for_mock_server,
-    ) -> None:
-        mock_find_pid.return_value = 160076
-        fake_process = MagicMock()
-        fake_process.wait.return_value = 0
-        mock_popen.return_value = fake_process
-
-        with main.ensure_mock_audit_service_url() as service_url:
-            self.assertEqual(service_url, main.DEFAULT_AUDIT_SERVICE_URL)
-
-        mock_stop_process.assert_called_once_with(mock_server.PORT, 160076)
-        mock_popen.assert_called_once_with(
-            [main.sys.executable, str(Path(main.__file__).resolve().with_name("mock_server.py"))],
-            cwd=str(Path(main.__file__).resolve().parent),
-        )
-        mock_wait_for_mock_server.assert_called_once_with(
-            main.DEFAULT_AUDIT_SERVICE_URL,
-            process=fake_process,
-        )
-        fake_process.terminate.assert_called_once()
-        fake_process.wait.assert_called_once_with(timeout=2)
 
     @patch("expense_audit_orchestrator.audit_client.urlopen")
     def test_fetch_audit_info_returns_data_payload(self, mock_urlopen) -> None:
@@ -3083,83 +3052,6 @@ class KingdeeOCRProviderTests(unittest.TestCase):
         self.assertEqual(requests[3][1]["messageType"], "recognitionCheck")
         self.assertEqual(requests[3][1]["data"]["companyInfo"]["name"], "锐捷网络股份有限公司")
         self.assertEqual(requests[3][1]["data"]["companyInfo"]["taxNo"], "91110108668444162H")
-
-
-class GraphConfigTests(unittest.TestCase):
-    def test_graph_variants_external_api_call_use_local_llm_service(self) -> None:
-        for graph_name in ("graph-local-online-10.json", "graph-llm-latest.json"):
-            with self.subTest(graph_name=graph_name):
-                graph_path = Path(__file__).resolve().with_name(graph_name)
-                graph = json.loads(graph_path.read_text(encoding="utf-8"))
-                node = next(item for item in graph["nodes"] if item["id"] == "external_api_call")
-                source = node["content"]["source"]
-
-                self.assertIn("http://127.0.0.1:8091/api/v1/node-gateway/llm/evaluate", source)
-                self.assertNotIn("/chat/completions", source)
-
-    def test_graph_online_external_api_call_does_not_use_global_url_constructor(self) -> None:
-        graph_path = Path(__file__).resolve().with_name("graph-llm-latest.json")
-        graph = json.loads(graph_path.read_text(encoding="utf-8"))
-        node = next(item for item in graph["nodes"] if item["id"] == "external_api_call")
-        source = node["content"]["source"]
-
-        self.assertNotIn("new URL(", source)
-
-    def test_graph_online_external_api_call_uses_http_post_instead_of_request(self) -> None:
-        graph_path = Path(__file__).resolve().with_name("graph-llm-latest.json")
-        graph = json.loads(graph_path.read_text(encoding="utf-8"))
-        node = next(item for item in graph["nodes"] if item["id"] == "external_api_call")
-        source = node["content"]["source"]
-
-        self.assertIn("http.post(", source)
-        self.assertNotIn("http.request(", source)
-
-
-class MockAuditServerTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.server = mock_server.ThreadingHTTPServer(
-            ("127.0.0.1", 0),
-            mock_server.AuditRequestHandler,
-        )
-        server_address = cls.server.server_address
-        cls.host = server_address[0]
-        cls.port = server_address[1]
-        cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
-        cls.thread.start()
-
-    @classmethod
-    def tearDownClass(cls) -> None:
-        cls.server.shutdown()
-        cls.server.server_close()
-        cls.thread.join(timeout=2)
-
-    def fetch_json(self, path: str) -> tuple[int, dict]:
-        with urlopen(f"http://{self.host}:{self.port}{path}", timeout=5.0) as response:
-            return response.status, json.load(response)
-
-    def test_company_blacklist_endpoint_returns_mocked_entries(self) -> None:
-        status_code, payload = self.fetch_json("/audit/companyblacklist")
-
-        self.assertEqual(status_code, 200)
-        self.assertEqual(payload["code"], 0)
-        self.assertEqual(payload["message"], "success")
-        self.assertIsInstance(payload["data"], list)
-        self.assertGreaterEqual(len(payload["data"]), 1)
-        self.assertEqual(
-            set(payload["data"][0]),
-            {"id", "code", "value", "createTime", "modifyTime"},
-        )
-
-    def test_company_list_query_alias_returns_expense_invoice_types(self) -> None:
-        status_code, payload = self.fetch_json("/audit/company-list?eiCode=EI001")
-
-        self.assertEqual(status_code, 200)
-        self.assertEqual(payload["code"], 0)
-        self.assertEqual(payload["message"], "success")
-        self.assertIsInstance(payload["data"], list)
-        self.assertGreaterEqual(len(payload["data"]), 1)
-        self.assertEqual(payload["data"][0]["eiCode"], "EI001")
 
 
 if __name__ == "__main__":

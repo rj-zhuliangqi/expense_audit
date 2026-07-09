@@ -22,11 +22,9 @@ output/
 prepared-input.json
 
 # Scrap / scratch graph snapshots (editor dumps). Only the pinned
-# DEFAULT_GRAPH_PATH graphs are tracked; the rest are local experiments.
+# DEFAULT_GRAPH_PATH graph is tracked; the rest are local experiments.
 graph-latest-* copy.json
 graph-latest-*-*.json
-!graph-latest-0623-1202.json
-!graph-latest-0625-1814.json
 !graph-latest-0707-2301.json
 
 # Local requirement spec sheets (not source code)

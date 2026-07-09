@@ -1,17 +1,9 @@
 import argparse
 import json
-import os
-import re
-import signal
-import subprocess
-import sys
-import time
 from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from typing import Any, Sequence
-from urllib.request import urlopen
 
-import mock_server
 from expense_audit_orchestrator import audit_client
 from expense_audit_orchestrator.bootstrap import create_receipt_audit_service
 from expense_audit_orchestrator.core import DEFAULT_OCR_PATH
@@ -49,102 +41,13 @@ def export_prepared_input(prepared_input: dict[str, Any], output_path: Path | st
 
 
 @contextmanager
-def ensure_mock_audit_service_url():
-    port = mock_server.PORT
-    existing_pid = _find_pid_listening_on_port(port)
-    if existing_pid is not None:
-        _stop_process_on_port(port, existing_pid)
+def ensure_audit_service_url(audit_service_url: str | None = None):
+    """解析上游核销单服务地址。
 
-    process = subprocess.Popen(
-        [sys.executable, str(Path(__file__).resolve().with_name("mock_server.py"))],
-        cwd=str(Path(__file__).resolve().parent),
-    )
-    try:
-        _wait_for_mock_server_service(audit_client.DEFAULT_AUDIT_SERVICE_URL, process=process)
-        yield audit_client.DEFAULT_AUDIT_SERVICE_URL
-    finally:
-        process.terminate()
-        try:
-            process.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait(timeout=2)
-
-
-def _find_pid_listening_on_port(port: int) -> int | None:
-    try:
-        result = subprocess.run(
-            ["ss", "-ltnp", f"( sport = :{port} )"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-    except FileNotFoundError:
-        return None
-
-    match = re.search(r"pid=(\d+)", result.stdout)
-    if match is None:
-        return None
-
-    return int(match.group(1))
-
-
-def _stop_process_on_port(port: int, pid: int, timeout: float = 3.0) -> None:
-    print(f"[mock_server] 检测到 {port} 端口被进程 {pid} 占用，正在停止旧进程...")
-    try:
-        os.kill(pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return
-
-    if _wait_for_port_release(port, timeout=timeout):
-        return
-
-    try:
-        os.kill(pid, signal.SIGKILL)
-    except ProcessLookupError:
-        return
-
-    if _wait_for_port_release(port, timeout=timeout):
-        return
-
-    raise RuntimeError(f"无法释放端口 {port}，旧进程 {pid} 仍在占用")
-
-
-def _wait_for_port_release(port: int, timeout: float = 3.0) -> bool:
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if _find_pid_listening_on_port(port) is None:
-            return True
-        time.sleep(0.1)
-    return False
-
-
-def _wait_for_mock_server_service(
-    service_url: str,
-    *,
-    process: Any | None = None,
-    timeout: float = 5.0,
-) -> None:
-    endpoint = f"{service_url.rstrip('/')}/audit/companyblacklist"
-    deadline = time.monotonic() + timeout
-    last_error: Exception | None = None
-
-    while time.monotonic() < deadline:
-        if process is not None and process.poll() is not None:
-            raise RuntimeError("mock_server.py 启动失败，进程已提前退出")
-
-        try:
-            with urlopen(endpoint, timeout=0.5) as response:
-                payload = json.load(response)
-            if payload.get("code") == 0:
-                return
-            last_error = RuntimeError(f"mock_server.py 返回了异常响应: {payload}")
-        except Exception as exc:
-            last_error = exc
-
-        time.sleep(0.1)
-
-    raise RuntimeError(f"mock_server.py 未能在 {service_url} 上就绪") from last_error
+    未显式传入时沿用 ``DEFAULT_AUDIT_SERVICE_URL``（生产真实网关，或通过环境变量
+    ``AUDIT_SERVICE_URL`` 覆盖）。本地不再拉起 mock 服务。
+    """
+    yield audit_service_url or audit_client.DEFAULT_AUDIT_SERVICE_URL
 
 
 def run_graph(
@@ -159,7 +62,7 @@ def run_graph(
     telecom_asset_dir: Path | str | None = None,
 ) -> dict[str, Any]:
     audit_service_url_context = (
-        ensure_mock_audit_service_url()
+        ensure_audit_service_url()
         if audit_service_url is None
         else nullcontext(audit_service_url)
     )
@@ -196,7 +99,7 @@ def export_prepared_input_only(
     telecom_asset_dir: Path | str | None = None,
 ) -> dict[str, Any]:
     audit_service_url_context = (
-        ensure_mock_audit_service_url()
+        ensure_audit_service_url()
         if audit_service_url is None
         else nullcontext(audit_service_url)
     )
@@ -286,7 +189,7 @@ def build_cli_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--audit-service-url",
-        help="指定上游核销单服务地址；未传时自动拉起本地 mock_server.py",
+        help="指定上游核销单服务地址；未传时使用 DEFAULT_AUDIT_SERVICE_URL（可用环境变量 AUDIT_SERVICE_URL 覆盖）",
     )
     return parser
 

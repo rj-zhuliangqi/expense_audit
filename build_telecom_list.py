@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 CSV_PATH = Path("/mnt/d/gorules/expense_audit/operator_city.csv")
-JSON_PATH = Path("/mnt/d/gorules/expense_audit/prepared-input2.json")
+JSON_PATH = Path("/mnt/d/gorules/expense_audit/prepared-input.json")
 
 
 def build_telecom_list(csv_path: Path) -> list[tuple[str, str]]:
