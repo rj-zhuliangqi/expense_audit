@@ -36,6 +36,9 @@ graph-latest-*-*.json
 # Empty scaffolding (auto-generated stubs only, no real code)
 gorules/
 
+# Local deploy drafts/outputs are not part of source control
+deploy/
+
 # OS
 .DS_Store
 Thumbs.db
