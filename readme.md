@@ -21,7 +21,7 @@
 
 ## 推荐端口
 
-- 图运行时服务：`8090`
+- 图运行时服务：`18090`
 - 节点调用网关：`8091`
 - mock 上游服务：`8080`
 
@@ -38,15 +38,15 @@ cd /mnt/d/gorules/expense_audit
 
 ```bash
 cd /mnt/d/gorules/expense_audit
-.venv/bin/python -m uvicorn graph_runtime.api:create_app --factory --host 127.0.0.1 --port 8090
+.venv/bin/python -m uvicorn graph_runtime.api:create_app --factory --host 127.0.0.1 --port 18090
 ```
 
 启动后可用接口：
 
 ```bash
-curl -sS http://127.0.0.1:8090/health
+curl -sS http://127.0.0.1:18090/health
 
-curl -sS -X POST http://127.0.0.1:8090/api/v1/graph-runtime/evaluations \
+curl -sS -X POST http://127.0.0.1:18090/api/v1/graph-runtime/evaluations \
   -H 'Content-Type: application/json' \
   -d '{"graphPath":"graph-latest-0610-2018.json","preparedInput":{"context":{"receiptCode":"REC-001"}},"includePreparedInput":true}'
 ```
@@ -63,7 +63,7 @@ cd /mnt/d/gorules/expense_audit
 ```bash
 cd /mnt/d/gorules/expense_audit
 set -a && source .env && set +a
-GRAPH_RUNTIME_URL=http://127.0.0.1:8090 \
+GRAPH_RUNTIME_URL=http://127.0.0.1:18090 \
 .venv/bin/python rabbitmq_worker.py \
   --amqp-url "$RABBITMQ_URL" \
   --audit-service-url https://service-uate-gw.ruijie.com.cn \
@@ -97,7 +97,7 @@ GRAPH_RUNTIME_URL=http://127.0.0.1:8090 \
 
 ```bash
 cd /mnt/d/gorules/expense_audit
-GRAPH_RUNTIME_URL=http://127.0.0.1:8090 \
+GRAPH_RUNTIME_URL=http://127.0.0.1:18090 \
 .venv/bin/python execute_graph.py --graph-path graph-latest-0610-2018.json --receipt-code REC20260603001
 ```
 
@@ -205,7 +205,7 @@ KINGDEE_OCR_TIMEOUT=30
 ```bash
 cd /mnt/d/gorules/expense_audit
 set -a && source .env && set +a
-GRAPH_RUNTIME_URL=http://127.0.0.1:8090 \
+GRAPH_RUNTIME_URL=http://127.0.0.1:18090 \
 .venv/bin/python rabbitmq_worker.py \
   --amqp-url "$RABBITMQ_URL" \
   --audit-service-url https://service-uate-gw.ruijie.com.cn \
@@ -218,7 +218,7 @@ GRAPH_RUNTIME_URL=http://127.0.0.1:8090 \
 ```bash
 cd /mnt/d/gorules/expense_audit
 set -a && source .env && set +a
-GRAPH_RUNTIME_URL=http://127.0.0.1:8090 \
+GRAPH_RUNTIME_URL=http://127.0.0.1:18090 \
 .venv/bin/python rabbitmq_worker.py \
   --amqp-url "$RABBITMQ_URL" \
   --audit-service-url https://service-uate-gw.ruijie.com.cn \
@@ -231,7 +231,7 @@ GRAPH_RUNTIME_URL=http://127.0.0.1:8090 \
 ```bash
 cd /mnt/d/gorules/expense_audit
 set -a && source .env && set +a
-GRAPH_RUNTIME_URL=http://127.0.0.1:8090 \
+GRAPH_RUNTIME_URL=http://127.0.0.1:18090 \
 .venv/bin/python rabbitmq_worker.py \
   --amqp-url "$RABBITMQ_URL" \
   --audit-service-url https://service-uate-gw.ruijie.com.cn \
@@ -393,7 +393,7 @@ set -a && source .env && set +a
 ```bash
 cd /mnt/d/gorules/expense_audit
 set -a && source .env && set +a
-GRAPH_RUNTIME_URL=http://127.0.0.1:8090 \
+GRAPH_RUNTIME_URL=http://127.0.0.1:18090 \
 .venv/bin/python rabbitmq_worker.py \
   --audit-service-url https://service-uate-gw.ruijie.com.cn/ \
   --queues audit

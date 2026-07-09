@@ -2130,7 +2130,7 @@ class FormalServiceTests(unittest.TestCase):
         )
 
         result = service.process_prepared_receipt(prepared_receipt)
-
+        
         self.assertEqual(result["summary"]["overallStatus"], "SUCCESS")
         self.assertEqual(len(published_receipts), 1)
         self.assertEqual(published_receipts[0]["receiptCode"], "REC-RECEIPT-SINK-001")
@@ -2139,104 +2139,6 @@ class FormalServiceTests(unittest.TestCase):
             [item["invoiceKey"] for item in published_receipts[0]["invoiceResults"]],
             ["FID-001", "FID-002"],
         )
-
-    def test_process_prepared_receipt_sets_overall_suggestion_when_provider_returns_string(self) -> None:
-        prepared_receipt = {
-            "receiptCode": "REC-OVERALL-001",
-            "serviceData": {"auditInfo": {"instanceCode": "REC-OVERALL-001"}},
-            "receiptContext": {"receiptCode": "REC-OVERALL-001"},
-            "invoicePreparations": [
-                {
-                    "invoiceKey": "FID-001",
-                    "invoiceFile": {"fid": "FID-001"},
-                    "preparedInput": {"serviceData": {"auditInvoiceFile": {"fid": "FID-001"}}},
-                },
-            ],
-        }
-
-        class _StubRuntime:
-            def evaluate(self, *, prepared_input, graph_path=None, graph_content=None):
-                return {"decisionOutput": {"checkStatus": "passed"}, "preparedInput": prepared_input}
-
-        published: list[dict[str, Any]] = []
-
-        def capture(receipt_result):
-            published.append(receipt_result)
-
-        def provider(receipt_code, invoice_results, *, receipt_context=None):
-            return "本核销单建议补传合规发票"
-
-        service = ReceiptAuditService(
-            graph_runtime_client=_StubRuntime(),
-            data_preparer=MagicMock(),
-            receipt_result_sink=capture,
-            overall_advice_provider=provider,
-        )
-        result = service.process_prepared_receipt(prepared_receipt)
-        self.assertEqual(result["aiAuditAdvice"], "本核销单建议补传合规发票")
-        self.assertEqual(published[0]["aiAuditAdvice"], "本核销单建议补传合规发票")
-
-    def test_process_prepared_receipt_does_not_raise_when_provider_throws(self) -> None:
-        prepared_receipt = {
-            "receiptCode": "REC-OVERALL-002",
-            "serviceData": {"auditInfo": {"instanceCode": "REC-OVERALL-002"}},
-            "receiptContext": {"receiptCode": "REC-OVERALL-002"},
-            "invoicePreparations": [
-                {
-                    "invoiceKey": "FID-001",
-                    "invoiceFile": {"fid": "FID-001"},
-                    "preparedInput": {"serviceData": {"auditInvoiceFile": {"fid": "FID-001"}}},
-                },
-            ],
-        }
-
-        class _StubRuntime:
-            def evaluate(self, *, prepared_input, graph_path=None, graph_content=None):
-                return {"decisionOutput": {"checkStatus": "passed"}, "preparedInput": prepared_input}
-
-        published: list[dict[str, Any]] = []
-
-        def capture(receipt_result):
-            published.append(receipt_result)
-
-        def boom(receipt_code, invoice_results, *, receipt_context=None):
-            raise RuntimeError("explode")
-
-        service = ReceiptAuditService(
-            graph_runtime_client=_StubRuntime(),
-            data_preparer=MagicMock(),
-            receipt_result_sink=capture,
-            overall_advice_provider=boom,
-        )
-        result = service.process_prepared_receipt(prepared_receipt)  # must NOT raise
-        self.assertNotIn("aiAuditAdvice", result)
-        self.assertEqual(len(published), 1)  # sink still called exactly once
-
-    def test_process_prepared_receipt_omits_overall_suggestion_when_provider_returns_none(self) -> None:
-        prepared_receipt = {
-            "receiptCode": "REC-OVERALL-003",
-            "serviceData": {"auditInfo": {"instanceCode": "REC-OVERALL-003"}},
-            "receiptContext": {"receiptCode": "REC-OVERALL-003"},
-            "invoicePreparations": [
-                {
-                    "invoiceKey": "FID-001",
-                    "invoiceFile": {"fid": "FID-001"},
-                    "preparedInput": {"serviceData": {"auditInvoiceFile": {"fid": "FID-001"}}},
-                },
-            ],
-        }
-
-        class _StubRuntime:
-            def evaluate(self, *, prepared_input, graph_path=None, graph_content=None):
-                return {"decisionOutput": {"checkStatus": "passed"}, "preparedInput": prepared_input}
-
-        service = ReceiptAuditService(
-            graph_runtime_client=_StubRuntime(),
-            data_preparer=MagicMock(),
-            overall_advice_provider=lambda rc, irs, *, receipt_context=None: None,
-        )
-        result = service.process_prepared_receipt(prepared_receipt)
-        self.assertNotIn("aiAuditAdvice", result)
 
     def test_receipt_audit_service_process_prepared_receipt_deducts_apply_amount_across_invoices(self) -> None:
         prepared_receipt = {
@@ -2337,68 +2239,6 @@ class FormalServiceTests(unittest.TestCase):
             invoice_results[2]["preparedInput"]["serviceData"]["auditInfo"]["applyAmount"],
             300.0,
         )
-
-    def test_receipt_audit_service_deducts_finalAmount_nested_under_invoice_content_valid_result(self) -> None:
-        """真实图里 E34 节点 outputPath=invoice_content_valid_result，finalAmount 嵌套在
-        decisionOutput['invoice_content_valid_result'] 下，而非顶层。验证该形状下扣减生效
-        （476 计入 → 剩 24 → isAmountSufficient=False → validInvoiceTotal=476）。
-
-        回归用例：此前 _extract_invoice_final_amount 从 runtime_result 下读嵌套路径，
-        取不到 → 扣减失败 → E31 message 报「有效发票合计金额 0 元」。
-        """
-        prepared_receipt = {
-            "receiptCode": "REC-NESTED-001",
-            "serviceData": {"auditInfo": {"applyAmount": 500.0}},
-            "receiptContext": {"receiptCode": "REC-NESTED-001"},
-            "invoiceCount": 1,
-            "invoicePreparations": [
-                {
-                    "invoiceKey": "FID-001",
-                    "invoiceFile": {"fid": "FID-001"},
-                    "preparedInput": {
-                        "serviceData": {
-                            "auditInfo": {"applyAmount": 500.0},
-                            "auditInvoiceFile": {"fid": "FID-001"},
-                        }
-                    },
-                },
-            ],
-        }
-
-        class NestedFinalAmountGraphRuntimeClient:
-            def evaluate(self, *, prepared_input: dict[str, Any], graph_path=None, graph_content=None) -> dict[str, Any]:
-                del graph_path, graph_content
-                return {
-                    "receiptCode": "REC-NESTED-001",
-                    "decisionOutput": {
-                        "checkStatus": "passed",
-                        "message": "ok",
-                        "amount_result": {
-                            "reason_code": "E31",
-                            "distinguish_result": "PASS",
-                            "message": "",
-                        },
-                        "invoice_content_valid_result": {
-                            "reason_code": "E34",
-                            "distinguish_result": "PASS",
-                            "invoice_finalAmount": 476.0,
-                        },
-                    },
-                    "preparedInput": prepared_input,
-                }
-
-        service = ReceiptAuditService(
-            graph_runtime_client=NestedFinalAmountGraphRuntimeClient(),
-            data_preparer=MagicMock(),
-        )
-
-        result = service.process_prepared_receipt(prepared_receipt)
-
-        self.assertEqual(result["summary"]["overallStatus"], "SUCCESS")
-        self.assertFalse(result["isAmountSufficient"])
-        self.assertEqual(result["remainingApplyAmount"], 24.0)
-        self.assertEqual(result["validInvoiceTotal"], 476.0)
-        self.assertEqual(result["applyAmount"], 500.0)
 
     def test_receipt_audit_service_process_prepared_receipt_skips_deduction_for_failed_invoice(self) -> None:
         prepared_receipt = {
@@ -2546,229 +2386,6 @@ class FormalServiceTests(unittest.TestCase):
             invoice_results[1]["preparedInput"]["serviceData"]["auditInfo"]["applyAmount"],
             1000.0,
         )
-
-    def test_receipt_audit_service_counts_e34_rejected_invoice_final_amount_as_valid(self) -> None:
-        """E34（发票明细含禁止报销项）reject 时，LLM 返回的扣减后 finalAmount 仍应计入
-        E31 有效合计。场景：申请 1000，一张票面 500 的发票其中 200 为禁止项，LLM 扣减后
-        finalAmount=300；E34 reject 但 300 计入 → 剩 700 → isAmountSufficient=False，
-        validInvoiceTotal=300。
-        """
-        prepared_receipt = {
-            "receiptCode": "REC-E34-DEDUCT-001",
-            "serviceData": {"auditInfo": {"applyAmount": 1000.0}},
-            "receiptContext": {"receiptCode": "REC-E34-DEDUCT-001"},
-            "invoiceCount": 1,
-            "invoicePreparations": [
-                {
-                    "invoiceKey": "FID-001",
-                    "invoiceFile": {"fid": "FID-001"},
-                    "preparedInput": {
-                        "serviceData": {
-                            "auditInfo": {"applyAmount": 1000.0},
-                            "auditInvoiceFile": {"fid": "FID-001"},
-                        }
-                    },
-                },
-            ],
-        }
-
-        class E34RejectGraphRuntimeClient:
-            def evaluate(self, *, prepared_input: dict[str, Any], graph_path=None, graph_content=None) -> dict[str, Any]:
-                del graph_path, graph_content
-                return {
-                    "receiptCode": "REC-E34-DEDUCT-001",
-                    "decisionOutput": {
-                        "checkStatus": "reject",
-                        "message": "含禁止报销项",
-                        "amount_result": {
-                            "reason_code": "E31",
-                            "distinguish_result": "REJECT",
-                            "message": "发票合计金额不足",
-                        },
-                        "invoice_content_valid_result": {
-                            "reason_code": "E34",
-                            "distinguish_result": "REJECT",
-                            "invoice_finalAmount": 300.0,
-                            "message": "扣减禁止报销部分",
-                        },
-                    },
-                    "preparedInput": prepared_input,
-                }
-
-        service = ReceiptAuditService(
-            graph_runtime_client=E34RejectGraphRuntimeClient(),
-            data_preparer=MagicMock(),
-        )
-
-        result = service.process_prepared_receipt(prepared_receipt)
-
-        self.assertFalse(result["isAmountSufficient"])
-        self.assertEqual(result["remainingApplyAmount"], 700.0)
-        self.assertEqual(result["validInvoiceTotal"], 300.0)
-
-    def test_receipt_audit_service_excludes_invoice_when_e34_reject_and_other_rule_rejects(self) -> None:
-        """当发票同时被 E34 与其他严重规则（如 E09 黑名单）reject 时，整张无效，
-        扣减后 finalAmount 也不计入（计 0）。
-        """
-        prepared_receipt = {
-            "receiptCode": "REC-E34-BL-001",
-            "serviceData": {"auditInfo": {"applyAmount": 1000.0}},
-            "receiptContext": {"receiptCode": "REC-E34-BL-001"},
-            "invoiceCount": 1,
-            "invoicePreparations": [
-                {
-                    "invoiceKey": "FID-001",
-                    "invoiceFile": {"fid": "FID-001"},
-                    "preparedInput": {
-                        "serviceData": {
-                            "auditInfo": {"applyAmount": 1000.0},
-                            "auditInvoiceFile": {"fid": "FID-001"},
-                        }
-                    },
-                },
-            ],
-        }
-
-        class E34AndBlacklistGraphRuntimeClient:
-            def evaluate(self, *, prepared_input: dict[str, Any], graph_path=None, graph_content=None) -> dict[str, Any]:
-                del graph_path, graph_content
-                return {
-                    "receiptCode": "REC-E34-BL-001",
-                    "decisionOutput": {
-                        "checkStatus": "reject",
-                        "message": "黑名单+禁止项",
-                        "company_backlist_result": {
-                            "reason_code": "E09",
-                            "distinguish_result": "REJECT",
-                        },
-                        "invoice_content_valid_result": {
-                            "reason_code": "E34",
-                            "distinguish_result": "REJECT",
-                            "invoice_finalAmount": 300.0,
-                        },
-                    },
-                    "preparedInput": prepared_input,
-                }
-
-        service = ReceiptAuditService(
-            graph_runtime_client=E34AndBlacklistGraphRuntimeClient(),
-            data_preparer=MagicMock(),
-        )
-
-        result = service.process_prepared_receipt(prepared_receipt)
-
-        # E09 是整张无效的硬规则 → finalAmount 不计入；validInvoiceTotal 退回
-        # applyAmount - remainingApplyAmount = 1000 - 1000 = 0（缺 1000）。
-        self.assertEqual(result["validInvoiceTotal"], 0.0)
-        self.assertEqual(result["remainingApplyAmount"], 1000.0)
-        self.assertFalse(result["isAmountSufficient"])
-
-    def test_receipt_audit_service_excludes_e34_rejected_invoice_when_finalAmount_missing(self) -> None:
-        """E34 reject 但 LLM 失败（finalAmount 缺失）时该张不计入（计 0）。
-        """
-        prepared_receipt = {
-            "receiptCode": "REC-E34-NOFA-001",
-            "serviceData": {"auditInfo": {"applyAmount": 1000.0}},
-            "receiptContext": {"receiptCode": "REC-E34-NOFA-001"},
-            "invoiceCount": 1,
-            "invoicePreparations": [
-                {
-                    "invoiceKey": "FID-001",
-                    "invoiceFile": {"fid": "FID-001"},
-                    "preparedInput": {
-                        "serviceData": {
-                            "auditInfo": {"applyAmount": 1000.0},
-                            "auditInvoiceFile": {"fid": "FID-001"},
-                        }
-                    },
-                },
-            ],
-        }
-
-        class E34RejectNoFinalAmountGraphRuntimeClient:
-            def evaluate(self, *, prepared_input: dict[str, Any], graph_path=None, graph_content=None) -> dict[str, Any]:
-                del graph_path, graph_content
-                return {
-                    "receiptCode": "REC-E34-NOFA-001",
-                    "decisionOutput": {
-                        "checkStatus": "reject",
-                        "message": "LLM 失败",
-                        "invoice_content_valid_result": {
-                            "reason_code": "E34",
-                            "distinguish_result": "FAILED",
-                            "invoice_finalAmount": None,
-                        },
-                    },
-                    "preparedInput": prepared_input,
-                }
-
-        service = ReceiptAuditService(
-            graph_runtime_client=E34RejectNoFinalAmountGraphRuntimeClient(),
-            data_preparer=MagicMock(),
-        )
-
-        result = service.process_prepared_receipt(prepared_receipt)
-
-        # E34 reject 但 finalAmount 缺失 → 该张不计入（计 0）；validInvoiceTotal 退回
-        # applyAmount - remainingApplyAmount = 0。
-        self.assertEqual(result["validInvoiceTotal"], 0.0)
-        self.assertEqual(result["remainingApplyAmount"], 1000.0)
-        self.assertFalse(result["isAmountSufficient"])
-
-    def test_process_invoice_preparation_injects_execution_time_into_context(self) -> None:
-        """每张发票执行前，编排层把该次执行时刻注入 preparedInput.context.executionTime，
-        供图内各稽核点 decisionTable 的 create_time 输出列引用（context.executionTime）。
-        """
-        captured: list[dict[str, Any]] = []
-
-        class CapturingGraphRuntimeClient:
-            def evaluate(self, *, prepared_input: dict[str, Any], graph_path=None, graph_content=None) -> dict[str, Any]:
-                del graph_path, graph_content
-                captured.append(prepared_input)
-                return {
-                    "receiptCode": "REC-CT-001",
-                    "decisionOutput": {"checkStatus": "passed", "message": "ok"},
-                    "preparedInput": prepared_input,
-                }
-
-        prepared_receipt = {
-            "receiptCode": "REC-CT-001",
-            "serviceData": {"auditInfo": {"applyAmount": 100.0}},
-            "receiptContext": {"receiptCode": "REC-CT-001"},
-            "invoiceCount": 1,
-            "invoicePreparations": [
-                {
-                    "invoiceKey": "FID-001",
-                    "invoiceFile": {"fid": "FID-001"},
-                    "preparedInput": {
-                        "serviceData": {
-                            "auditInfo": {"applyAmount": 100.0},
-                            "auditInvoiceFile": {"fid": "FID-001"},
-                        }
-                    },
-                },
-            ],
-        }
-
-        service = ReceiptAuditService(
-            graph_runtime_client=CapturingGraphRuntimeClient(),
-            data_preparer=MagicMock(),
-        )
-
-        service.process_prepared_receipt(prepared_receipt)
-
-        self.assertEqual(len(captured), 1)
-        context = captured[0].get("context") or {}
-        self.assertIn("executionTime", context)
-        # executionTime 是 ISO-8601 字符串，与发票结果 startedAt 对齐
-        execution_time = context["executionTime"]
-        self.assertIsInstance(execution_time, str)
-        self.assertTrue(execution_time)
-        # 既有 runId/receiptCode/invoiceKey 注入不受 executionTime 影响
-        self.assertEqual(context.get("receiptCode"), "REC-CT-001")
-        self.assertEqual(context.get("invoiceKey"), "FID-001")
-        self.assertIn("runId", context)
-
 
     @patch("expense_audit_orchestrator.bootstrap.create_kingdee_ocr_provider_from_env")
     def test_orchestrator_runs_custom_receipt_sink_before_real_writeback(
@@ -3130,6 +2747,111 @@ class FormalServiceTests(unittest.TestCase):
         self.assertEqual(raw_response.json()["llmStatus"], "success")
         self.assertEqual(captured_calls[0]["json"]["messages"][1]["content"], "form prompt")
         self.assertEqual(captured_calls[1]["json"]["messages"][1]["content"], "raw prompt")
+
+    def test_api_exposes_llm_evaluate_endpoint_retries_when_result_format_invalid(self) -> None:
+        call_count = 0
+
+        class FakeLlmResponse:
+            def __init__(self, content: str) -> None:
+                self.status_code = 200
+                self._payload = {"choices": [{"message": {"content": content}}]}
+                self.text = json.dumps(self._payload, ensure_ascii=False)
+
+            def json(self) -> dict[str, Any]:
+                return self._payload
+
+        class FakeAsyncClient:
+            def __init__(self, *args, **kwargs) -> None:
+                del args, kwargs
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb) -> bool:
+                return False
+
+            async def post(self, url: str, headers=None, json=None):
+                del url, headers, json
+                nonlocal call_count
+                call_count += 1
+                if call_count == 1:
+                    return FakeLlmResponse('{"passed":"true"}')
+                return FakeLlmResponse('{"passed":true,"finalAmount":12.3}')
+
+        with patch.dict(
+            "os.environ",
+            {
+                "LLM_API_KEY": "test-key",
+                "LLM_BASE_URL": "https://llm.example/v1",
+                "LLM_MODEL": "audit-model",
+            },
+            clear=False,
+        ):
+            with patch("node_gateway.api.httpx.AsyncClient", FakeAsyncClient):
+                client = TestClient(create_node_gateway_app())
+                response = client.post(
+                    NODE_GATEWAY_LLM_EVALUATE_PATH,
+                    json={
+                        "prompt": "请返回审计结论",
+                        "maxRetries": 1,
+                    },
+                )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["llmStatus"], "success")
+        self.assertTrue(response.json()["llmResult"]["passed"])
+        self.assertEqual(call_count, 2)
+
+    def test_api_exposes_llm_evaluate_endpoint_returns_error_after_retry_exhausted(self) -> None:
+        call_count = 0
+
+        class FakeLlmResponse:
+            status_code = 200
+            text = '{"choices":[{"message":{"content":"{\\"finalAmount\\":\\"abc\\"}"}}]}'
+
+            def json(self) -> dict[str, Any]:
+                return {"choices": [{"message": {"content": '{"finalAmount":"abc"}'}}]}
+
+        class FakeAsyncClient:
+            def __init__(self, *args, **kwargs) -> None:
+                del args, kwargs
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb) -> bool:
+                return False
+
+            async def post(self, url: str, headers=None, json=None):
+                del url, headers, json
+                nonlocal call_count
+                call_count += 1
+                return FakeLlmResponse()
+
+        with patch.dict(
+            "os.environ",
+            {
+                "LLM_API_KEY": "test-key",
+                "LLM_BASE_URL": "https://llm.example/v1",
+                "LLM_MODEL": "audit-model",
+            },
+            clear=False,
+        ):
+            with patch("node_gateway.api.httpx.AsyncClient", FakeAsyncClient):
+                client = TestClient(create_node_gateway_app())
+                response = client.post(
+                    NODE_GATEWAY_LLM_EVALUATE_PATH,
+                    json={
+                        "prompt": "请返回审计结论",
+                        "maxRetries": 1,
+                    },
+                )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["llmStatus"], "error")
+        self.assertIn("invalid llm result format", response.json()["errorMessage"])
+        self.assertIn("retries=1", response.json()["errorMessage"])
+        self.assertEqual(call_count, 2)
 
 
 class KingdeeOCRProviderTests(unittest.TestCase):

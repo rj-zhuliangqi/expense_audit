@@ -1,6 +1,6 @@
 import json
 import os
-import time
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs
@@ -10,16 +10,9 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from expense_audit_orchestrator.observability import (
-    configure_logging,
-    get_logger,
-    write_llm_call_artifact,
-)
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 NODE_GATEWAY_LLM_EVALUATE_PATH = "/api/v1/node-gateway/llm/evaluate"
-_LLM_CALL_SEQ = 0
 
 
 def _load_project_env() -> None:
@@ -33,9 +26,7 @@ class EvaluateLlmRequest(BaseModel):
     system_prompt: str | None = Field(default=None, alias="systemPrompt")
     model: str | None = None
     temperature: float = 0
-    run_id: str | None = Field(default=None, alias="runId")
-    receipt_code: str | None = Field(default=None, alias="receiptCode")
-    invoice_key: str | None = Field(default=None, alias="invoiceKey")
+    max_retries: int | None = Field(default=None, alias="maxRetries")
 
 
 class EvaluateLlmResponse(BaseModel):
@@ -58,6 +49,54 @@ def _strip_markdown_json_fence(content: str) -> str:
         text = text[:-3].strip()
 
     return text
+
+
+def _resolve_retry_count(requested: int | None) -> int:
+    if isinstance(requested, int):
+        return max(0, min(requested, 5))
+
+    raw_retry = os.getenv("LLM_MAX_RETRIES", "1").strip()
+    try:
+        parsed = int(raw_retry)
+    except ValueError:
+        parsed = 1
+    return max(0, min(parsed, 5))
+
+
+def _is_number_like(value: Any) -> bool:
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return True
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return False
+        try:
+            float(text)
+        except ValueError:
+            return False
+        return True
+    return False
+
+
+def _validate_llm_result(result: Any) -> str | None:
+    if not isinstance(result, Mapping):
+        return "llmResult must be a JSON object"
+
+    # 对常用字段做轻量类型约束，不限制业务字段扩展。
+    if "passed" in result and not isinstance(result.get("passed"), bool):
+        return "llmResult.passed must be a boolean"
+    if "finalAmount" in result and not _is_number_like(result.get("finalAmount")):
+        return "llmResult.finalAmount must be a number"
+    if "isInvoiceYearMatched" in result and not isinstance(result.get("isInvoiceYearMatched"), bool):
+        return "llmResult.isInvoiceYearMatched must be a boolean"
+    if "remarkPhone" in result and not isinstance(result.get("remarkPhone"), str):
+        return "llmResult.remarkPhone must be a string"
+    if "matchReason" in result and not isinstance(result.get("matchReason"), str):
+        return "llmResult.matchReason must be a string"
+
+    return None
 
 
 async def _parse_llm_request(raw_request: Request) -> tuple[EvaluateLlmRequest | None, str | None]:
@@ -89,23 +128,10 @@ async def _parse_llm_request(raw_request: Request) -> tuple[EvaluateLlmRequest |
 
 
 def register_node_gateway_routes(app: FastAPI) -> None:
-    logger = get_logger("node_gateway.llm")
-
     @app.post(NODE_GATEWAY_LLM_EVALUATE_PATH, response_model=EvaluateLlmResponse)
     async def evaluate_llm(raw_request: Request) -> dict[str, Any]:
-        global _LLM_CALL_SEQ
         request, validation_error = await _parse_llm_request(raw_request)
-        started_at = _utc_now_isoformat()
-        t0 = time.monotonic()
-
         if request is None:
-            logger.warning(
-                "llm request invalid",
-                extra={
-                    "event": "llm.request.invalid",
-                    "error": validation_error,
-                },
-            )
             return {
                 "llmStatus": "error",
                 "errorMessage": validation_error,
@@ -118,17 +144,7 @@ def register_node_gateway_routes(app: FastAPI) -> None:
         base_url = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
         default_model = os.getenv("LLM_MODEL", "gpt-4o-mini").strip()
 
-        correlation = {
-            "receipt_code": request.receipt_code,
-            "run_id": request.run_id,
-            "invoice_key": request.invoice_key,
-        }
-
         if not api_key:
-            logger.warning(
-                "llm request missing api key",
-                extra={**correlation, "event": "llm.request", "error": "missing env LLM_API_KEY"},
-            )
             return {
                 "llmStatus": "error",
                 "errorMessage": "missing env LLM_API_KEY",
@@ -149,208 +165,84 @@ def register_node_gateway_routes(app: FastAPI) -> None:
             ],
         }
 
-        logger.info(
-            "llm request",
-            extra={
-                **correlation,
-                "event": "llm.request",
-                "model": model,
-                "prompt_length": len(request.prompt),
-                "has_system_prompt": request.system_prompt is not None,
-            },
-        )
-        logger.debug(
-            "llm prompt",
-            extra={
-                **correlation,
-                "event": "llm.prompt",
-                "system_prompt": request.system_prompt,
-                "prompt": request.prompt,
-            },
-        )
+        max_retries = _resolve_retry_count(request.max_retries)
+        last_error: str | None = None
+        last_raw_content: str | None = None
 
-        content: str | None = None
-        parsed: Any = None
-        status = "error"
-        error_message: str | None = None
+        for attempt in range(max_retries + 1):
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.post(
+                        f"{base_url}/chat/completions",
+                        headers={
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {api_key}",
+                        },
+                        json=payload,
+                    )
+            except Exception as exc:
+                last_error = f"request exception: {exc}"
+                if attempt < max_retries:
+                    continue
+                break
 
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(
-                    f"{base_url}/chat/completions",
-                    headers={
-                        "Content-Type": "application/json",
-                        "Authorization": f"Bearer {api_key}",
-                    },
-                    json=payload,
-                )
-        except Exception as exc:
-            error_message = f"request exception: {exc}"
-            _log_llm_outcome(logger, correlation, model, status, error_message, t0, content)
+            if resp.status_code < 200 or resp.status_code >= 300:
+                last_error = f"llm request failed: {resp.status_code} {resp.text}"
+                if attempt < max_retries:
+                    continue
+                break
+
+            try:
+                data = resp.json()
+            except Exception as exc:
+                last_error = f"invalid llm response json: {exc}"
+                last_raw_content = resp.text
+                if attempt < max_retries:
+                    continue
+                break
+
+            content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            if not content:
+                last_error = "empty model content"
+                last_raw_content = None
+                if attempt < max_retries:
+                    continue
+                break
+
+            cleaned = _strip_markdown_json_fence(content)
+            try:
+                parsed = json.loads(cleaned)
+            except Exception as exc:
+                last_error = f"model output is not valid JSON: {exc}"
+                last_raw_content = content
+                if attempt < max_retries:
+                    continue
+                break
+
+            validation_error = _validate_llm_result(parsed)
+            if validation_error:
+                last_error = f"invalid llm result format: {validation_error}"
+                last_raw_content = content
+                if attempt < max_retries:
+                    continue
+                break
+
             return {
-                "llmStatus": "error",
-                "errorMessage": error_message,
-                "llmResult": None,
-                "rawContent": None,
-            }
-
-        if resp.status_code < 200 or resp.status_code >= 300:
-            error_message = f"llm request failed: {resp.status_code} {resp.text}"
-            _log_llm_outcome(logger, correlation, model, status, error_message, t0, content)
-            return {
-                "llmStatus": "error",
-                "errorMessage": error_message,
-                "llmResult": None,
-                "rawContent": None,
-            }
-
-        try:
-            data = resp.json()
-        except Exception as exc:
-            error_message = f"invalid llm response json: {exc}"
-            _log_llm_outcome(logger, correlation, model, status, error_message, t0, resp.text)
-            return {
-                "llmStatus": "error",
-                "errorMessage": error_message,
-                "llmResult": None,
-                "rawContent": resp.text,
-            }
-
-        content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-        if not content:
-            error_message = "empty model content"
-            _log_llm_outcome(logger, correlation, model, status, error_message, t0, content)
-            return {
-                "llmStatus": "error",
-                "errorMessage": error_message,
-                "llmResult": None,
-                "rawContent": None,
-            }
-
-        cleaned = _strip_markdown_json_fence(content)
-        try:
-            parsed = json.loads(cleaned)
-        except Exception as exc:
-            error_message = f"model output is not valid JSON: {exc}"
-            _log_llm_outcome(logger, correlation, model, status, error_message, t0, content, parsed)
-            return {
-                "llmStatus": "error",
-                "errorMessage": error_message,
-                "llmResult": None,
+                "llmStatus": "success",
+                "llmResult": parsed,
                 "rawContent": content,
+                "errorMessage": None,
             }
-
-        status = "success"
-        _log_llm_outcome(logger, correlation, model, status, None, t0, content, parsed)
-
-        _LLM_CALL_SEQ += 1
-        _maybe_write_llm_artifact(
-            receipt_code=request.receipt_code,
-            run_id=request.run_id,
-            call_seq=_LLM_CALL_SEQ,
-            model=model,
-            temperature=request.temperature,
-            system_prompt=system_prompt,
-            prompt=request.prompt,
-            content=content,
-            parsed=parsed,
-            status=status,
-            error_message=None,
-            started_at=started_at,
-        )
 
         return {
-            "llmStatus": "success",
-            "llmResult": parsed,
-            "rawContent": content,
-            "errorMessage": None,
+            "llmStatus": "error",
+            "errorMessage": f"{last_error}; retries={max_retries}",
+            "llmResult": None,
+            "rawContent": last_raw_content,
         }
 
 
-def _log_llm_outcome(
-    logger,
-    correlation: dict[str, Any],
-    model: str,
-    status: str,
-    error_message: str | None,
-    t0: float,
-    content: str | None,
-    parsed: Any = None,
-) -> None:
-    latency_ms = int((time.monotonic() - t0) * 1000)
-    logger.info(
-        "llm response",
-        extra={
-            **correlation,
-            "event": "llm.response",
-            "llm_status": status,
-            "model": model,
-            "latency_ms": latency_ms,
-            "error": error_message,
-            "raw_content_length": len(content) if isinstance(content, str) else 0,
-        },
-    )
-    logger.debug(
-        "llm raw content",
-        extra={
-            **correlation,
-            "event": "llm.raw_content",
-            "raw_content": content,
-            "llm_result": parsed,
-        },
-    )
-
-
-def _maybe_write_llm_artifact(
-    *,
-    receipt_code: str | None,
-    run_id: str | None,
-    call_seq: int,
-    model: str,
-    temperature: float,
-    system_prompt: str,
-    prompt: str,
-    content: str | None,
-    parsed: Any,
-    status: str,
-    error_message: str | None,
-    started_at: str,
-) -> None:
-    if not receipt_code or not run_id or not os.getenv("LOG_DIR"):
-        return
-    try:
-        write_llm_call_artifact(
-            receipt_code=receipt_code,
-            run_id=run_id,
-            call_seq=call_seq,
-            payload={
-                "model": model,
-                "temperature": temperature,
-                "systemPrompt": system_prompt,
-                "prompt": prompt,
-                "rawContent": content,
-                "llmResult": parsed,
-                "llmStatus": status,
-                "errorMessage": error_message,
-                "startedAt": started_at,
-                "finishedAt": _utc_now_isoformat(),
-            },
-        )
-    except Exception:
-        get_logger("node_gateway.llm").exception(
-            "llm artifact write failed",
-            extra={"receipt_code": receipt_code, "run_id": run_id, "event": "llm.artifact.failed"},
-        )
-
-
-def _utc_now_isoformat() -> str:
-    from datetime import datetime, timezone
-
-    return datetime.now(timezone.utc).isoformat()
-
-
 def create_app() -> FastAPI:
-    configure_logging()
     app = FastAPI(title="Node Gateway Service", version="1.0.0")
 
     @app.get("/health")

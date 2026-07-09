@@ -152,6 +152,7 @@ class WritebackAssemblerTests(unittest.TestCase):
         self.assertEqual(payload["auditInvoiceInfos"][0]["aiid"], "AIID-001")
         self.assertEqual(payload["auditInvoiceInfoContents"][0]["content"], "*电信服务*通信服务费")
         self.assertEqual(payload["auditLogs"][0]["distinguishResult"], "warning")
+        self.assertEqual(payload["auditLogs"][0]["specificProblemDes"], payload["auditLogs"][0]["message"])
 
     def test_assemble_result_audit_info_expands_runtime_rule_results_into_audit_logs(self) -> None:
         prepared_receipt = {
@@ -249,11 +250,13 @@ class WritebackAssemblerTests(unittest.TestCase):
             "当前核销单有效发票合计金额40元，低于报销单报销金额100元，有效发票金额缺少60元。",
         )
         self.assertEqual(payload["auditLogs"][0]["policiesIndex"], "")
+        self.assertEqual(payload["auditLogs"][0]["specificProblemDes"], payload["auditLogs"][0]["message"])
         # REJECT override carries the two-scenario E31 suggestion
         self.assertIn("场景1", payload["auditLogs"][0]["employeeSuggestionTips"])
         self.assertIn("场景2", payload["auditLogs"][0]["employeeSuggestionTips"])
         self.assertEqual(payload["auditLogs"][1]["reasonCode"], "E01")
         self.assertEqual(payload["auditLogs"][1]["distinguishResult"], "pass")
+        self.assertEqual(payload["auditLogs"][1]["specificProblemDes"], payload["auditLogs"][1]["message"])
         self.assertEqual(payload["auditLogs"][1]["policiesIndex"], "")
         self.assertEqual(payload["auditLogs"][1]["employeeSuggestionTips"], "")
         self.assertEqual(payload["auditInvoiceInfos"][0]["reasonCode"], "E31")

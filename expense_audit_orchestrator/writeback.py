@@ -236,6 +236,7 @@ def _build_audit_logs(
                         )
                         or result.get("decisionStatus"),
                         "message": rule_result.get("message") or result.get("errorMessage"),
+                        "specificProblemDes": rule_result.get("message") or result.get("errorMessage"),
                         "policiesIndex": rule_result.get("policiesIndex"),
                         "employeeSuggestionTips": rule_result.get("employeeSuggestionTips"),
                         "createTime": rule_result.get("create_time") or rule_result.get("createTime"),
@@ -254,6 +255,7 @@ def _build_audit_logs(
                 "distinguishContent": decision_output.get("distinguishContent"),
                 "distinguishResult": result.get("decisionStatus"),
                 "message": decision_output.get("message") or result.get("errorMessage"),
+                "specificProblemDes": decision_output.get("message") or result.get("errorMessage"),
                 "policiesIndex": decision_output.get("policiesIndex"),
                 "employeeSuggestionTips": decision_output.get("employeeSuggestionTips"),
                 "createTime": decision_output.get("create_time") or decision_output.get("createTime"),

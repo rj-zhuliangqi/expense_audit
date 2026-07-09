@@ -1649,7 +1649,7 @@
           {
             "id": "50871993-19cd-4009-ae64-68ad282cb902",
             "key": "isValidInvoiceAmount",
-            "value": "llm_status == \"success\" ? ((number(llm_result.finalAmount ?? 999999999) >= number(serviceData.auditInfo.applyAmount ?? 0)) ? \"true\" : \"false\") : \"error\""
+            "value": "llm_status == \"success\" ? (llm_result.passed == true ? \"true\" : \"false\") : \"error\""
           }
         ],
         "passThrough": true,

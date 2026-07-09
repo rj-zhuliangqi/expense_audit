@@ -389,7 +389,10 @@ def _is_success_payload(payload: Any) -> bool:
 def _get_service_error_message(payload: Any, description: str) -> str:
     if isinstance(payload, dict):
         message = payload.get("message") or payload.get("err")
+        detail = payload.get("data")
         if isinstance(message, str) and message.strip():
+            if isinstance(detail, str) and detail.strip():
+                return f"{message}: {detail.strip()}"
             return message
 
     return f"{description} service returned a failure response"

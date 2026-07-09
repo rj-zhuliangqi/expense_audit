@@ -2,6 +2,7 @@ import json
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from .application import ReceiptResultSink
@@ -43,15 +44,7 @@ class AuditInfoWritebackClient:
         endpoint = f"{self._service_url}{self._save_path}"
         _logger.info("回写稽核结果", extra={"event": "writeback.save", "endpoint": endpoint})
 
-        request = Request(
-            endpoint,
-            data=json.dumps(dict(payload), ensure_ascii=False).encode("utf-8"),
-            headers=_build_auth_headers({"Content-Type": "application/json"}),
-            method="POST",
-        )
-
-        with urlopen(request, timeout=self._timeout) as response:
-            response_payload = json.load(response)
+        response_payload = self._post_payload(endpoint, payload)
 
         if not _is_success_payload(response_payload):
             raise ValueError(_get_service_error_message(response_payload, "回写稽核结果"))
@@ -60,6 +53,23 @@ class AuditInfoWritebackClient:
             raise ValueError("回写稽核结果 service returned invalid payload")
 
         return response_payload
+
+    def _post_payload(self, endpoint: str, payload: Mapping[str, Any]) -> Any:
+        request = Request(
+            endpoint,
+            data=json.dumps(dict(payload), ensure_ascii=False).encode("utf-8"),
+            headers=_build_auth_headers({"Content-Type": "application/json"}),
+            method="POST",
+        )
+
+        try:
+            with urlopen(request, timeout=self._timeout) as response:
+                return json.load(response)
+        except HTTPError as exc:
+            response_text = exc.read().decode("utf-8", errors="replace").strip()
+            if response_text:
+                raise ValueError(f"回写稽核结果 HTTP {exc.code}: {response_text}") from exc
+            raise ValueError(f"回写稽核结果 HTTP {exc.code}") from exc
 
 
 WritebackStrategy = Callable[..., dict[str, Any]]
