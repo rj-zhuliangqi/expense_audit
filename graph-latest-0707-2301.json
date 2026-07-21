@@ -158,7 +158,7 @@
           {
             "id": "af675bce-5b08-46e4-b516-e39222576c0d",
             "key": "isCompanyExists",
-            "value": "orgName in map(serviceData.companyList as c, c.cName ?? c.cname ?? c.companyName)"
+            "value": "(orgName ?? buyerName ?? \"\") in map(serviceData.companyList as c, c.cName ?? c.cname ?? c.companyName)"
           },
           {
             "id": "e9aa2ade-0afc-4964-94dc-2d223a7dbb88",
@@ -183,7 +183,7 @@
           {
             "id": "7fe051f0-138b-4658-b318-26503211dd65",
             "key": "isCurrentYearInvoice",
-            "value": "d(invoiceDate).year() == d(serviceData.auditInfo.submitTime).year()"
+            "value": "(invoiceDate ?? \"\") != \"\" and (serviceData.auditInfo.submitTime ?? \"\") != \"\" and d(invoiceDate).year() == d(serviceData.auditInfo.submitTime).year()"
           },
           {
             "id": "94c8882d-9c36-482e-90b4-5d843bb9bdce",
@@ -237,7 +237,7 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据购货方名称为“\"+(orgName??\"\")+\"”，正确购货方名称为“\"+(filter((serviceData.companyList??[]) as c,(c.ccode??c.accountingCode)==(accountingCode??\"\"))[0].cname??\"\")+\"”，不符合“税法政策要求”\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据购货方名称为“\"+(buyerName??\"\")+\"”，正确购货方名称为“\"+(filter((serviceData.companyList??[]) as c,(c.ccode??c.accountingCode)==(instanceComCode??serviceData.auditInfo.instanceComCode??\"\"))[0].companyName??filter((serviceData.companyList??[]) as c,(c.ccode??c.accountingCode)==(instanceComCode??serviceData.auditInfo.instanceComCode??\"\"))[0].cName??filter((serviceData.companyList??[]) as c,(c.ccode??c.accountingCode)==(instanceComCode??serviceData.auditInfo.instanceComCode??\"\"))[0].cname??\"\")+\"”，不符合“税法政策要求”\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2.1.1员工需要确保票据中公司信息的准确性。\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票重开】联系销货方或在手机APP重新开具发票\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
@@ -1360,22 +1360,22 @@
           {
             "id": "30f6f1f2-2684-42b0-8ce3-822bc57b9c35",
             "key": "is_in_company_list",
-            "value": "orgName in map(serviceData.companyList as c, c.cName ?? c.cname ?? c.companyName)"
+            "value": "(buyerName ?? \"\") == (filter((serviceData.companyList??[]) as c,(c.ccode??c.accountingCode)==(instanceComCode??serviceData.auditInfo.instanceComCode??\"\"))[0].companyName??filter((serviceData.companyList??[]) as c,(c.ccode??c.accountingCode)==(instanceComCode??serviceData.auditInfo.instanceComCode??\"\"))[0].cName??filter((serviceData.companyList??[]) as c,(c.ccode??c.accountingCode)==(instanceComCode??serviceData.auditInfo.instanceComCode??\"\"))[0].cname??\"\")"
           },
           {
             "id": "2be9e223-a645-4770-a6b4-e95113e04cf3",
             "key": "is_company",
-            "value": "contains(orgName, \"公司\")"
+            "value": "contains((buyerName ?? \"\"), \"公司\")"
           },
           {
             "id": "7baa400b-6e9c-449a-9a04-e3318d7c0515",
             "key": "is_in_telecom_list",
-            "value": "some(operatorList ?? [], contains((salerName ?? \"\"), #.name) and contains((salerName ?? \"\"), #.city))"
+            "value": "some((serviceData.telecom_list ?? []) as t, contains((salerName ?? \"\"), (t[0] ?? t.name ?? \"\")) and contains((salerName ?? \"\"), (t[1] ?? t.city ?? \"\")))"
           },
           {
             "id": "fd203418-999a-4aaa-9712-e9971b09d2f7",
             "key": "is_same_peple",
-            "value": "orgName == serviceData.auditInfo.verifiUserName"
+            "value": "(serviceData.auditInfo.verifiUserName ?? \"\") != \"\" and ((buyerName ?? \"\") == (serviceData.auditInfo.verifiUserName ?? \"\") or (buyerName ?? \"\") == ((serviceData.auditInfo.verifiUserName ?? \"\") + \"（个人）\") or (buyerName ?? \"\") == ((serviceData.auditInfo.verifiUserName ?? \"\") + \" (个人)\") or (buyerName ?? \"\") == ((serviceData.auditInfo.verifiUserName ?? \"\") + \"(个人)\") or (buyerName ?? \"\") == ((serviceData.auditInfo.verifiUserName ?? \"\") + \" （个人）\") or (buyerName ?? \"\") == ((serviceData.auditInfo.verifiUserName ?? \"\") + \"个人\"))"
           },
           {
             "id": "99145f04-7d00-4d80-bcc8-4c1ce810915a",
