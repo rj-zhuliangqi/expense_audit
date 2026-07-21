@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 from typing import Any, Sequence, cast
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 
 try:
@@ -34,6 +35,15 @@ _logger = get_logger("rabbitmq")
 
 DEFAULT_AMQP_URL = "amqp://guest:guest@127.0.0.1:5672/%2F"
 DEFAULT_DELAY_TIME_MILLIS = 300000
+DEFAULT_WORKER_MAX_RETRIES = 2
+DEFAULT_FAILED_TASK_STATUS = 2
+WORKER_MAX_RETRIES_ENV = "WORKER_MAX_RETRIES"
+FAILED_TASK_STATUS_ENV = "AUDIT_TASK_FAILED_STATUS"
+RETRY_COUNT_HEADER = "x-worker-retry-count"
+
+
+class TaskGateLookupError(RuntimeError):
+    """任务门禁查询失败。"""
 
 
 @dataclass(slots=True)
@@ -225,6 +235,8 @@ class ReceiptAuditWorker:
         task_info_list_provider: Any | None = None,
         task_status_update_provider: Any | None = None,
         bypass_task_gate: bool = False,
+        max_retry_count: int | None = None,
+        failed_task_status: int | None = None,
     ) -> None:
         self._service = service
         self._settings = settings or RabbitMQSettings()
@@ -234,8 +246,11 @@ class ReceiptAuditWorker:
         self._task_info_list_provider = task_info_list_provider
         self._task_status_update_provider = task_status_update_provider
         self._bypass_task_gate = bypass_task_gate
+        self._max_retry_count = _resolve_worker_max_retries(max_retry_count)
+        self._failed_task_status = _resolve_failed_task_status(failed_task_status)
 
     def handle_delivery(self, channel: Any, method: Any, _properties: Any, body: bytes) -> None:
+        receipt_code = ""
         try:
             receipt_code = parse_receipt_code(body)
             source = getattr(method, "routing_key", "unknown")
@@ -271,11 +286,110 @@ class ReceiptAuditWorker:
             )
             channel.basic_ack(delivery_tag=method.delivery_tag)
         except Exception as exc:
+            if isinstance(exc, TaskGateLookupError):
+                _logger.exception(
+                    "failed to process message",
+                    extra={"event": "rabbitmq.failed"},
+                )
+                channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+                return
+
+            retry_count = _resolve_retry_count(_properties)
+            if (
+                _is_retryable_processing_error(exc)
+                and retry_count < self._max_retry_count
+                and self._publish_to_delay_queue(channel, body, retry_count + 1)
+            ):
+                _logger.warning(
+                    "message scheduled for delayed retry",
+                    extra={
+                        "event": "rabbitmq.retry.scheduled",
+                        "receipt_code": receipt_code,
+                        "retry_count": retry_count + 1,
+                        "max_retry_count": self._max_retry_count,
+                        "delay_queue": self._settings.delay_queue_name,
+                        "error_type": type(exc).__name__,
+                    },
+                )
+                channel.basic_ack(delivery_tag=method.delivery_tag)
+                return
+
             _logger.exception(
                 "failed to process message",
                 extra={"event": "rabbitmq.failed"},
             )
+            self._mark_receipt_failed(receipt_code, exc)
             channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+
+    def _publish_to_delay_queue(self, channel: Any, body: bytes, retry_count: int) -> bool:
+        try:
+            channel.basic_publish(
+                exchange=self._settings.exchange_name,
+                routing_key=self._settings.delay_routing_key,
+                body=body,
+                properties=_build_retry_properties(retry_count),
+            )
+            return True
+        except Exception:
+            _logger.exception(
+                "failed to publish delayed retry message",
+                extra={
+                    "event": "rabbitmq.retry.publish_failed",
+                    "retry_count": retry_count,
+                    "delay_queue": self._settings.delay_queue_name,
+                },
+            )
+            return False
+
+    def _mark_receipt_failed(self, receipt_code: str, exc: Exception) -> None:
+        if not receipt_code:
+            return
+
+        if not callable(self._task_status_update_provider):
+            return
+
+        fail_reason = f"{type(exc).__name__}: {exc}".strip()
+        if len(fail_reason) > 512:
+            fail_reason = f"{fail_reason[:509]}..."
+
+        try:
+            update_result = self._task_status_update_provider(
+                receipt_code,
+                new_status=self._failed_task_status,
+                system_identifier=4,
+                fail_reason=fail_reason,
+            )
+        except Exception as update_exc:
+            _logger.warning(
+                "failed to mark receipt as failed",
+                extra={
+                    "event": "rabbitmq.task_status.failed",
+                    "receipt_code": receipt_code,
+                    "new_status": self._failed_task_status,
+                    "error": str(update_exc),
+                },
+            )
+            return
+
+        if not _is_task_status_update_success(update_result):
+            _logger.warning(
+                "task status update returned unsuccessful result",
+                extra={
+                    "event": "rabbitmq.task_status.failed",
+                    "receipt_code": receipt_code,
+                    "new_status": self._failed_task_status,
+                },
+            )
+            return
+
+        _logger.info(
+            "marked receipt as failed",
+            extra={
+                "event": "rabbitmq.task_status.marked_failed",
+                "receipt_code": receipt_code,
+                "new_status": self._failed_task_status,
+            },
+        )
 
     def _supports_two_stage_processing(self) -> bool:
         prepare_method = getattr(self._service, "prepare_receipt", None)
@@ -321,7 +435,10 @@ class ReceiptAuditWorker:
         if not callable(self._task_info_list_provider) or not callable(self._task_status_update_provider):
             return True
 
-        task_info_list = self._task_info_list_provider(receipt_code)
+        try:
+            task_info_list = self._task_info_list_provider(receipt_code)
+        except Exception as exc:
+            raise TaskGateLookupError(str(exc)) from exc
         matched_task = _select_pending_ruijie_task(task_info_list)
         if matched_task is None:
             _logger.info(
@@ -445,6 +562,106 @@ def _resolve_invoice_count(result: Any) -> int | None:
     return None
 
 
+def _resolve_retry_count(properties: Any) -> int:
+    headers = getattr(properties, "headers", None)
+    if not isinstance(headers, dict):
+        return 0
+
+    value = headers.get(RETRY_COUNT_HEADER)
+    if isinstance(value, int):
+        return max(0, value)
+    if isinstance(value, str):
+        normalized = value.strip()
+        if not normalized:
+            return 0
+        try:
+            return max(0, int(normalized))
+        except ValueError:
+            return 0
+
+    return 0
+
+
+def _resolve_worker_max_retries(explicit: int | None = None) -> int:
+    if explicit is not None:
+        return max(0, explicit)
+
+    raw = (os.getenv(WORKER_MAX_RETRIES_ENV) or "").strip()
+    if not raw:
+        return DEFAULT_WORKER_MAX_RETRIES
+
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        _logger.warning(
+            "invalid worker max retries env, using default",
+            extra={
+                "event": "rabbitmq.env.invalid",
+                "env": WORKER_MAX_RETRIES_ENV,
+                "value": raw,
+                "default": DEFAULT_WORKER_MAX_RETRIES,
+            },
+        )
+        return DEFAULT_WORKER_MAX_RETRIES
+
+
+def _resolve_failed_task_status(explicit: int | None = None) -> int:
+    if explicit is not None:
+        return explicit
+
+    raw = (os.getenv(FAILED_TASK_STATUS_ENV) or "").strip()
+    if not raw:
+        return DEFAULT_FAILED_TASK_STATUS
+
+    try:
+        return int(raw)
+    except ValueError:
+        _logger.warning(
+            "invalid failed task status env, using default",
+            extra={
+                "event": "rabbitmq.env.invalid",
+                "env": FAILED_TASK_STATUS_ENV,
+                "value": raw,
+                "default": DEFAULT_FAILED_TASK_STATUS,
+            },
+        )
+        return DEFAULT_FAILED_TASK_STATUS
+
+
+def _is_retryable_processing_error(exc: Exception) -> bool:
+    if isinstance(exc, HTTPError):
+        return exc.code in {408, 429, 500, 502, 503, 504}
+
+    if isinstance(exc, URLError):
+        reason = getattr(exc, "reason", None)
+        if isinstance(reason, TimeoutError):
+            return True
+        if isinstance(reason, OSError):
+            return True
+        return False
+
+    if isinstance(exc, TimeoutError):
+        return True
+    if isinstance(exc, (ConnectionError, OSError)):
+        return True
+
+    return False
+
+
+def _build_retry_properties(retry_count: int) -> Any:
+    if pika is None:
+        return None
+
+    properties_cls = getattr(pika, "BasicProperties", None)
+    if properties_cls is None:
+        return None
+
+    return properties_cls(
+        delivery_mode=2,
+        headers={RETRY_COUNT_HEADER: retry_count},
+    )
+
+
 def _resolve_task_int(task: Any, key: str) -> int | None:
     if not isinstance(task, dict):
         return None
@@ -516,6 +733,8 @@ def create_worker(
     writeback_output_dir: Path | str | None = None,
     bypass_task_gate: bool = False,
     telecom_asset_dir: Path | str | None = None,
+    max_retry_count: int | None = None,
+    failed_task_status: int | None = None,
 ) -> ReceiptAuditWorker:
     resolved_audit_service_url = resolve_audit_service_url(audit_service_url)
 
@@ -537,6 +756,8 @@ def create_worker(
         task_info_list_provider=partial(fetch_audit_task_info_list, service_url=resolved_audit_service_url),
         task_status_update_provider=partial(update_audit_task_status, service_url=resolved_audit_service_url),
         bypass_task_gate=bypass_task_gate,
+        max_retry_count=max_retry_count,
+        failed_task_status=failed_task_status,
     )
 
 
@@ -557,6 +778,18 @@ def build_cli_parser() -> argparse.ArgumentParser:
         help="通讯费 operator_city.csv 所在目录；默认用包内资产",
     )
     parser.add_argument("--delay-time-millis", type=int, default=resolve_delay_time_millis())
+    parser.add_argument(
+        "--max-retry-count",
+        type=int,
+        default=_resolve_worker_max_retries(),
+        help="瞬时失败时投递到 delay queue 的最大重试次数",
+    )
+    parser.add_argument(
+        "--failed-task-status",
+        type=int,
+        default=_resolve_failed_task_status(),
+        help="重试耗尽后回写的失败状态码",
+    )
     parser.add_argument(
         "--bypass-task-gate",
         action="store_true",
@@ -591,6 +824,8 @@ def main_cli(argv: Sequence[str] | None = None) -> int:
         writeback_output_dir=args.writeback_output_dir,
         bypass_task_gate=args.bypass_task_gate,
         telecom_asset_dir=args.telecom_asset_dir,
+        max_retry_count=args.max_retry_count,
+        failed_task_status=args.failed_task_status,
     )
     worker.run_forever()
     return 0

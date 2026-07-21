@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -9,6 +10,10 @@ import httpx
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_GRAPH_PATH = ROOT / "graph-latest-0707-2301.json"
 DEFAULT_GRAPH_RUNTIME_URL = "http://127.0.0.1:8090"
+DEFAULT_GRAPH_RUNTIME_MAX_RETRIES = 2
+DEFAULT_GRAPH_RUNTIME_RETRY_BACKOFF_SECONDS = 0.5
+GRAPH_RUNTIME_MAX_RETRIES_ENV = "GRAPH_RUNTIME_MAX_RETRIES"
+GRAPH_RUNTIME_RETRY_BACKOFF_SECONDS_ENV = "GRAPH_RUNTIME_RETRY_BACKOFF_SECONDS"
 
 
 class GraphRuntimeClient(Protocol):
@@ -91,29 +96,86 @@ class HttpGraphRuntimeClient:
             ),
         }
 
-        try:
-            with httpx.Client(timeout=self._timeout) as client:
-                response = client.post(f"{self._base_url}/api/v1/graph-runtime/evaluations", json=payload)
-        except httpx.TimeoutException as exc:
-            timeout_type = _classify_timeout(exc)
-            raise RuntimeError(
-                f"graph runtime {timeout_type} after {self._timeout}s: "
-                f"receipt_code={_extract_receipt_code(prepared_input)}, "
-                f"base_url={self._base_url}"
-            ) from exc
-        except httpx.ConnectError as exc:
-            raise RuntimeError(
-                f"graph runtime connection refused: "
-                f"base_url={self._base_url}, detail={exc}"
-            ) from exc
+        max_retries = _resolve_int_env(GRAPH_RUNTIME_MAX_RETRIES_ENV, DEFAULT_GRAPH_RUNTIME_MAX_RETRIES)
+        backoff_seconds = _resolve_float_env(
+            GRAPH_RUNTIME_RETRY_BACKOFF_SECONDS_ENV,
+            DEFAULT_GRAPH_RUNTIME_RETRY_BACKOFF_SECONDS,
+        )
+        endpoint = f"{self._base_url}/api/v1/graph-runtime/evaluations"
 
-        if response.status_code < 200 or response.status_code >= 300:
-            raise ValueError(f"graph runtime request failed: {response.status_code} {response.text}")
+        for attempt in range(max_retries + 1):
+            try:
+                with httpx.Client(timeout=self._timeout) as client:
+                    response = client.post(endpoint, json=payload)
+            except httpx.TimeoutException as exc:
+                if attempt >= max_retries:
+                    timeout_type = _classify_timeout(exc)
+                    raise RuntimeError(
+                        f"graph runtime {timeout_type} after {self._timeout}s: "
+                        f"receipt_code={_extract_receipt_code(prepared_input)}, "
+                        f"base_url={self._base_url}"
+                    ) from exc
+                _sleep_before_retry(
+                    attempt=attempt,
+                    backoff_seconds=backoff_seconds,
+                )
+                continue
+            except (httpx.ConnectError, httpx.NetworkError) as exc:
+                if attempt >= max_retries:
+                    raise RuntimeError(
+                        "graph runtime connection failed: "
+                        f"base_url={self._base_url}, detail={exc}"
+                    ) from exc
+                _sleep_before_retry(
+                    attempt=attempt,
+                    backoff_seconds=backoff_seconds,
+                )
+                continue
 
-        try:
-            return response.json()
-        except Exception as exc:
-            raise ValueError(f"graph runtime returned invalid json: {exc}") from exc
+            if response.status_code < 200 or response.status_code >= 300:
+                if attempt < max_retries and response.status_code in {408, 429, 500, 502, 503, 504}:
+                    _sleep_before_retry(
+                        attempt=attempt,
+                        backoff_seconds=backoff_seconds,
+                    )
+                    continue
+                raise ValueError(f"graph runtime request failed: {response.status_code} {response.text}")
+
+            try:
+                return response.json()
+            except Exception as exc:
+                raise ValueError(f"graph runtime returned invalid json: {exc}") from exc
+
+        raise RuntimeError("unreachable")
+
+
+def _sleep_before_retry(*, attempt: int, backoff_seconds: float) -> None:
+    retry_delay = backoff_seconds * (2 ** attempt)
+    if retry_delay <= 0:
+        return
+    time.sleep(retry_delay)
+
+
+def _resolve_float_env(env_name: str, default: float) -> float:
+    raw_value = (os.getenv(env_name) or "").strip()
+    if not raw_value:
+        return default
+
+    try:
+        return float(raw_value)
+    except ValueError:
+        return default
+
+
+def _resolve_int_env(env_name: str, default: int) -> int:
+    raw_value = (os.getenv(env_name) or "").strip()
+    if not raw_value:
+        return default
+
+    try:
+        return int(raw_value)
+    except ValueError:
+        return default
 
 
 def create_graph_runtime_client(graph_runtime_url: str | None = None) -> GraphRuntimeClient:

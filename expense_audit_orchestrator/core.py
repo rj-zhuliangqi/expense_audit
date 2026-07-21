@@ -275,11 +275,13 @@ def build_rule_input(
     current_invoice_info = _resolve_first_mapping(normalized_service_data.get("currentInvoiceInfo"))
     current_audit_invoice_file = dict(normalized_service_data.get("currentAuditInvoiceFile") or {})
     instance_code = _get_string_value(audit_info, "instanceCode") or receipt_code
+    instance_com_code = _get_string_value(audit_info, "instanceComCode")
     invoice_file_id = _get_string_value(current_audit_invoice_file, "aifid", "afiid")
     invoice_info_id = _get_string_value(current_invoice_info, "aiiid")
     return {
         **ocr_data,
         "instance_code": instance_code,
+        "instanceComCode": instance_com_code,
         "invoice_file_id": invoice_file_id,
         "invoice_info_id": invoice_info_id,
         "receipt": {
@@ -407,11 +409,23 @@ class ReceiptDataPreparer:
         generated_atcrid = str(uuid.uuid4())
         current_audit_invoice_file = dict(invoice_file.get("auditInvoiceFile") or {})
         current_audit_invoice_file_info = dict(invoice_file.get("auditInvoiceFileInfo") or {})
-        invoice_usage_history = (
-            self.invoice_info_provider(cheque_no, instance_code, accounting_code)
-            if cheque_no is not None
-            else []
-        )
+        invoice_usage_history: list[dict[str, Any]] = []
+        if cheque_no is not None:
+            try:
+                invoice_usage_history = self.invoice_info_provider(cheque_no, instance_code, accounting_code)
+            except Exception as exc:
+                # 发票占用信息用于辅助校验，外部接口抖动时降级为空，避免整单失败。
+                _logger.warning(
+                    "发票占用信息查询失败，降级为空列表",
+                    extra={
+                        "event": "data_prep.invoice_info.fallback",
+                        "receipt_code": receipt_code,
+                        "instance_code": instance_code,
+                        "cheque_no": cheque_no,
+                        "accounting_code": accounting_code,
+                        "error": str(exc),
+                    },
+                )
 
         service_data: dict[str, Any] = {
             **receipt_service_data,

@@ -139,6 +139,27 @@ class LlmOverallAdviceProviderTests(unittest.TestCase):
         provider = _make_provider(handler)
         self.assertIsNone(provider("REC-001", [_invoice("INV-1", {"r": _rule("E05", "REJECT")})]))
 
+    @patch.dict(
+        os.environ,
+        {
+            "OVERALL_ADVICE_MAX_RETRIES": "1",
+            "OVERALL_ADVICE_RETRY_BACKOFF_SECONDS": "0",
+        },
+        clear=False,
+    )
+    def test_http_500_retries_then_success(self):
+        calls = {"n": 0}
+
+        def handler(request):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return httpx.Response(503, text="busy")
+            return httpx.Response(200, json={"llmStatus": "success", "llmResult": {"aiAuditAdvice": "重试成功"}})
+
+        provider = _make_provider(handler)
+        self.assertEqual(provider("REC-001", [_invoice("INV-1", {"r": _rule("E05", "REJECT")})]), "重试成功")
+        self.assertEqual(calls["n"], 2)
+
     def test_transport_error_returns_none(self):
         def handler(request):
             raise httpx.ConnectError("refused")

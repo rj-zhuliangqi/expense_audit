@@ -1173,6 +1173,7 @@ class ReceiptPipelineTests(unittest.TestCase):
             "auditInfo": {
                 "instanceCode": "REC-001",
                 "eiCode": "FEE-PROJ-1001",
+                "instanceComCode": "112",
             },
             "companyBlacklist": [{"value": "福建示例供应商有限公司"}],
             "companyList": [{"cCode": "RJCW01", "cName": "锐捷网络股份有限公司"}],
@@ -1201,6 +1202,7 @@ class ReceiptPipelineTests(unittest.TestCase):
         )
         self.assertEqual(prepared_input["context"]["serviceData"]["invoiceUsageHistory"], service_data["invoiceUsageHistory"])
         self.assertEqual(prepared_input["context"]["serviceData"]["currentInvoiceInfo"], service_data["currentInvoiceInfo"])
+        self.assertEqual(prepared_input["instanceComCode"], "112")
 
     @patch("expense_audit_orchestrator.audit_client.urlopen")
     def test_default_data_preparer_collects_all_mock_service_data(self, mock_urlopen) -> None:
@@ -1536,6 +1538,66 @@ class ReceiptPipelineTests(unittest.TestCase):
             prepared_input["serviceData"]["currentInvoiceInfo"]["aiiid"],
             prepared_input["serviceData"]["invoiceUsageHistory"][0]["aiiid"],
         )
+
+    def test_prepare_invoice_input_falls_back_when_invoice_info_provider_raises(self) -> None:
+        invoice_info_calls: list[tuple[str, str, str | None]] = []
+
+        preparer = main.ReceiptDataPreparer(
+            invoice_file_provider=lambda receipt_code: (_ for _ in ()).throw(
+                AssertionError(f"invoice_file_provider should not be used: {receipt_code}")
+            ),
+            ocr_provider=lambda file_path, ocr_sample_path=main.DEFAULT_OCR_PATH, *, file_name: {
+                "invoiceType": "26",
+                "invoiceNo": "INV-TIMEOUT-001",
+                "buyerTaxNo": "91110108668444162H",
+                "buyerName": "北京星网锐捷网络技术有限公司",
+            },
+            audit_info_provider=lambda receipt_code: {
+                "instanceCode": receipt_code,
+                "eiCode": "EI001",
+            },
+            company_blacklist_provider=lambda: [],
+            company_list_provider=lambda: [
+                {
+                    "ccode": "112",
+                    "cname": "北京星网锐捷网络技术有限公司",
+                    "companyTax": "91110108668444162H",
+                }
+            ],
+            expense_invoice_types_provider=lambda ei_code: [{"eiCode": ei_code, "invoiceType": "26"}],
+            invoice_info_provider=lambda cheque_no, instance_code, accounting_code=None: invoice_info_calls.append(
+                (cheque_no, instance_code, accounting_code)
+            )
+            or (_ for _ in ()).throw(TimeoutError("timed out")),
+            audit_invoice_files_provider=lambda instance_code, a_type=0: [
+                {
+                    "aifid": "AIFID-001",
+                    "miInstanceCode": instance_code,
+                    "fid": "FID-001",
+                    "type": a_type,
+                    "fileName": "origin-001.pdf",
+                    "aiid": "AIID-001",
+                }
+            ],
+            audit_invoice_file_info_provider=lambda fid: [
+                {
+                    "fileUrl": f"https://files.example/{fid}.pdf",
+                    "fileBase64": f"BASE64-{fid}",
+                    "fid": fid,
+                }
+            ],
+            field_mappings_provider=lambda belong_table: [],
+        )
+
+        receipt_context = preparer.prepare_receipt_context("REC-TIMEOUT-001")
+        prepared_input = preparer.prepare_invoice_input(
+            "REC-TIMEOUT-001",
+            receipt_context["invoiceFiles"][0],
+            receipt_context,
+        )
+
+        self.assertEqual(invoice_info_calls, [("INV-TIMEOUT-001", "REC-TIMEOUT-001", "112")])
+        self.assertEqual(prepared_input["serviceData"]["invoiceUsageHistory"], [])
 
     def test_prepare_invoice_input_injects_runtime_identity_fields_and_generates_invoice_info_id(self) -> None:
         preparer = main.ReceiptDataPreparer(

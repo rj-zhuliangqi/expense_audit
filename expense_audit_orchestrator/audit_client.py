@@ -5,7 +5,7 @@ import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
@@ -17,6 +17,12 @@ from expense_audit_orchestrator.observability import get_logger
 _logger = get_logger("audit_client")
 
 DEFAULT_AUDIT_SERVICE_URL = "http://127.0.0.1:8080"
+DEFAULT_AUDIT_SERVICE_TIMEOUT = 10
+DEFAULT_AUDIT_SERVICE_MAX_RETRIES = 2
+DEFAULT_AUDIT_SERVICE_RETRY_BACKOFF_SECONDS = 0.5
+AUDIT_SERVICE_TIMEOUT_ENV = "AUDIT_SERVICE_TIMEOUT"
+AUDIT_SERVICE_MAX_RETRIES_ENV = "AUDIT_SERVICE_MAX_RETRIES"
+AUDIT_SERVICE_RETRY_BACKOFF_SECONDS_ENV = "AUDIT_SERVICE_RETRY_BACKOFF_SECONDS"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_AUDIT_INVOICE_FILE_HEADERS = {
     "Accept": "*/*",
@@ -32,7 +38,7 @@ _PROJECT_ENV_LOADED = False
 def fetch_audit_info(
     instance_code: str,
     service_url: str = DEFAULT_AUDIT_SERVICE_URL,
-    timeout: float = 5.0,
+    timeout: float | None = None,
 ) -> dict[str, Any]:
     """调用核销单查询接口，补齐规则执行前需要的业务上下文。"""
     data = _fetch_service_data(
@@ -50,7 +56,7 @@ def fetch_audit_info(
 
 def fetch_company_blacklist(
     service_url: str = DEFAULT_AUDIT_SERVICE_URL,
-    timeout: float = 5.0,
+    timeout: float | None = None,
 ) -> list[dict[str, Any]]:
     """获取供应商黑名单数据。"""
     data = _fetch_service_data(
@@ -65,7 +71,7 @@ def fetch_company_blacklist(
 
 def fetch_company_list(
     service_url: str = DEFAULT_AUDIT_SERVICE_URL,
-    timeout: float = 5.0,
+    timeout: float | None = None,
 ) -> list[dict[str, Any]]:
     """获取财务公司清单。"""
     data = _fetch_service_data(
@@ -81,7 +87,7 @@ def fetch_company_list(
 def fetch_expense_invoice_types(
     ei_code: str,
     service_url: str = DEFAULT_AUDIT_SERVICE_URL,
-    timeout: float = 5.0,
+    timeout: float | None = None,
 ) -> list[dict[str, Any]]:
     """按费用项编码获取允许的发票类型。"""
     paths = [
@@ -114,7 +120,7 @@ def fetch_expense_invoice_types(
 def fetch_field_mappings(
     belong_table: str,
     service_url: str = DEFAULT_AUDIT_SERVICE_URL,
-    timeout: float = 5.0,
+    timeout: float | None = None,
 ) -> list[dict[str, Any]]:
     """按所属表获取金蝶和费用字段映射。"""
     normalized_belong_table = belong_table.strip()
@@ -133,7 +139,7 @@ def fetch_invoice_info(
     instance_code: str,
     accounting_code: str | None = None,
     service_url: str = DEFAULT_AUDIT_SERVICE_URL,
-    timeout: float = 5.0,
+    timeout: float | None = None,
 ) -> list[dict[str, Any]]:
     """查询发票占用信息。"""
     data = _fetch_service_data(
@@ -155,7 +161,7 @@ def fetch_audit_invoice_files(
     instance_code: str,
     a_type: int = 0,
     service_url: str = DEFAULT_AUDIT_SERVICE_URL,
-    timeout: float = 5.0,
+    timeout: float | None = None,
     headers: Mapping[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """按核销单号获取关联的稽核发票文件列表。"""
@@ -176,7 +182,7 @@ def fetch_audit_invoice_files(
 def fetch_audit_invoice_file_info(
     fid: str,
     service_url: str = DEFAULT_AUDIT_SERVICE_URL,
-    timeout: float = 5.0,
+    timeout: float | None = None,
     headers: Mapping[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """按文件系统 fid 获取发票文件详情。"""
@@ -193,7 +199,7 @@ def fetch_audit_invoice_file_info(
 def fetch_audit_task_info_list(
     instance_code: str,
     service_url: str = DEFAULT_AUDIT_SERVICE_URL,
-    timeout: float = 5.0,
+    timeout: float | None = None,
     headers: Mapping[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """按核销单号获取稽核任务列表。"""
@@ -212,21 +218,26 @@ def update_audit_task_status(
     *,
     new_status: int,
     system_identifier: int,
+    fail_reason: str | None = None,
     service_url: str = DEFAULT_AUDIT_SERVICE_URL,
-    timeout: float = 5.0,
+    timeout: float | None = None,
     headers: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """更新稽核任务状态。"""
+    resolved_payload: dict[str, Any] = {
+        "instanceCode": instance_code,
+        "newStatus": new_status,
+        "systemIdentifier": system_identifier,
+    }
+    if isinstance(fail_reason, str) and fail_reason.strip():
+        resolved_payload["failReason"] = fail_reason.strip()
+
     return _post_service_payload(
         "/api/audit-service/audit/task-status-update",
         service_url=service_url,
         timeout=timeout,
         description="稽核任务状态更新",
-        payload={
-            "instanceCode": instance_code,
-            "newStatus": new_status,
-            "systemIdentifier": system_identifier,
-        },
+        payload=resolved_payload,
         headers=_build_auth_headers({"Content-Type": "application/json", **(dict(headers) if headers else {})}),
     )
 
@@ -308,7 +319,7 @@ def _fetch_service_data(
     path: str,
     *,
     service_url: str,
-    timeout: float,
+    timeout: float | None,
     description: str,
     query_params: Mapping[str, str | int | None] | None = None,
     headers: Mapping[str, str] | None = None,
@@ -330,7 +341,13 @@ def _fetch_service_data(
     if headers:
         request = Request(endpoint, headers=dict(headers), method="GET")
 
-    with urlopen(request, timeout=timeout) as response:
+    resolved_timeout = _resolve_timeout(timeout)
+    with _open_with_retries(
+        request,
+        timeout=resolved_timeout,
+        description=description,
+        endpoint=endpoint,
+    ) as response:
         payload = json.load(response)
 
     if not _is_success_payload(payload):
@@ -346,7 +363,7 @@ def _post_service_payload(
     path: str,
     *,
     service_url: str,
-    timeout: float,
+    timeout: float | None,
     description: str,
     payload: Mapping[str, Any],
     headers: Mapping[str, str] | None = None,
@@ -361,7 +378,13 @@ def _post_service_payload(
         method="POST",
     )
 
-    with urlopen(request, timeout=timeout) as response:
+    resolved_timeout = _resolve_timeout(timeout)
+    with _open_with_retries(
+        request,
+        timeout=resolved_timeout,
+        description=description,
+        endpoint=endpoint,
+    ) as response:
         response_payload = json.load(response)
 
     if not _is_success_payload(response_payload):
@@ -384,6 +407,109 @@ def _is_success_payload(payload: Any) -> bool:
         return str(payload.get("status")).strip() in {"0", "200"}
 
     return False
+
+
+def _resolve_timeout(timeout: float | None) -> float:
+    if timeout is not None:
+        return timeout
+
+    return _resolve_float_env(AUDIT_SERVICE_TIMEOUT_ENV, DEFAULT_AUDIT_SERVICE_TIMEOUT)
+
+
+def _resolve_max_retries() -> int:
+    return max(0, _resolve_int_env(AUDIT_SERVICE_MAX_RETRIES_ENV, DEFAULT_AUDIT_SERVICE_MAX_RETRIES))
+
+
+def _resolve_retry_backoff_seconds() -> float:
+    return max(
+        0.0,
+        _resolve_float_env(
+            AUDIT_SERVICE_RETRY_BACKOFF_SECONDS_ENV,
+            DEFAULT_AUDIT_SERVICE_RETRY_BACKOFF_SECONDS,
+        ),
+    )
+
+
+def _resolve_float_env(env_name: str, default: float) -> float:
+    raw_value = (os.getenv(env_name) or "").strip()
+    if not raw_value:
+        return default
+
+    try:
+        return float(raw_value)
+    except ValueError:
+        _logger.warning(
+            "invalid audit client float env, using default",
+            extra={"event": "audit_client.env.invalid", "env": env_name, "value": raw_value, "default": default},
+        )
+        return default
+
+
+def _resolve_int_env(env_name: str, default: int) -> int:
+    raw_value = (os.getenv(env_name) or "").strip()
+    if not raw_value:
+        return default
+
+    try:
+        return int(raw_value)
+    except ValueError:
+        _logger.warning(
+            "invalid audit client int env, using default",
+            extra={"event": "audit_client.env.invalid", "env": env_name, "value": raw_value, "default": default},
+        )
+        return default
+
+
+def _open_with_retries(
+    request: str | Request,
+    *,
+    timeout: float,
+    description: str,
+    endpoint: str,
+):
+    max_retries = _resolve_max_retries()
+    backoff_seconds = _resolve_retry_backoff_seconds()
+
+    for attempt in range(max_retries + 1):
+        try:
+            return urlopen(request, timeout=timeout)
+        except Exception as exc:
+            if not _is_retryable_request_error(exc) or attempt >= max_retries:
+                raise
+
+            retry_delay = backoff_seconds * (2 ** attempt)
+            _logger.warning(
+                "核销单服务请求超时或临时失败，准备重试",
+                extra={
+                    "event": "audit_client.retry",
+                    "description": description,
+                    "endpoint": endpoint,
+                    "attempt": attempt + 1,
+                    "max_retries": max_retries,
+                    "retry_delay_seconds": retry_delay,
+                    "timeout_seconds": timeout,
+                    "error_type": type(exc).__name__,
+                },
+            )
+            if retry_delay > 0:
+                time.sleep(retry_delay)
+
+    raise RuntimeError("unreachable")
+
+
+def _is_retryable_request_error(exc: Exception) -> bool:
+    if isinstance(exc, HTTPError):
+        return exc.code in {408, 429, 500, 502, 503, 504}
+
+    if isinstance(exc, URLError):
+        reason = getattr(exc, "reason", None)
+        if isinstance(reason, TimeoutError):
+            return True
+        if isinstance(reason, OSError):
+            return True
+        return False
+
+    return isinstance(exc, TimeoutError)
 
 
 def _get_service_error_message(payload: Any, description: str) -> str:

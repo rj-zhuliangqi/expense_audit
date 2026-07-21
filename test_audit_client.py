@@ -4,7 +4,7 @@ import os
 import unittest
 from hashlib import md5
 from unittest.mock import patch
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request
 
 from dotenv import dotenv_values
@@ -502,6 +502,36 @@ class AuditClientHeaderTests(unittest.TestCase):
         self.assertEqual(headers["sysid"], "override-sysid")
 
     @patch("expense_audit_orchestrator.audit_client.urlopen")
+    def test_update_audit_task_status_can_include_fail_reason(self, mock_urlopen) -> None:
+        mock_urlopen.return_value = FakeHttpResponse(
+            {
+                "code": 0,
+                "message": "success",
+                "data": True,
+            }
+        )
+
+        response = audit_client.update_audit_task_status(
+            "rjw260617000006",
+            new_status=2,
+            system_identifier=4,
+            fail_reason="URLError: timed out",
+            service_url="https://service.example",
+        )
+
+        self.assertEqual(response, {"code": 0, "message": "success", "data": True})
+        request = mock_urlopen.call_args.args[0]
+        self.assertEqual(
+            json.loads(request.data.decode("utf-8")),
+            {
+                "instanceCode": "rjw260617000006",
+                "newStatus": 2,
+                "systemIdentifier": 4,
+                "failReason": "URLError: timed out",
+            },
+        )
+
+    @patch("expense_audit_orchestrator.audit_client.urlopen")
     def test_fetch_audit_task_info_list_raises_on_failure_envelope(self, mock_urlopen) -> None:
         mock_urlopen.return_value = FakeHttpResponse(
             {
@@ -538,6 +568,101 @@ class AuditClientHeaderTests(unittest.TestCase):
             )
 
         self.assertIn("task status update failed", str(context.exception))
+
+    @patch.dict(
+        os.environ,
+        {
+            "AUDIT_SERVICE_TIMEOUT": "12.5",
+            "AUDIT_SERVICE_MAX_RETRIES": "1",
+            "AUDIT_SERVICE_RETRY_BACKOFF_SECONDS": "0",
+        },
+        clear=False,
+    )
+    @patch("expense_audit_orchestrator.audit_client.urlopen")
+    def test_fetch_audit_invoice_files_retries_timeout_and_uses_env_timeout(self, mock_urlopen) -> None:
+        mock_urlopen.side_effect = [
+            URLError(TimeoutError("timed out")),
+            FakeHttpResponse(
+                {
+                    "code": 0,
+                    "message": "success",
+                    "data": [{"fid": "FID-RETRY-001"}],
+                }
+            ),
+        ]
+
+        result = audit_client.fetch_audit_invoice_files(
+            "rjw260327000006",
+            service_url="https://service.example",
+        )
+
+        self.assertEqual(result, [{"fid": "FID-RETRY-001"}])
+        self.assertEqual(mock_urlopen.call_count, 2)
+        self.assertEqual(mock_urlopen.call_args_list[0].kwargs["timeout"], 12.5)
+        self.assertEqual(mock_urlopen.call_args_list[1].kwargs["timeout"], 12.5)
+
+    @patch.dict(
+        os.environ,
+        {
+            "AUDIT_SERVICE_MAX_RETRIES": "1",
+            "AUDIT_SERVICE_RETRY_BACKOFF_SECONDS": "0",
+        },
+        clear=False,
+    )
+    @patch("expense_audit_orchestrator.audit_client.urlopen")
+    def test_update_audit_task_status_retries_retryable_http_error(self, mock_urlopen) -> None:
+        mock_urlopen.side_effect = [
+            HTTPError(
+                "https://service.example/api/audit-service/audit/task-status-update",
+                503,
+                "Service Unavailable",
+                None,
+                io.BytesIO(b"{}"),
+            ),
+            FakeHttpResponse(
+                {
+                    "code": 0,
+                    "message": "success",
+                    "data": True,
+                }
+            ),
+        ]
+
+        result = audit_client.update_audit_task_status(
+            "rjw260617000005",
+            new_status=1,
+            system_identifier=4,
+            service_url="https://service.example",
+        )
+
+        self.assertEqual(result, {"code": 0, "message": "success", "data": True})
+        self.assertEqual(mock_urlopen.call_count, 2)
+
+    @patch.dict(
+        os.environ,
+        {
+            "AUDIT_SERVICE_MAX_RETRIES": "2",
+            "AUDIT_SERVICE_RETRY_BACKOFF_SECONDS": "0",
+        },
+        clear=False,
+    )
+    @patch("expense_audit_orchestrator.audit_client.urlopen")
+    def test_fetch_audit_task_info_list_does_not_retry_non_retryable_http_error(self, mock_urlopen) -> None:
+        mock_urlopen.side_effect = HTTPError(
+            "https://service.example/api/audit-service/audit/task-info-list/rjw260617000005",
+            400,
+            "Bad Request",
+            None,
+            io.BytesIO(b"{}"),
+        )
+
+        with self.assertRaises(HTTPError):
+            audit_client.fetch_audit_task_info_list(
+                "rjw260617000005",
+                service_url="https://service.example",
+            )
+
+        self.assertEqual(mock_urlopen.call_count, 1)
 
 
 if __name__ == "__main__":

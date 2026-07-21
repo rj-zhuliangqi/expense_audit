@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Protocol
@@ -28,10 +29,14 @@ from .writeback import _extract_rule_results, _normalize_rule_distinguish_result
 DEFAULT_NODE_GATEWAY_URL = "http://127.0.0.1:8091"
 DEFAULT_OVERALL_ADVICE_TIMEOUT = 30.0
 DEFAULT_LLM_MODEL = "gpt-4o-mini"
+DEFAULT_OVERALL_ADVICE_MAX_RETRIES = 2
+DEFAULT_OVERALL_ADVICE_RETRY_BACKOFF_SECONDS = 0.5
 DEFAULT_PROMPT_DIR: Path = Path(__file__).resolve().parent / "prompts"
 SYSTEM_PROMPT_FILENAME = "receipt_overall_advice.system.md"
 USER_PROMPT_FILENAME = "receipt_overall_advice.user.md"
 NODE_GATEWAY_LLM_EVALUATE_PATH = "/api/v1/node-gateway/llm/evaluate"
+OVERALL_ADVICE_MAX_RETRIES_ENV = "OVERALL_ADVICE_MAX_RETRIES"
+OVERALL_ADVICE_RETRY_BACKOFF_SECONDS_ENV = "OVERALL_ADVICE_RETRY_BACKOFF_SECONDS"
 
 # 只把这些状态的问题纳入摘要；pass 不出现。
 _PROBLEM_STATUSES = frozenset({"reject", "failed", "warning"})
@@ -223,50 +228,86 @@ class LlmOverallAdviceProvider:
             "receiptCode": receipt_code,
         }
 
+        max_retries = _resolve_int_env(
+            OVERALL_ADVICE_MAX_RETRIES_ENV,
+            DEFAULT_OVERALL_ADVICE_MAX_RETRIES,
+        )
+        backoff_seconds = _resolve_float_env(
+            OVERALL_ADVICE_RETRY_BACKOFF_SECONDS_ENV,
+            DEFAULT_OVERALL_ADVICE_RETRY_BACKOFF_SECONDS,
+        )
+
         with run_context(receipt_code=receipt_code, run_id=run_id, invoice_key=None):
-            try:
-                with self._client_factory() as client:
-                    response = client.post(
-                        self._endpoint,
-                        json=payload,
-                        headers={"Content-Type": "application/json"},
+            response_json: Mapping[str, Any] | None = None
+            for attempt in range(max_retries + 1):
+                try:
+                    with self._client_factory() as client:
+                        response = client.post(
+                            self._endpoint,
+                            json=payload,
+                            headers={"Content-Type": "application/json"},
+                        )
+                except httpx.HTTPError as exc:
+                    if attempt >= max_retries:
+                        _logger.exception(
+                            "overall advice llm call failed",
+                            extra={
+                                "receipt_code": receipt_code,
+                                "run_id": run_id,
+                                "event": "overall_advice.failed",
+                                "error": str(exc),
+                            },
+                        )
+                        return None
+
+                    _sleep_before_retry(attempt, backoff_seconds=backoff_seconds)
+                    continue
+
+                if response.status_code < 200 or response.status_code >= 300:
+                    if attempt < max_retries and response.status_code in {408, 429, 500, 502, 503, 504}:
+                        _sleep_before_retry(attempt, backoff_seconds=backoff_seconds)
+                        continue
+
+                    _logger.warning(
+                        "overall advice llm non-2xx",
+                        extra={
+                            "receipt_code": receipt_code,
+                            "run_id": run_id,
+                            "event": "overall_advice.failed",
+                            "status_code": response.status_code,
+                        },
                     )
-            except httpx.HTTPError as exc:
-                _logger.exception(
-                    "overall advice llm call failed",
-                    extra={
-                        "receipt_code": receipt_code,
-                        "run_id": run_id,
-                        "event": "overall_advice.failed",
-                        "error": str(exc),
-                    },
-                )
-                return None
+                    return None
 
-            if response.status_code < 200 or response.status_code >= 300:
+                try:
+                    decoded = response.json()
+                except Exception as exc:
+                    _logger.exception(
+                        "overall advice llm invalid json",
+                        extra={
+                            "receipt_code": receipt_code,
+                            "run_id": run_id,
+                            "event": "overall_advice.failed",
+                            "error": str(exc),
+                        },
+                    )
+                    return None
+
+                if isinstance(decoded, Mapping):
+                    response_json = decoded
+                    break
+
                 _logger.warning(
-                    "overall advice llm non-2xx",
+                    "overall advice llm invalid payload",
                     extra={
                         "receipt_code": receipt_code,
                         "run_id": run_id,
                         "event": "overall_advice.failed",
-                        "status_code": response.status_code,
                     },
                 )
                 return None
 
-            try:
-                response_json = response.json()
-            except Exception as exc:
-                _logger.exception(
-                    "overall advice llm invalid json",
-                    extra={
-                        "receipt_code": receipt_code,
-                        "run_id": run_id,
-                        "event": "overall_advice.failed",
-                        "error": str(exc),
-                    },
-                )
+            if response_json is None:
                 return None
 
         suggestion = _extract_advice(response_json)
@@ -300,6 +341,35 @@ def _resolve_bool_env(env_name: str, *, default: bool) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _resolve_float_env(env_name: str, default: float) -> float:
+    raw_value = (os.getenv(env_name) or "").strip()
+    if not raw_value:
+        return default
+
+    try:
+        return float(raw_value)
+    except ValueError:
+        return default
+
+
+def _resolve_int_env(env_name: str, default: int) -> int:
+    raw_value = (os.getenv(env_name) or "").strip()
+    if not raw_value:
+        return default
+
+    try:
+        return int(raw_value)
+    except ValueError:
+        return default
+
+
+def _sleep_before_retry(attempt: int, *, backoff_seconds: float) -> None:
+    retry_delay = backoff_seconds * (2 ** attempt)
+    if retry_delay <= 0:
+        return
+    time.sleep(retry_delay)
 
 
 def create_overall_advice_provider_from_env() -> OverallAdviceProvider:

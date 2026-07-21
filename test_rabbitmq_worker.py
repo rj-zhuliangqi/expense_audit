@@ -4,6 +4,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock
 from unittest.mock import patch
+from urllib.error import URLError
 
 import rabbitmq_worker
 
@@ -20,6 +21,7 @@ class FakeChannel:
         self.queue_bind_calls: list[dict] = []
         self.acked_tags: list[int] = []
         self.nacked_tags: list[tuple[int, bool]] = []
+        self.published_messages: list[dict] = []
 
     def exchange_declare(self, *, exchange: str, exchange_type: str, durable: bool) -> None:
         self.exchange_declare_calls.append(
@@ -63,6 +65,21 @@ class FakeChannel:
 
     def basic_nack(self, *, delivery_tag: int, requeue: bool) -> None:
         self.nacked_tags.append((delivery_tag, requeue))
+
+    def basic_publish(self, *, exchange: str, routing_key: str, body: bytes, properties: object | None = None) -> None:
+        self.published_messages.append(
+            {
+                "exchange": exchange,
+                "routing_key": routing_key,
+                "body": body,
+                "properties": properties,
+            }
+        )
+
+
+class FakeProperties:
+    def __init__(self, headers: dict | None = None) -> None:
+        self.headers = headers or {}
 
 
 class FakeReceiptAuditService:
@@ -130,6 +147,24 @@ class FakeTwoStageReceiptService:
                 {"decisionOutput": {"checkStatus": "warning", "message": "FID-002"}},
             ],
         }
+
+
+class FakeTransientFailureService:
+    def prepare_receipt(self, receipt_code: str, ocr_sample_path=None) -> dict:
+        return {
+            "receiptCode": receipt_code,
+            "invoiceCount": 1,
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "invoiceFile": {"fid": "FID-001"},
+                    "preparedInput": {"receipt": {"code": receipt_code}},
+                }
+            ],
+        }
+
+    def process_prepared_receipt(self, prepared_receipt: dict) -> dict:
+        raise URLError(TimeoutError("timed out"))
 
 
 class RabbitMQWorkerTests(unittest.TestCase):
@@ -554,6 +589,49 @@ class RabbitMQWorkerTests(unittest.TestCase):
         self.assertEqual(service.calls, [])
         self.assertEqual(channel.acked_tags, [])
         self.assertEqual(channel.nacked_tags, [(8, False)])
+
+    def test_handle_delivery_schedules_retry_to_delay_queue_for_transient_error(self) -> None:
+        service = FakeTransientFailureService()
+        worker = rabbitmq_worker.ReceiptAuditWorker(service=service, max_retry_count=2)
+        channel = FakeChannel()
+
+        worker.handle_delivery(
+            channel,
+            FakeMethod(18),
+            FakeProperties(headers={}),
+            b'{"receiptCode": "REC-RETRY-TO-DELAY-001"}',
+        )
+
+        self.assertEqual(channel.acked_tags, [18])
+        self.assertEqual(channel.nacked_tags, [])
+        self.assertEqual(len(channel.published_messages), 1)
+        self.assertEqual(channel.published_messages[0]["routing_key"], worker._settings.delay_routing_key)
+
+    def test_handle_delivery_marks_failed_when_retry_exhausted(self) -> None:
+        service = FakeTransientFailureService()
+        task_status_update_provider = MagicMock(return_value={"code": 0, "message": "success", "data": True})
+        worker = rabbitmq_worker.ReceiptAuditWorker(
+            service=service,
+            task_status_update_provider=task_status_update_provider,
+            max_retry_count=2,
+            failed_task_status=2,
+        )
+        channel = FakeChannel()
+
+        worker.handle_delivery(
+            channel,
+            FakeMethod(19),
+            FakeProperties(headers={rabbitmq_worker.RETRY_COUNT_HEADER: 2}),
+            b'{"receiptCode": "REC-RETRY-EXHAUSTED-001"}',
+        )
+
+        self.assertEqual(channel.acked_tags, [])
+        self.assertEqual(channel.nacked_tags, [(19, False)])
+        task_status_update_provider.assert_called_once()
+        called_kwargs = task_status_update_provider.call_args.kwargs
+        self.assertEqual(called_kwargs["new_status"], 2)
+        self.assertEqual(called_kwargs["system_identifier"], 4)
+        self.assertIn("timed out", called_kwargs["fail_reason"])
 
     def test_create_blocking_connection_reports_actionable_error_when_broker_unreachable(self) -> None:
         settings = rabbitmq_worker.RabbitMQSettings(amqp_url="amqp://guest:guest@127.0.0.1:5672/%2F")

@@ -140,7 +140,12 @@ KINGDEE_OCR_VERIFY_FLAG=1
 KINGDEE_OCR_UPLOAD_FILE_TYPE=1
 KINGDEE_OCR_RECOGNITION_FILE_TYPE=1
 KINGDEE_OCR_TIMEOUT=30
+AUDIT_SERVICE_TIMEOUT=10
+AUDIT_SERVICE_MAX_RETRIES=1
+AUDIT_SERVICE_RETRY_BACKOFF_SECONDS=0.5
 ```
+
+其中审核服务请求默认超时 5 秒；设置 `AUDIT_SERVICE_TIMEOUT` 后，worker 内部所有 `audit_client` 的 GET/POST 请求都会统一采用该超时。`AUDIT_SERVICE_MAX_RETRIES` 表示首次失败后的额外重试次数，默认 1；只会对超时、连接类 `URLError`、以及 `408/429/5xx` 做重试，避免把业务错误重复提交。
 
 这个 provider 会在内部完成四步调用：获取 `AppToken`、获取 `accessToken`、上传文件、发起 OCR 识别。规则引擎侧最终只接收标准化后的 OCR 结果，不会暴露中间 token 或上传响应。
 

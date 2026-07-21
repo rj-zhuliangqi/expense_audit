@@ -1,8 +1,10 @@
 import json
+import os
+import time
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from .application import ReceiptResultSink
@@ -26,6 +28,11 @@ from .writeback import (
 
 AUDIT_INFO_SAVE_PATH = "/api/audit-service/audit/audit-info-save"
 DEFAULT_WRITEBACK_TIMEOUT = 30.0
+DEFAULT_WRITEBACK_MAX_RETRIES = 2
+DEFAULT_WRITEBACK_RETRY_BACKOFF_SECONDS = 0.5
+WRITEBACK_TIMEOUT_ENV = "WRITEBACK_TIMEOUT"
+WRITEBACK_MAX_RETRIES_ENV = "WRITEBACK_MAX_RETRIES"
+WRITEBACK_RETRY_BACKOFF_SECONDS_ENV = "WRITEBACK_RETRY_BACKOFF_SECONDS"
 
 
 class AuditInfoWritebackClient:
@@ -55,21 +62,139 @@ class AuditInfoWritebackClient:
         return response_payload
 
     def _post_payload(self, endpoint: str, payload: Mapping[str, Any]) -> Any:
-        request = Request(
-            endpoint,
-            data=json.dumps(dict(payload), ensure_ascii=False).encode("utf-8"),
-            headers=_build_auth_headers({"Content-Type": "application/json"}),
-            method="POST",
+        max_retries = _resolve_int_env(WRITEBACK_MAX_RETRIES_ENV, DEFAULT_WRITEBACK_MAX_RETRIES)
+        backoff_seconds = _resolve_float_env(
+            WRITEBACK_RETRY_BACKOFF_SECONDS_ENV,
+            DEFAULT_WRITEBACK_RETRY_BACKOFF_SECONDS,
         )
+        request_payload = dict(payload)
+        used_advice_fallback = False
 
-        try:
-            with urlopen(request, timeout=self._timeout) as response:
-                return json.load(response)
-        except HTTPError as exc:
-            response_text = exc.read().decode("utf-8", errors="replace").strip()
-            if response_text:
-                raise ValueError(f"回写稽核结果 HTTP {exc.code}: {response_text}") from exc
-            raise ValueError(f"回写稽核结果 HTTP {exc.code}") from exc
+        for attempt in range(max_retries + 1):
+            request = Request(
+                endpoint,
+                data=json.dumps(request_payload, ensure_ascii=False).encode("utf-8"),
+                headers=_build_auth_headers({"Content-Type": "application/json"}),
+                method="POST",
+            )
+
+            try:
+                with urlopen(request, timeout=self._timeout) as response:
+                    return json.load(response)
+            except HTTPError as exc:
+                response_text = exc.read().decode("utf-8", errors="replace").strip()
+
+                if (
+                    not used_advice_fallback
+                    and exc.code >= 500
+                    and "aiAuditAdvice" in request_payload
+                ):
+                    used_advice_fallback = True
+                    request_payload = {
+                        key: value
+                        for key, value in request_payload.items()
+                        if key != "aiAuditAdvice"
+                    }
+                    _logger.warning(
+                        "回写服务端异常，移除 aiAuditAdvice 后重试",
+                        extra={
+                            "event": "writeback.retry.fallback",
+                            "endpoint": endpoint,
+                            "attempt": attempt + 1,
+                            "max_retries": max_retries,
+                            "status_code": exc.code,
+                        },
+                    )
+                    continue
+
+                if attempt < max_retries and _is_retryable_writeback_error(exc):
+                    retry_delay = backoff_seconds * (2 ** attempt)
+                    _logger.warning(
+                        "回写接口请求超时或临时失败，准备重试",
+                        extra={
+                            "event": "writeback.retry",
+                            "endpoint": endpoint,
+                            "attempt": attempt + 1,
+                            "max_retries": max_retries,
+                            "retry_delay_seconds": retry_delay,
+                            "timeout_seconds": self._timeout,
+                            "error_type": type(exc).__name__,
+                            "status_code": exc.code,
+                        },
+                    )
+                    if retry_delay > 0:
+                        time.sleep(retry_delay)
+                    continue
+
+                if response_text:
+                    raise ValueError(f"回写稽核结果 HTTP {exc.code}: {response_text}") from exc
+                raise ValueError(f"回写稽核结果 HTTP {exc.code}") from exc
+            except (URLError, TimeoutError) as exc:
+                if attempt >= max_retries:
+                    raise
+
+                retry_delay = backoff_seconds * (2 ** attempt)
+                _logger.warning(
+                    "回写接口请求超时或临时失败，准备重试",
+                    extra={
+                        "event": "writeback.retry",
+                        "endpoint": endpoint,
+                        "attempt": attempt + 1,
+                        "max_retries": max_retries,
+                        "retry_delay_seconds": retry_delay,
+                        "timeout_seconds": self._timeout,
+                        "error_type": type(exc).__name__,
+                    },
+                )
+                if retry_delay > 0:
+                    time.sleep(retry_delay)
+
+        raise RuntimeError("unreachable")
+
+
+def _resolve_float_env(env_name: str, default: float) -> float:
+    raw_value = (os.getenv(env_name) or "").strip()
+    if not raw_value:
+        return default
+
+    try:
+        return float(raw_value)
+    except ValueError:
+        _logger.warning(
+            "invalid writeback float env, using default",
+            extra={"event": "writeback.env.invalid", "env": env_name, "value": raw_value, "default": default},
+        )
+        return default
+
+
+def _resolve_int_env(env_name: str, default: int) -> int:
+    raw_value = (os.getenv(env_name) or "").strip()
+    if not raw_value:
+        return default
+
+    try:
+        return int(raw_value)
+    except ValueError:
+        _logger.warning(
+            "invalid writeback int env, using default",
+            extra={"event": "writeback.env.invalid", "env": env_name, "value": raw_value, "default": default},
+        )
+        return default
+
+
+def _is_retryable_writeback_error(exc: Exception) -> bool:
+    if isinstance(exc, HTTPError):
+        return exc.code in {408, 429, 500, 502, 503, 504}
+
+    if isinstance(exc, URLError):
+        reason = getattr(exc, "reason", None)
+        if isinstance(reason, TimeoutError):
+            return True
+        if isinstance(reason, OSError):
+            return True
+        return False
+
+    return isinstance(exc, TimeoutError)
 
 
 WritebackStrategy = Callable[..., dict[str, Any]]

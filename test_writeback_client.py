@@ -1,8 +1,10 @@
 import json
+import io
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from urllib.error import HTTPError, URLError
 
 from expense_audit_orchestrator.profiles.telecom.writeback import telecom_compliance_rule
 from expense_audit_orchestrator.writeback_client import (
@@ -227,6 +229,63 @@ class WritebackClientTests(unittest.TestCase):
         self.assertEqual(payload["instanceCode"], "REC-WRITEBACK-CHAIN-001")
         self.assertEqual(payload["auditInvoiceFiles"][0]["fid"], "FID-001")
         self.assertTrue(payload["auditTruthCheckLogs"][0]["atclid"])
+
+    @patch.dict(
+        "os.environ",
+        {
+            "WRITEBACK_MAX_RETRIES": "2",
+            "WRITEBACK_RETRY_BACKOFF_SECONDS": "0",
+        },
+        clear=False,
+    )
+    @patch("expense_audit_orchestrator.writeback_client.urlopen")
+    def test_save_result_audit_info_retries_timeout_error(self, mock_urlopen) -> None:
+        mock_urlopen.side_effect = [
+            URLError(TimeoutError("timed out")),
+            FakeHttpResponse({"code": 0, "message": "success", "data": True}),
+        ]
+
+        client = AuditInfoWritebackClient(service_url="https://service.example")
+        response = client.save_result_audit_info({"instanceCode": "REC-RETRY-001"})
+
+        self.assertEqual(response, {"code": 0, "message": "success", "data": True})
+        self.assertEqual(mock_urlopen.call_count, 2)
+
+    @patch.dict(
+        "os.environ",
+        {
+            "WRITEBACK_MAX_RETRIES": "1",
+            "WRITEBACK_RETRY_BACKOFF_SECONDS": "0",
+        },
+        clear=False,
+    )
+    @patch("expense_audit_orchestrator.writeback_client.urlopen")
+    def test_save_result_audit_info_drops_ai_advice_once_on_500(self, mock_urlopen) -> None:
+        mock_urlopen.side_effect = [
+            HTTPError(
+                "https://service.example/api/audit-service/audit/audit-info-save",
+                500,
+                "Internal Server Error",
+                None,
+                io.BytesIO(b"{\"message\":\"boom\"}"),
+            ),
+            FakeHttpResponse({"code": 0, "message": "success", "data": True}),
+        ]
+
+        client = AuditInfoWritebackClient(service_url="https://service.example")
+        response = client.save_result_audit_info(
+            {
+                "instanceCode": "REC-FALLBACK-001",
+                "aiAuditAdvice": "too long advice",
+            }
+        )
+
+        self.assertEqual(response, {"code": 0, "message": "success", "data": True})
+        self.assertEqual(mock_urlopen.call_count, 2)
+        second_request = mock_urlopen.call_args_list[1].args[0]
+        second_payload = json.loads(second_request.data.decode("utf-8"))
+        self.assertEqual(second_payload["instanceCode"], "REC-FALLBACK-001")
+        self.assertNotIn("aiAuditAdvice", second_payload)
 
 
 if __name__ == "__main__":
