@@ -28,6 +28,11 @@ from expense_audit_orchestrator import (
     create_receipt_audit_service,
 )
 from expense_audit_orchestrator.observability import configure_logging, get_logger
+from expense_audit_orchestrator.profiles import (
+    ProfileResolver,
+    UnknownExpenseTypeError,
+    create_profile_resolver_from_env,
+)
 from expense_audit_orchestrator.writeback_client import build_receipt_writeback_file_sink
 
 
@@ -291,6 +296,20 @@ class ReceiptAuditWorker:
                     "failed to process message",
                     extra={"event": "rabbitmq.failed"},
                 )
+                channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+                return
+
+            # 未知费用类型（eiCode 未映射）：标记任务失败，不重试
+            if isinstance(exc, UnknownExpenseTypeError):
+                _logger.warning(
+                    "unknown expense type, marking receipt as failed",
+                    extra={
+                        "receipt_code": receipt_code,
+                        "event": "rabbitmq.unknown_expense_type",
+                        "error": str(exc),
+                    },
+                )
+                self._mark_receipt_failed(receipt_code, exc)
                 channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
                 return
 
@@ -735,6 +754,7 @@ def create_worker(
     telecom_asset_dir: Path | str | None = None,
     max_retry_count: int | None = None,
     failed_task_status: int | None = None,
+    profile_resolver: "ProfileResolver | None" = None,
 ) -> ReceiptAuditWorker:
     resolved_audit_service_url = resolve_audit_service_url(audit_service_url)
 
@@ -746,6 +766,7 @@ def create_worker(
         enable_writeback=True,
         writeback_output_dir=writeback_output_dir,
         telecom_asset_dir=telecom_asset_dir,
+        profile_resolver=profile_resolver,
     )
     return ReceiptAuditWorker(
         service=service,
@@ -768,6 +789,11 @@ def build_cli_parser() -> argparse.ArgumentParser:
     parser.add_argument("--amqp-url", default=resolve_amqp_url())
     parser.add_argument("--profile", default="telecom")
     parser.add_argument("--graph-path", default=str(DEFAULT_GRAPH_PATH))
+    parser.add_argument(
+        "--ei-code-map-path",
+        default=None,
+        help="eiCode->profile 映射文件路径；传入后启用动态路由模式（与 --profile/--graph-path 互斥）",
+    )
     parser.add_argument("--audit-service-url")
     parser.add_argument("--graph-runtime-url")
     parser.add_argument("--ocr-sample-path", default=str(DEFAULT_OCR_PATH))
@@ -808,6 +834,26 @@ def main_cli(argv: Sequence[str] | None = None) -> int:
     parser = build_cli_parser()
     args = parser.parse_args(argv)
 
+    # 动态路由模式（--ei-code-map-path）与静态模式（--profile/--graph-path）互斥
+    profile_resolver: ProfileResolver | None = None
+    if args.ei_code_map_path is not None:
+        if args.profile != "telecom" or args.graph_path != str(DEFAULT_GRAPH_PATH):
+            parser.error("--ei-code-map-path cannot be used together with --profile or --graph-path")
+        profile_resolver = ProfileResolver.from_map_file(args.ei_code_map_path)
+        _logger.info(
+            "enabled dynamic profile routing",
+            extra={"event": "rabbitmq.dynamic_routing.enabled", "ei_code_map_path": args.ei_code_map_path},
+        )
+    else:
+        # 静态模式：若未显式传 EI_CODE_MAP_PATH env，也支持自动启用动态路由
+        env_map_path = os.getenv("EI_CODE_MAP_PATH")
+        if env_map_path and env_map_path.strip():
+            profile_resolver = create_profile_resolver_from_env()
+            _logger.info(
+                "enabled dynamic profile routing from env",
+                extra={"event": "rabbitmq.dynamic_routing.enabled_from_env"},
+            )
+
     settings = RabbitMQSettings(
         amqp_url=resolve_amqp_url(args.amqp_url),
         delay_time_millis=resolve_delay_time_millis(args.delay_time_millis),
@@ -826,6 +872,7 @@ def main_cli(argv: Sequence[str] | None = None) -> int:
         telecom_asset_dir=args.telecom_asset_dir,
         max_retry_count=args.max_retry_count,
         failed_task_status=args.failed_task_status,
+        profile_resolver=profile_resolver,
     )
     worker.run_forever()
     return 0

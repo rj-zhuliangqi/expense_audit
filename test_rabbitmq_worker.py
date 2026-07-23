@@ -660,5 +660,116 @@ class RabbitMQWorkerTests(unittest.TestCase):
         self.assertIn("5672", str(context.exception))
 
 
+class FakeUnknownExpenseTypeService:
+    """模拟 prepare_receipt 抛 UnknownExpenseTypeError 的 service。"""
+
+    def prepare_receipt(self, receipt_code: str, ocr_sample_path=None) -> dict:
+        from expense_audit_orchestrator.profiles import UnknownExpenseTypeError
+
+        raise UnknownExpenseTypeError(
+            "eiCode 'EI999' is not mapped to any expense profile"
+        )
+
+    def process_prepared_receipt(self, prepared_receipt: dict) -> dict:
+        raise AssertionError("process_prepared_receipt should not be called")
+
+
+class UnknownExpenseTypeRoutingTests(unittest.TestCase):
+    """未知 eiCode（未映射的费用类型）处理路径测试。"""
+
+    def test_handle_delivery_marks_failed_for_unknown_expense_type(self) -> None:
+        service = FakeUnknownExpenseTypeService()
+        task_status_update_provider = MagicMock(return_value={"code": 0, "message": "success", "data": True})
+        worker = rabbitmq_worker.ReceiptAuditWorker(
+            service=service,
+            task_status_update_provider=task_status_update_provider,
+            max_retry_count=2,
+            failed_task_status=2,
+        )
+        channel = FakeChannel()
+
+        worker.handle_delivery(
+            channel,
+            FakeMethod(21),
+            FakeProperties(headers={}),
+            b'{"receiptCode": "REC-UNKNOWN-EITYPE-001"}',
+        )
+
+        # 应标记失败并 nack（不重试、不重入队）
+        self.assertEqual(channel.acked_tags, [])
+        self.assertEqual(channel.nacked_tags, [(21, False)])
+        task_status_update_provider.assert_called_once()
+        called_kwargs = task_status_update_provider.call_args.kwargs
+        self.assertEqual(called_kwargs["new_status"], 2)
+        self.assertEqual(called_kwargs["system_identifier"], 4)
+        self.assertIn("EI999", called_kwargs["fail_reason"])
+
+    @patch("rabbitmq_worker.create_worker")
+    def test_main_cli_enables_dynamic_routing_with_ei_code_map_path(self, mock_create_worker: MagicMock) -> None:
+        import json
+        import tempfile
+
+        fake_worker = MagicMock()
+        mock_create_worker.return_value = fake_worker
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8") as fh:
+            json.dump({"EI001": "telecom"}, fh)
+            map_path = fh.name
+
+        try:
+            rabbitmq_worker.main_cli(
+                [
+                    "--amqp-url",
+                    "amqp://guest:guest@example:5672/%2F",
+                    "--audit-service-url",
+                    "https://service.example",
+                    "--queues",
+                    "audit",
+                    "--ei-code-map-path",
+                    map_path,
+                ]
+            )
+        finally:
+            import os
+
+            os.unlink(map_path)
+
+        # create_worker 应收到非 None 的 profile_resolver
+        self.assertIsNotNone(mock_create_worker.call_args.kwargs["profile_resolver"])
+        fake_worker.run_forever.assert_called_once_with()
+
+    @patch("rabbitmq_worker.create_worker")
+    def test_main_cli_rejects_ei_code_map_path_with_profile(self, mock_create_worker: MagicMock) -> None:
+        import json
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8") as fh:
+            json.dump({"EI001": "telecom"}, fh)
+            map_path = fh.name
+
+        try:
+            with self.assertRaises(SystemExit):
+                rabbitmq_worker.main_cli(
+                    [
+                        "--amqp-url",
+                        "amqp://guest:guest@example:5672/%2F",
+                        "--audit-service-url",
+                        "https://service.example",
+                        "--queues",
+                        "audit",
+                        "--ei-code-map-path",
+                        map_path,
+                        "--profile",
+                        "travel",
+                    ]
+                )
+        finally:
+            import os
+
+            os.unlink(map_path)
+
+        mock_create_worker.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
