@@ -1,0 +1,6 @@
+{
+  "_comment": "eiCode -> profile name 1:1 映射表。新增费用类型时在此追加映射，并在 profiles/ 下注册对应 profile。未知 eiCode 将被拒绝并标记任务失败。",
+  "EI001": "telecom",
+  "EI002": "travel",
+  "EI003": "entertainment"
+}

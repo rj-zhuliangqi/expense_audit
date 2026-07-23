@@ -53,13 +53,91 @@ class GetProfileTelecomAssetDirTests(unittest.TestCase):
         enricher = profile.receipt_enrichers["telecom_list"]
         self.assertIsInstance(enricher("R", {}), list)
 
-    def test_travel_profile_not_implemented(self) -> None:
+    def test_travel_profile_registered_but_enricher_deferred(self) -> None:
+        # travel profile 已注册到注册表，但 enricher 实现仍 deferred
+        profile = get_profile("travel")
+        self.assertEqual(profile.name, "travel")
+        enricher = profile.receipt_enrichers["travel_data"]
         with self.assertRaises(NotImplementedError):
-            get_profile("travel")
+            enricher("R", {})
+
+    def test_entertainment_profile_registered(self) -> None:
+        profile = get_profile("entertainment")
+        self.assertEqual(profile.name, "entertainment")
+        enricher = profile.receipt_enrichers["entertainment_data"]
+        # 招待费 enricher 当前返回空 dict（无专属数据）
+        self.assertEqual(enricher("R", {}), {})
 
     def test_unknown_profile_raises_value_error(self) -> None:
         with self.assertRaises(ValueError):
             get_profile("nonexistent")
+
+
+class ProfileResolverTests(unittest.TestCase):
+    def test_resolve_known_ei_code(self) -> None:
+        from expense_audit_orchestrator.profiles import ProfileResolver
+
+        resolver = ProfileResolver(ei_code_map={"EI001": "telecom"})
+        profile = resolver.resolve("EI001")
+        self.assertEqual(profile.name, "telecom")
+
+    def test_resolve_unknown_ei_code_raises(self) -> None:
+        from expense_audit_orchestrator.profiles import (
+            ProfileResolver,
+            UnknownExpenseTypeError,
+        )
+
+        resolver = ProfileResolver(ei_code_map={"EI001": "telecom"})
+        with self.assertRaises(UnknownExpenseTypeError):
+            resolver.resolve("EI999")
+
+    def test_resolve_empty_ei_code_raises(self) -> None:
+        from expense_audit_orchestrator.profiles import (
+            ProfileResolver,
+            UnknownExpenseTypeError,
+        )
+
+        resolver = ProfileResolver(ei_code_map={"EI001": "telecom"})
+        with self.assertRaises(UnknownExpenseTypeError):
+            resolver.resolve(None)
+        with self.assertRaises(UnknownExpenseTypeError):
+            resolver.resolve("")
+
+    def test_from_map_file_loads_json(self) -> None:
+        import json
+        import tempfile
+
+        from expense_audit_orchestrator.profiles import ProfileResolver
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False, encoding="utf-8"
+        ) as fh:
+            json.dump({"_comment": "test", "EI001": "telecom", "EI002": "travel"}, fh)
+            map_path = fh.name
+
+        try:
+            resolver = ProfileResolver.from_map_file(map_path)
+            self.assertEqual(resolver.ei_code_map["EI001"], "telecom")
+            self.assertEqual(resolver.ei_code_map["EI002"], "travel")
+            # _comment 键应被忽略
+            self.assertNotIn("_comment", resolver.ei_code_map)
+        finally:
+            os.unlink(map_path)
+
+    def test_create_from_env_uses_default_file(self) -> None:
+        from expense_audit_orchestrator.profiles import (
+            DEFAULT_EI_CODE_MAP_PATH,
+            create_profile_resolver_from_env,
+        )
+
+        env = {k: v for k, v in os.environ.items() if k != "EI_CODE_MAP_PATH"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            resolver = create_profile_resolver_from_env()
+        # 默认映射文件应包含 telecom 映射
+        self.assertIn("EI001", resolver.ei_code_map)
+        self.assertEqual(resolver.ei_code_map["EI001"], "telecom")
+        # 默认路径应指向包内文件
+        self.assertTrue(DEFAULT_EI_CODE_MAP_PATH.exists())
 
 
 if __name__ == "__main__":
