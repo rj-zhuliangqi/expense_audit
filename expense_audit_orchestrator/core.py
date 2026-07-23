@@ -292,13 +292,33 @@ def build_rule_input(
         "context": {
             "serviceData": normalized_service_data,
             "receiptCode": receipt_code,
-            "employee": {
-                "name": "张三",
-                "department": "销售部",
-                "level": "P3",
-            },
+            "employee": _build_employee_context(audit_info),
         },
     }
+
+
+def _build_employee_context(audit_info: Mapping[str, Any]) -> dict[str, Any]:
+    """从 auditInfo 中提取员工信息，供图内节点使用。
+
+    优先取 verifiUserName/verifiUserId/verifiUserPhone 等字段；
+    无法获取时返回空 dict（而非假数据），避免误导规则判断。
+    """
+    if not isinstance(audit_info, Mapping):
+        return {}
+    employee: dict[str, Any] = {}
+    name = _get_string_value(audit_info, "verifiUserName")
+    if name:
+        employee["name"] = name
+    staff_no = _get_string_value(audit_info, "verifiStaffNo")
+    if staff_no:
+        employee["staffNo"] = staff_no
+    user_id = _get_string_value(audit_info, "verifiUserId")
+    if user_id:
+        employee["userId"] = user_id
+    phone = _get_string_value(audit_info, "verifiUserPhone")
+    if phone:
+        employee["phone"] = phone
+    return employee
 
 
 @dataclass(slots=True)

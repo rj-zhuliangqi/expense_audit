@@ -3241,6 +3241,79 @@ class ProfileRoutingTests(unittest.TestCase):
                 profile_resolver=resolver,
             )
 
+    def test_dynamic_routing_different_ei_codes_select_different_profiles(self) -> None:
+        """端到端：不同 eiCode 路由到不同 profile，使用不同图路径。"""
+        from expense_audit_orchestrator.profiles import (
+            ENTERTAINMENT_GRAPH_PATH,
+            TRAVEL_GRAPH_PATH,
+            ProfileResolver,
+        )
+
+        resolver = ProfileResolver(
+            ei_code_map={"EI001": "telecom", "EI002": "travel", "EI003": "entertainment"}
+        )
+
+        # EI001 -> telecom profile
+        telecom_preparer = self._build_data_preparer_with_audit_info(
+            {"instanceCode": "R1", "eiCode": "EI001"}
+        )
+        service1 = ReceiptAuditService(
+            graph_runtime_client=MagicMock(),
+            data_preparer=telecom_preparer,
+            profile_resolver=resolver,
+        )
+        result1 = service1.prepare_receipt("R1")
+        self.assertEqual(result1["resolvedProfile"].name, "telecom")
+
+        # EI003 -> entertainment profile（图路径应为招待费图）
+        entertainment_preparer = self._build_data_preparer_with_audit_info(
+            {"instanceCode": "R3", "eiCode": "EI003"}
+        )
+        service3 = ReceiptAuditService(
+            graph_runtime_client=MagicMock(),
+            data_preparer=entertainment_preparer,
+            profile_resolver=resolver,
+        )
+        result3 = service3.prepare_receipt("R3")
+        self.assertEqual(result3["resolvedProfile"].name, "entertainment")
+        self.assertEqual(result3["resolvedProfile"].default_graph_path, ENTERTAINMENT_GRAPH_PATH)
+
+    def test_employee_context_no_longer_hardcoded(self) -> None:
+        """context.employee 应从 auditInfo 提取，不再硬编码假数据。"""
+        from expense_audit_orchestrator.core import build_rule_input
+
+        service_data = {
+            "auditInfo": {
+                "instanceCode": "R-EMP-001",
+                "verifiUserName": "刘雪涛",
+                "verifiStaffNo": "R06108",
+            }
+        }
+        result = build_rule_input(
+            "R-EMP-001",
+            {"invoiceType": "26"},
+            file_path="base64://x",
+            service_data=service_data,
+        )
+        employee = result["context"]["employee"]
+        self.assertEqual(employee["name"], "刘雪涛")
+        self.assertEqual(employee["staffNo"], "R06108")
+        # 不应包含硬编码的假数据
+        self.assertNotIn("department", employee)
+        self.assertNotIn("level", employee)
+
+    def test_employee_context_empty_when_no_audit_info(self) -> None:
+        """auditInfo 为空时，context.employee 应为空 dict 而非假数据。"""
+        from expense_audit_orchestrator.core import build_rule_input
+
+        result = build_rule_input(
+            "R-EMP-002",
+            {"invoiceType": "26"},
+            file_path="base64://x",
+            service_data={},
+        )
+        self.assertEqual(result["context"]["employee"], {})
+
 
 if __name__ == "__main__":
     unittest.main()

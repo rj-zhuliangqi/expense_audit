@@ -7,8 +7,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from ..runtime_client import DEFAULT_GRAPH_PATH
+from ..runtime_client import DEFAULT_GRAPH_PATH, ROOT
 from ..writeback_client import AUDIT_INFO_SAVE_PATH
+
+
+# 各费用类型的默认图路径（ROOT 为项目根目录，与 runtime_client.DEFAULT_GRAPH_PATH 同级）
+TRAVEL_GRAPH_PATH = ROOT / "graph-latest-travel-0722.json"
+ENTERTAINMENT_GRAPH_PATH = ROOT / "graph-latest-entertainment-0722.json"
 
 
 ReceiptEnricher = Callable[[str, Mapping[str, Any]], Any]
@@ -94,7 +99,7 @@ def _build_travel_profile(asset_dir: Path | str | None = None) -> ExpenseProfile
 
     return ExpenseProfile(
         name="travel",
-        default_graph_path=DEFAULT_GRAPH_PATH,
+        default_graph_path=TRAVEL_GRAPH_PATH,
         receipt_enrichers={"travel_data": travel_receipt_enricher},
         compliance_rule=travel_compliance_rule,
         audit_travels_builder=travel_audit_travels_builder,
@@ -108,7 +113,7 @@ def _build_entertainment_profile(asset_dir: Path | str | None = None) -> Expense
 
     return ExpenseProfile(
         name="entertainment",
-        default_graph_path=DEFAULT_GRAPH_PATH,
+        default_graph_path=ENTERTAINMENT_GRAPH_PATH,
         receipt_enrichers={"entertainment_data": entertainment_receipt_enricher},
         compliance_rule=entertainment_compliance_rule,
         writeback_save_path=AUDIT_INFO_SAVE_PATH,
@@ -212,11 +217,13 @@ __all__ = [
     "ComplianceRule",
     "DEFAULT_EI_CODE_MAP_PATH",
     "EI_CODE_MAP_PATH_ENV",
+    "ENTERTAINMENT_GRAPH_PATH",
     "ExpenseProfile",
     "FormBuilder",
     "InvoiceEnricher",
     "ProfileResolver",
     "ReceiptEnricher",
+    "TRAVEL_GRAPH_PATH",
     "UnknownExpenseTypeError",
     "UnknownProfileError",
     "create_profile_resolver_from_env",
