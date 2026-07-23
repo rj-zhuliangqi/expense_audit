@@ -318,7 +318,12 @@ class ReceiptDataPreparer:
     receipt_enrichers: Mapping[str, ReceiptEnricher] = field(default_factory=dict)
     extra_enrichers: Mapping[str, DataEnricher] = field(default_factory=dict)
 
-    def prepare_receipt_context(self, receipt_code: str) -> dict[str, Any]:
+    def prepare_receipt_context(
+        self,
+        receipt_code: str,
+        *,
+        receipt_enrichers_override: Mapping[str, ReceiptEnricher] | None = None,
+    ) -> dict[str, Any]:
         _logger.info("开始聚合单据级外部数据", extra={"receipt_code": receipt_code, "event": "data_prep.aggregate.start"})
         audit_info = self.audit_info_provider(receipt_code)
         company_blacklist = self.company_blacklist_provider()
@@ -347,7 +352,9 @@ class ReceiptDataPreparer:
             "auditInvoiceFileInfo": audit_invoice_file_info,
             "truthCheckFieldMappings": truthcheck_field_mappings,
         }
-        for enricher_name, enricher in self.receipt_enrichers.items():
+        # 动态路由模式下，enricher 由 resolver 选中的 profile 决定，通过 override 传入
+        active_enrichers = receipt_enrichers_override if receipt_enrichers_override is not None else self.receipt_enrichers
+        for enricher_name, enricher in active_enrichers.items():
             service_data[enricher_name] = enricher(receipt_code, dict(service_data))
         invoice_files = _build_invoice_files(
             receipt_code,

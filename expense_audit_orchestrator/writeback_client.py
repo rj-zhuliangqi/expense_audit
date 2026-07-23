@@ -47,8 +47,17 @@ class AuditInfoWritebackClient:
         self._timeout = timeout
         self._save_path = save_path if save_path.startswith("/") else f"/{save_path}"
 
-    def save_result_audit_info(self, payload: Mapping[str, Any]) -> dict[str, Any]:
-        endpoint = f"{self._service_url}{self._save_path}"
+    def save_result_audit_info(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        save_path: str | None = None,
+    ) -> dict[str, Any]:
+        # 动态路由模式下，save_path 可按单据的 profile 决定；默认用构造时的 self._save_path
+        resolved_save_path = self._save_path
+        if save_path is not None:
+            resolved_save_path = save_path if save_path.startswith("/") else f"/{save_path}"
+        endpoint = f"{self._service_url}{resolved_save_path}"
         _logger.info("回写稽核结果", extra={"event": "writeback.save", "endpoint": endpoint})
 
         response_payload = self._post_payload(endpoint, payload)

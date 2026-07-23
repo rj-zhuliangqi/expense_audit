@@ -91,7 +91,13 @@ class FakeSplitDataPreparer:
         self.prepare_receipt_context_calls: list[str] = []
         self.prepare_invoice_input_calls: list[tuple[str, str, object]] = []
 
-    def prepare_receipt_context(self, receipt_code: str) -> dict[str, Any]:
+    def prepare_receipt_context(
+        self,
+        receipt_code: str,
+        *,
+        receipt_enrichers_override: object = None,
+    ) -> dict[str, Any]:
+        del receipt_enrichers_override  # mock 不关心 enricher 覆盖
         self.prepare_receipt_context_calls.append(receipt_code)
         return self.receipt_context
 
@@ -3114,6 +3120,126 @@ class KingdeeOCRProviderTests(unittest.TestCase):
         self.assertEqual(requests[3][1]["messageType"], "recognitionCheck")
         self.assertEqual(requests[3][1]["data"]["companyInfo"]["name"], "锐捷网络股份有限公司")
         self.assertEqual(requests[3][1]["data"]["companyInfo"]["taxNo"], "91110108668444162H")
+
+
+class ProfileRoutingTests(unittest.TestCase):
+    """动态路由模式（profile_resolver）集成测试。"""
+
+    def _build_data_preparer_with_audit_info(self, audit_info: dict[str, Any]) -> FakeSplitDataPreparer:
+        """构造一个 FakeSplitDataPreparer，其 audit_info_provider 返回指定 audit_info。"""
+        receipt_context = {
+            "receiptCode": "REC-ROUTE-001",
+            "serviceData": {"auditInfo": audit_info},
+            "invoiceFiles": [
+                {
+                    "fid": "FID-ROUTE-001",
+                    "filePath": "base64://BASE64",
+                    "auditInvoiceFile": {"fid": "FID-ROUTE-001"},
+                    "auditInvoiceFileInfo": {"fid": "FID-ROUTE-001"},
+                },
+            ],
+        }
+        preparer = FakeSplitDataPreparer(
+            receipt_context,
+            {"FID-ROUTE-001": {"receipt": {"code": "REC-ROUTE-001"}}},
+        )
+        # 让 audit_info_provider 返回带 eiCode 的 audit_info（供 _resolve_profile_for_receipt 使用）
+        preparer.audit_info_provider = lambda receipt_code: audit_info
+        return preparer
+
+    def test_dynamic_routing_resolves_profile_by_ei_code(self) -> None:
+        from expense_audit_orchestrator.profiles import ProfileResolver
+
+        audit_info = {"instanceCode": "REC-ROUTE-001", "eiCode": "EI001"}
+        preparer = self._build_data_preparer_with_audit_info(audit_info)
+
+        resolver = ProfileResolver(ei_code_map={"EI001": "telecom", "EI002": "travel"})
+        runtime_client = MagicMock()
+        service = ReceiptAuditService(
+            graph_runtime_client=runtime_client,
+            data_preparer=preparer,
+            profile_resolver=resolver,
+        )
+
+        result = service.prepare_receipt("REC-ROUTE-001")
+
+        # resolvedProfile 应被存入 prepared_receipt
+        self.assertIsNotNone(result.get("resolvedProfile"))
+        self.assertEqual(result["resolvedProfile"].name, "telecom")
+
+    def test_dynamic_routing_unknown_ei_code_raises(self) -> None:
+        from expense_audit_orchestrator.profiles import (
+            ProfileResolver,
+            UnknownExpenseTypeError,
+        )
+
+        audit_info = {"instanceCode": "REC-ROUTE-002", "eiCode": "EI999"}
+        preparer = self._build_data_preparer_with_audit_info(audit_info)
+
+        resolver = ProfileResolver(ei_code_map={"EI001": "telecom"})
+        runtime_client = MagicMock()
+        service = ReceiptAuditService(
+            graph_runtime_client=runtime_client,
+            data_preparer=preparer,
+            profile_resolver=resolver,
+        )
+
+        with self.assertRaises(UnknownExpenseTypeError):
+            service.prepare_receipt("REC-ROUTE-002")
+
+    def test_dynamic_routing_uses_profile_graph_path(self) -> None:
+        """动态路由下，process_prepared_receipt 应使用 resolved profile 的 graph_path。"""
+        from expense_audit_orchestrator.profiles import ProfileResolver
+
+        # 构造一个 prepared_receipt，含 resolvedProfile（模拟 prepare_receipt 的输出）
+        custom_profile = ExpenseProfile(
+            name="telecom",
+            default_graph_path="/custom/path/graph.json",
+        )
+        prepared_receipt = {
+            "receiptCode": "REC-ROUTE-003",
+            "serviceData": {"auditInfo": {"instanceCode": "REC-ROUTE-003"}},
+            "receiptContext": {"receiptCode": "REC-ROUTE-003"},
+            "invoiceCount": 1,
+            "resolvedProfile": custom_profile,
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-003",
+                    "invoiceFile": {"fid": "FID-003"},
+                    "preparedInput": {"receipt": {"code": "REC-ROUTE-003"}},
+                },
+            ],
+        }
+
+        runtime_client = MagicMock()
+        runtime_client.evaluate.return_value = {
+            "decisionOutput": {"checkStatus": "passed"},
+            "receiptCode": "REC-ROUTE-003",
+        }
+        service = ReceiptAuditService(
+            graph_runtime_client=runtime_client,
+            data_preparer=FakeSplitDataPreparer({}, {}),
+            profile_resolver=ProfileResolver(ei_code_map={"EI001": "telecom"}),
+        )
+
+        service.process_prepared_receipt(prepared_receipt)
+
+        # evaluate 应被调用，且 graph_path 为 resolved profile 的 default_graph_path
+        runtime_client.evaluate.assert_called_once()
+        call_kwargs = runtime_client.evaluate.call_args.kwargs
+        self.assertEqual(call_kwargs["graph_path"], "/custom/path/graph.json")
+
+    def test_profile_resolver_and_graph_path_are_mutually_exclusive(self) -> None:
+        from expense_audit_orchestrator.profiles import ProfileResolver
+
+        resolver = ProfileResolver(ei_code_map={"EI001": "telecom"})
+        with self.assertRaises(ValueError):
+            ReceiptAuditService(
+                graph_runtime_client=MagicMock(),
+                data_preparer=FakeSplitDataPreparer({}, {}),
+                graph_path="/some/graph.json",
+                profile_resolver=resolver,
+            )
 
 
 if __name__ == "__main__":

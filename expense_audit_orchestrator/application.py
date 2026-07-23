@@ -1,14 +1,19 @@
+from __future__ import annotations
+
 from collections.abc import Callable, Mapping
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from expense_audit_orchestrator.runtime_client import DEFAULT_GRAPH_PATH, GraphRuntimeClient
 
 from .core import DEFAULT_OCR_PATH, ReceiptDataPreparer
 from .observability import get_logger, new_run_id, run_context
 from .overall_advice import OverallAdviceProvider
+
+if TYPE_CHECKING:
+    from .profiles import ExpenseProfile, ProfileResolver
 
 
 InvoiceResultSink = Callable[[str, dict[str, Any]], None]
@@ -21,20 +26,34 @@ class ReceiptAuditService:
         graph_runtime_client: GraphRuntimeClient,
         data_preparer: ReceiptDataPreparer,
         *,
-        graph_path: Path | str | None = DEFAULT_GRAPH_PATH,
+        graph_path: Path | str | None = None,
         graph_content: dict[str, Any] | str | None = None,
+        profile_resolver: ProfileResolver | None = None,
         invoice_result_sink: InvoiceResultSink | None = None,
         receipt_result_sink: ReceiptResultSink | None = None,
         run_id_factory: Callable[[], str] = new_run_id,
         overall_advice_provider: OverallAdviceProvider | None = None,
     ) -> None:
-        if (graph_path is None) == (graph_content is None):
-            raise ValueError("exactly one of graph_path or graph_content is required")
+        # 动态路由模式（profile_resolver）与静态模式（graph_path/graph_content）互斥：
+        # - 动态模式：每单据按 eiCode 路由到不同 profile，图路径由 profile.default_graph_path 决定
+        # - 静态模式：所有单据用同一图（现有行为，向后兼容）
+        if profile_resolver is not None:
+            if graph_path is not None or graph_content is not None:
+                raise ValueError(
+                    "profile_resolver cannot be used together with graph_path or graph_content; "
+                    "use either dynamic routing (profile_resolver) or static graph (graph_path/graph_content)"
+                )
+        elif graph_content is None and graph_path is None:
+            # 静态模式默认用 DEFAULT_GRAPH_PATH（向后兼容）
+            graph_path = DEFAULT_GRAPH_PATH
+        elif graph_path is not None and graph_content is not None:
+            raise ValueError("graph_path and graph_content cannot be set together")
 
         self._graph_runtime_client = graph_runtime_client
         self._data_preparer = data_preparer
         self._graph_path = graph_path
         self._graph_content = graph_content
+        self._profile_resolver = profile_resolver
         self._invoice_result_sink = invoice_result_sink or _noop_invoice_result_sink
         self._receipt_result_sink = receipt_result_sink or _noop_receipt_result_sink
         self._run_id_factory = run_id_factory
@@ -53,7 +72,17 @@ class ReceiptAuditService:
         ocr_sample_path: Path | str | None = None,
     ) -> dict[str, Any]:
         resolved_ocr_sample_path = ocr_sample_path or DEFAULT_OCR_PATH
-        receipt_context = self._data_preparer.prepare_receipt_context(receipt_code)
+        # 动态路由模式：先 fetch audit_info 拿 eiCode → resolve profile → 用 profile enricher 准备数据
+        resolved_profile: ExpenseProfile | None = None
+        enrichers_override: Mapping | None = None
+        if self._profile_resolver is not None:
+            resolved_profile = self._resolve_profile_for_receipt(receipt_code)
+            enrichers_override = resolved_profile.receipt_enrichers
+
+        receipt_context = self._data_preparer.prepare_receipt_context(
+            receipt_code,
+            receipt_enrichers_override=enrichers_override,
+        )
         invoice_preparations: list[dict[str, Any]] = []
 
         for invoice_file in receipt_context["invoiceFiles"]:
@@ -81,7 +110,30 @@ class ReceiptAuditService:
                 "invoiceCount": len(invoice_preparations),
                 "preparedCount": len(invoice_preparations),
             },
+            # 动态路由模式下记录选中的 profile，供 process_prepared_receipt 选图
+            "resolvedProfile": resolved_profile,
         }
+
+    def _resolve_profile_for_receipt(self, receipt_code: str) -> ExpenseProfile:
+        """动态路由：fetch audit_info 拿 eiCode → resolver.resolve → ExpenseProfile。
+
+        audit_info 在 prepare_receipt_context 内部也会 fetch，这里提前 fetch 一次用于路由。
+        为避免重复请求，prepare_receipt_context 复用底座的 audit_info_provider 即可
+        （底座 fetch 是幂等查询，重复一次开销可接受；后续可优化为传入 audit_info_override）。
+        """
+        audit_info = self._data_preparer.audit_info_provider(receipt_code)
+        ei_code = _get_audit_info_ei_code(audit_info)
+        profile = self._profile_resolver.resolve(ei_code)
+        get_logger("profile_routing").info(
+            "resolved expense profile by eiCode",
+            extra={
+                "receipt_code": receipt_code,
+                "ei_code": ei_code,
+                "profile": profile.name,
+                "event": "profile_routing.resolved",
+            },
+        )
+        return profile
 
     def process_receipt(
         self,
@@ -100,11 +152,19 @@ class ReceiptAuditService:
         receipt_code = str(prepared_receipt.get("receiptCode") or "")
         remaining_apply_amount = _resolve_initial_apply_amount(prepared_receipt)
 
+        # 动态路由模式：从 prepared_receipt 取出选中的 profile，用其 graph_path 执行
+        resolved_profile: ExpenseProfile | None = prepared_receipt.get("resolvedProfile")
+        effective_graph_path = self._graph_path
+        if resolved_profile is not None and resolved_profile.default_graph_path is not None:
+            effective_graph_path = resolved_profile.default_graph_path
+
         for invoice_preparation in prepared_receipt["invoicePreparations"]:
             if remaining_apply_amount is not None:
                 _update_preparation_apply_amount(invoice_preparation, remaining_apply_amount)
 
-            invoice_result = self._process_invoice_preparation(receipt_code, invoice_preparation)
+            invoice_result = self._process_invoice_preparation(
+                receipt_code, invoice_preparation, graph_path=effective_graph_path,
+            )
             invoice_results.append(invoice_result)
 
             used_amount = _extract_invoice_final_amount(invoice_result)
@@ -136,6 +196,8 @@ class ReceiptAuditService:
         self,
         receipt_code: str,
         invoice_preparation: Mapping[str, Any],
+        *,
+        graph_path: Path | str | None = None,
     ) -> dict[str, Any]:
         started_at = _utc_now_isoformat()
         run_id = self._run_id_factory()
@@ -149,6 +211,9 @@ class ReceiptAuditService:
             execution_time=started_at,
         )
 
+        # 动态路由模式下用传入的 graph_path（来自 resolved profile），静态模式用 self._graph_path
+        effective_graph_path = graph_path if graph_path is not None else self._graph_path
+
         try:
             if not prepared_input:
                 raise ValueError("preparedInput is required for invoice execution")
@@ -156,7 +221,7 @@ class ReceiptAuditService:
             with run_context(receipt_code=receipt_code, run_id=run_id, invoice_key=invoice_key):
                 runtime_result = self._graph_runtime_client.evaluate(
                     prepared_input=prepared_input,
-                    graph_path=self._graph_path,
+                    graph_path=effective_graph_path,
                     graph_content=self._graph_content,
                 )
         except Exception as exc:
@@ -226,6 +291,17 @@ class ReceiptAuditService:
             return
         if isinstance(advice, str) and advice.strip():
             receipt_result["aiAuditAdvice"] = advice.strip()
+
+
+def _get_audit_info_ei_code(audit_info: Any) -> str:
+    """从 audit_info 中提取 eiCode（费用项编码），用于路由到对应 profile。"""
+    if not isinstance(audit_info, Mapping):
+        return ""
+    for key in ("eiCode", "ei_code", "expenseItemCode"):
+        value = audit_info.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
 
 
 def _resolve_invoice_key(invoice_file: Mapping[str, Any]) -> str:
