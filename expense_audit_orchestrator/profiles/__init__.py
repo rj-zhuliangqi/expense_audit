@@ -12,8 +12,37 @@ from ..writeback_client import AUDIT_INFO_SAVE_PATH
 
 
 # 各费用类型的默认图路径（ROOT 为项目根目录，与 runtime_client.DEFAULT_GRAPH_PATH 同级）
-TRAVEL_GRAPH_PATH = ROOT / "graph-latest-travel-0722.json"
-ENTERTAINMENT_GRAPH_PATH = ROOT / "graph-latest-entertainment-0722.json"
+# 图路径支持通过 .env 环境变量覆盖，避免每次换图都要改代码：
+#   TELECOM_GRAPH_PATH / PERSONAL_TRANSPORT_GRAPH_PATH / TRAVEL_GRAPH_PATH / ENTERTAINMENT_GRAPH_PATH
+# 留空或未设置时用代码内默认值；相对路径以项目根目录 ROOT 为基准解析。
+TELECOM_GRAPH_PATH_ENV = "TELECOM_GRAPH_PATH"
+PERSONAL_TRANSPORT_GRAPH_PATH_ENV = "PERSONAL_TRANSPORT_GRAPH_PATH"
+TRAVEL_GRAPH_PATH_ENV = "TRAVEL_GRAPH_PATH"
+ENTERTAINMENT_GRAPH_PATH_ENV = "ENTERTAINMENT_GRAPH_PATH"
+
+
+def _resolve_graph_path(env_key: str, default: Path | None) -> Path | None:
+    """从环境变量读取图路径，留空则用代码内默认值。
+
+    相对路径以项目根目录 ROOT 为基准解析；空字符串视为未设置（用默认值）。
+    """
+    raw = (os.getenv(env_key) or "").strip()
+    if not raw:
+        return default
+    p = Path(raw)
+    if not p.is_absolute():
+        p = ROOT / p
+    return p
+
+
+PERSONAL_TRANSPORT_GRAPH_PATH = _resolve_graph_path(
+    PERSONAL_TRANSPORT_GRAPH_PATH_ENV, ROOT / "graph-latest-personal-transport-0722.json"
+)
+# 差旅（travel）执行图暂未独立，default_graph_path 留空占位，待差旅图就绪后通过 .env 绑定。
+TRAVEL_GRAPH_PATH: Path | None = _resolve_graph_path(TRAVEL_GRAPH_PATH_ENV, None)
+ENTERTAINMENT_GRAPH_PATH = _resolve_graph_path(
+    ENTERTAINMENT_GRAPH_PATH_ENV, ROOT / "graph-latest-entertainment-0722.json"
+)
 
 
 ReceiptEnricher = Callable[[str, Mapping[str, Any]], Any]
@@ -86,7 +115,7 @@ def _build_telecom_profile(asset_dir: Path | str | None = None) -> ExpenseProfil
     csv_path = resolve_telecom_csv_path(asset_dir)
     return ExpenseProfile(
         name="telecom",
-        default_graph_path=DEFAULT_GRAPH_PATH,
+        default_graph_path=_resolve_graph_path(TELECOM_GRAPH_PATH_ENV, DEFAULT_GRAPH_PATH),
         receipt_enrichers={"telecom_list": telecom_receipt_enricher(load_telecom_list(csv_path))},
         compliance_rule=telecom_compliance_rule,
         writeback_save_path=AUDIT_INFO_SAVE_PATH,
@@ -94,6 +123,13 @@ def _build_telecom_profile(asset_dir: Path | str | None = None) -> ExpenseProfil
 
 
 def _build_travel_profile(asset_dir: Path | str | None = None) -> ExpenseProfile:
+    """差旅（travel）profile。
+
+    差旅与个人交通费是两个独立费用类型：差旅涉及行程预订/里程标准等业务数据，
+    个人交通费（personal_transport）走 graph-latest-personal-transport-0722.json。
+    差旅图与 enricher/writeback 均未就绪，保留 NotImplementedError 占位；
+    差旅图就绪后通过 .env 的 TRAVEL_GRAPH_PATH 绑定。
+    """
     from .travel.data import travel_receipt_enricher
     from .travel.writeback import travel_audit_travels_builder, travel_compliance_rule
 
@@ -103,6 +139,24 @@ def _build_travel_profile(asset_dir: Path | str | None = None) -> ExpenseProfile
         receipt_enrichers={"travel_data": travel_receipt_enricher},
         compliance_rule=travel_compliance_rule,
         audit_travels_builder=travel_audit_travels_builder,
+        writeback_save_path=AUDIT_INFO_SAVE_PATH,
+    )
+
+
+def _build_personal_transport_profile(asset_dir: Path | str | None = None) -> ExpenseProfile:
+    """个人交通费（personal_transport）profile。
+
+    对应执行图 graph-latest-personal-transport-0722.json（可通过 .env 的
+    PERSONAL_TRANSPORT_GRAPH_PATH 覆盖）。合规规则在图内节点完成，回写使用默认放行策略。
+    """
+    from .personal_transport.data import personal_transport_receipt_enricher
+    from .personal_transport.writeback import personal_transport_compliance_rule
+
+    return ExpenseProfile(
+        name="personal_transport",
+        default_graph_path=PERSONAL_TRANSPORT_GRAPH_PATH,
+        receipt_enrichers={"personal_transport_data": personal_transport_receipt_enricher},
+        compliance_rule=personal_transport_compliance_rule,
         writeback_save_path=AUDIT_INFO_SAVE_PATH,
     )
 
@@ -123,6 +177,7 @@ def _build_entertainment_profile(asset_dir: Path | str | None = None) -> Expense
 # 内置 profile 自注册
 register_profile("telecom", _build_telecom_profile)
 register_profile("travel", _build_travel_profile)
+register_profile("personal_transport", _build_personal_transport_profile)
 register_profile("entertainment", _build_entertainment_profile)
 
 
@@ -218,12 +273,17 @@ __all__ = [
     "DEFAULT_EI_CODE_MAP_PATH",
     "EI_CODE_MAP_PATH_ENV",
     "ENTERTAINMENT_GRAPH_PATH",
+    "ENTERTAINMENT_GRAPH_PATH_ENV",
     "ExpenseProfile",
     "FormBuilder",
     "InvoiceEnricher",
+    "PERSONAL_TRANSPORT_GRAPH_PATH",
+    "PERSONAL_TRANSPORT_GRAPH_PATH_ENV",
     "ProfileResolver",
     "ReceiptEnricher",
+    "TELECOM_GRAPH_PATH_ENV",
     "TRAVEL_GRAPH_PATH",
+    "TRAVEL_GRAPH_PATH_ENV",
     "UnknownExpenseTypeError",
     "UnknownProfileError",
     "create_profile_resolver_from_env",

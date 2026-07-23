@@ -218,19 +218,20 @@ def update_audit_task_status(
     *,
     new_status: int,
     system_identifier: int,
-    fail_reason: str | None = None,
     service_url: str = DEFAULT_AUDIT_SERVICE_URL,
     timeout: float | None = None,
     headers: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
-    """更新稽核任务状态。"""
+    """更新稽核任务状态。
+
+    接口文档仅接受 instanceCode / newStatus / systemIdentifier 三个字段，
+    不传 failReason（服务端不支持该字段，传入会导致 500）。
+    """
     resolved_payload: dict[str, Any] = {
         "instanceCode": instance_code,
         "newStatus": new_status,
         "systemIdentifier": system_identifier,
     }
-    if isinstance(fail_reason, str) and fail_reason.strip():
-        resolved_payload["failReason"] = fail_reason.strip()
 
     return _post_service_payload(
         "/api/audit-service/audit/task-status-update",

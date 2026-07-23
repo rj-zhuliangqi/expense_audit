@@ -390,11 +390,7 @@ def _build_audit_invoice_infos(
                 "post": prepared_input.get("post"),
                 "departure": prepared_input.get("departure"),
                 "reasonStatus": 1 if result.get("executionStatus") == "SUCCEEDED" else 0,
-                "reasonCode": (
-                    primary_rule_result.get("reason_code")
-                    if primary_rule_result
-                    else decision_output.get("reasonCode")
-                ),
+                "reasonCode": _resolve_reason_code(primary_rule_result, decision_output),
                 "fid": current_audit_invoice_file.get("fid"),
                 "parentFid": current_audit_invoice_file.get("fid"),
                 "billTypeFullName": None,
@@ -760,3 +756,20 @@ def _select_primary_rule_result(
     if rule_results:
         return rule_results[0]
     return None
+
+
+def _resolve_reason_code(
+    primary_rule_result: Mapping[str, Any] | None,
+    decision_output: Mapping[str, Any],
+) -> str | None:
+    """解析回写用的 reasonCode。
+
+    优先取主规则结果的 reason_code；若主规则结果不存在或其 reason_code 为空，
+    则 fallback 到 decision_output 顶层的 reasonCode（执行图整体结论）。
+    避免 primary_rule_result 存在但 reason_code 为空时 reasonCode 落为 null。
+    """
+    if primary_rule_result is not None:
+        reason_code = primary_rule_result.get("reason_code")
+        if reason_code:
+            return reason_code
+    return decision_output.get("reasonCode")

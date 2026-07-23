@@ -54,12 +54,59 @@ class GetProfileTelecomAssetDirTests(unittest.TestCase):
         self.assertIsInstance(enricher("R", {}), list)
 
     def test_travel_profile_registered_but_enricher_deferred(self) -> None:
-        # travel profile 已注册到注册表，但 enricher 实现仍 deferred
+        # travel profile（差旅）已注册到注册表，但 enricher 实现仍 deferred
         profile = get_profile("travel")
         self.assertEqual(profile.name, "travel")
         enricher = profile.receipt_enrichers["travel_data"]
         with self.assertRaises(NotImplementedError):
             enricher("R", {})
+
+    def test_personal_transport_profile_registered(self) -> None:
+        # personal_transport profile（个人交通费）已注册，图路径指向个人交通费图
+        from expense_audit_orchestrator.profiles import PERSONAL_TRANSPORT_GRAPH_PATH
+
+        profile = get_profile("personal_transport")
+        self.assertEqual(profile.name, "personal_transport")
+        self.assertEqual(profile.default_graph_path, PERSONAL_TRANSPORT_GRAPH_PATH)
+        enricher = profile.receipt_enrichers["personal_transport_data"]
+        # 个人交通费 enricher 当前返回空 dict（无专属数据）
+        self.assertEqual(enricher("R", {}), {})
+
+    def test_graph_path_env_override(self) -> None:
+        """图路径支持通过 .env 环境变量覆盖，无需改代码。"""
+        import importlib
+
+        from expense_audit_orchestrator import profiles as profiles_mod
+
+        env_overrides = {
+            "TELECOM_GRAPH_PATH": "/env/telecom.json",
+            "PERSONAL_TRANSPORT_GRAPH_PATH": "/env/personal_transport.json",
+            "TRAVEL_GRAPH_PATH": "/env/travel.json",
+            "ENTERTAINMENT_GRAPH_PATH": "/env/entertainment.json",
+        }
+        with mock.patch.dict(os.environ, env_overrides, clear=False):
+            importlib.reload(profiles_mod)
+            try:
+                self.assertEqual(
+                    str(profiles_mod.PERSONAL_TRANSPORT_GRAPH_PATH),
+                    "/env/personal_transport.json",
+                )
+                self.assertEqual(
+                    str(profiles_mod.TRAVEL_GRAPH_PATH),
+                    "/env/travel.json",
+                )
+                self.assertEqual(
+                    str(profiles_mod.ENTERTAINMENT_GRAPH_PATH),
+                    "/env/entertainment.json",
+                )
+                # telecom profile 的图路径也应被 env 覆盖
+                telecom = profiles_mod.get_profile("telecom")
+                self.assertEqual(str(telecom.default_graph_path), "/env/telecom.json")
+            finally:
+                # 恢复模块默认状态，避免污染后续测试
+                for k in env_overrides:
+                    os.environ.pop(k, None)
+                importlib.reload(profiles_mod)
 
     def test_entertainment_profile_registered(self) -> None:
         profile = get_profile("entertainment")

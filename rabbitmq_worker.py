@@ -261,7 +261,13 @@ class ReceiptAuditWorker:
             source = getattr(method, "routing_key", "unknown")
             _logger.info(
                 "received receipt",
-                extra={"receipt_code": receipt_code, "source": source, "event": "rabbitmq.received"},
+                extra={
+                    "receipt_code": receipt_code,
+                    "source": source,
+                    "event": "rabbitmq.received",
+                    "stage": "receive",
+                    "status": "success",
+                },
             )
 
             if not self._should_process_receipt(receipt_code):
@@ -277,6 +283,8 @@ class ReceiptAuditWorker:
                         "receipt_code": receipt_code,
                         "invoice_count": _resolve_invoice_count(prepared_receipt),
                         "event": "rabbitmq.prepared",
+                        "stage": "prepare",
+                        "status": "success",
                     },
                 )
 
@@ -287,14 +295,24 @@ class ReceiptAuditWorker:
                     "receipt_code": receipt_code,
                     "invoice_count": _resolve_invoice_count(result),
                     "event": "rabbitmq.completed",
+                    "stage": "process",
+                    "status": "success",
                 },
             )
             channel.basic_ack(delivery_tag=method.delivery_tag)
         except Exception as exc:
             if isinstance(exc, TaskGateLookupError):
-                _logger.exception(
-                    "failed to process message",
-                    extra={"event": "rabbitmq.failed"},
+                _logger.error(
+                    "failed to process message at task gate lookup",
+                    extra={
+                        "event": "rabbitmq.failed",
+                        "receipt_code": receipt_code,
+                        "stage": "task_gate",
+                        "status": "error",
+                        "error_type": type(exc).__name__,
+                        "error": str(exc),
+                    },
+                    exc_info=True,
                 )
                 channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
                 return
@@ -306,6 +324,9 @@ class ReceiptAuditWorker:
                     extra={
                         "receipt_code": receipt_code,
                         "event": "rabbitmq.unknown_expense_type",
+                        "stage": "profile_routing",
+                        "status": "error",
+                        "error_type": type(exc).__name__,
                         "error": str(exc),
                     },
                 )
@@ -324,18 +345,29 @@ class ReceiptAuditWorker:
                     extra={
                         "event": "rabbitmq.retry.scheduled",
                         "receipt_code": receipt_code,
+                        "stage": _resolve_failure_stage(exc),
+                        "status": "retry",
                         "retry_count": retry_count + 1,
                         "max_retry_count": self._max_retry_count,
                         "delay_queue": self._settings.delay_queue_name,
                         "error_type": type(exc).__name__,
+                        "error": str(exc),
                     },
                 )
                 channel.basic_ack(delivery_tag=method.delivery_tag)
                 return
 
-            _logger.exception(
+            _logger.error(
                 "failed to process message",
-                extra={"event": "rabbitmq.failed"},
+                extra={
+                    "event": "rabbitmq.failed",
+                    "receipt_code": receipt_code,
+                    "stage": _resolve_failure_stage(exc),
+                    "status": "error",
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                },
+                exc_info=True,
             )
             self._mark_receipt_failed(receipt_code, exc)
             channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
@@ -367,6 +399,7 @@ class ReceiptAuditWorker:
         if not callable(self._task_status_update_provider):
             return
 
+        # 失败原因仅记录到日志，不传给 task-status-update 接口（接口不支持 failReason 字段）
         fail_reason = f"{type(exc).__name__}: {exc}".strip()
         if len(fail_reason) > 512:
             fail_reason = f"{fail_reason[:509]}..."
@@ -376,7 +409,6 @@ class ReceiptAuditWorker:
                 receipt_code,
                 new_status=self._failed_task_status,
                 system_identifier=4,
-                fail_reason=fail_reason,
             )
         except Exception as update_exc:
             _logger.warning(
@@ -384,7 +416,10 @@ class ReceiptAuditWorker:
                 extra={
                     "event": "rabbitmq.task_status.failed",
                     "receipt_code": receipt_code,
+                    "stage": "mark_failed",
+                    "status": "error",
                     "new_status": self._failed_task_status,
+                    "error_type": type(update_exc).__name__,
                     "error": str(update_exc),
                 },
             )
@@ -396,6 +431,8 @@ class ReceiptAuditWorker:
                 extra={
                     "event": "rabbitmq.task_status.failed",
                     "receipt_code": receipt_code,
+                    "stage": "mark_failed",
+                    "status": "error",
                     "new_status": self._failed_task_status,
                 },
             )
@@ -406,6 +443,8 @@ class ReceiptAuditWorker:
             extra={
                 "event": "rabbitmq.task_status.marked_failed",
                 "receipt_code": receipt_code,
+                "stage": "mark_failed",
+                "status": "success",
                 "new_status": self._failed_task_status,
             },
         )
@@ -447,7 +486,12 @@ class ReceiptAuditWorker:
         if self._bypass_task_gate:
             _logger.info(
                 "bypassed task gate",
-                extra={"receipt_code": receipt_code, "event": "rabbitmq.task_gate.bypassed"},
+                extra={
+                    "receipt_code": receipt_code,
+                    "event": "rabbitmq.task_gate.bypassed",
+                    "stage": "task_gate",
+                    "status": "skipped",
+                },
             )
             return True
 
@@ -462,7 +506,13 @@ class ReceiptAuditWorker:
         if matched_task is None:
             _logger.info(
                 "skipped receipt",
-                extra={"receipt_code": receipt_code, "event": "rabbitmq.skipped", "reason": "no pending ruijieAI task"},
+                extra={
+                    "receipt_code": receipt_code,
+                    "event": "rabbitmq.skipped",
+                    "stage": "task_gate",
+                    "status": "skipped",
+                    "reason": "no pending ruijieAI task",
+                },
             )
             return False
 
@@ -479,7 +529,10 @@ class ReceiptAuditWorker:
                 extra={
                     "receipt_code": receipt_code,
                     "event": "rabbitmq.skipped",
+                    "stage": "task_gate",
+                    "status": "error",
                     "reason": "task status update failed",
+                    "error_type": type(exc).__name__,
                     "error": str(exc),
                 },
             )
@@ -491,6 +544,8 @@ class ReceiptAuditWorker:
                 extra={
                     "receipt_code": receipt_code,
                     "event": "rabbitmq.skipped",
+                    "stage": "task_gate",
+                    "status": "error",
                     "reason": "task status update reported unsuccessful result",
                 },
             )
@@ -504,13 +559,38 @@ class ReceiptAuditWorker:
 
         output_file = self._prepared_output_dir / f"{receipt_code}.prepared-receipt.json"
         output_file.parent.mkdir(parents=True, exist_ok=True)
-        output_file.write_text(
-            json.dumps(prepared_receipt, ensure_ascii=False, indent=4),
-            encoding="utf-8",
-        )
+        try:
+            payload = json.dumps(
+                prepared_receipt,
+                ensure_ascii=False,
+                indent=4,
+                default=_prepared_receipt_json_default,
+            )
+        except TypeError as exc:
+            # 序列化失败不应阻断主流程（process_prepared_receipt 仍可正常运行），
+            # 仅记录错误并跳过导出，避免把数据准备阶段的可序列化问题误判为业务失败。
+            _logger.error(
+                "failed to serialize prepared receipt for export",
+                extra={
+                    "receipt_code": receipt_code,
+                    "event": "rabbitmq.export.serialize_failed",
+                    "stage": "export_prepared_receipt",
+                    "status": "error",
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                },
+            )
+            return
+        output_file.write_text(payload, encoding="utf-8")
         _logger.info(
             "exported prepared receipt",
-            extra={"receipt_code": receipt_code, "event": "rabbitmq.exported", "output_path": str(output_file)},
+            extra={
+                "receipt_code": receipt_code,
+                "event": "rabbitmq.exported",
+                "stage": "export_prepared_receipt",
+                "status": "success",
+                "output_path": str(output_file),
+            },
         )
 
     def run_forever(self) -> None:
@@ -579,6 +659,24 @@ def _resolve_invoice_count(result: Any) -> int | None:
         return len(invoice_results)
 
     return None
+
+
+def _resolve_failure_stage(exc: Exception) -> str:
+    """根据异常类型推断失败发生在哪个阶段，便于日志定位。
+
+    无法精确判断时返回 "process"（最常见阶段）。
+    """
+    if isinstance(exc, TaskGateLookupError):
+        return "task_gate"
+    if isinstance(exc, UnknownExpenseTypeError):
+        return "profile_routing"
+    # 序列化/导出阶段：TypeError 且消息含 "JSON serializable"
+    if isinstance(exc, TypeError) and "JSON serializable" in str(exc):
+        return "export_prepared_receipt"
+    # 网络类异常通常发生在 process 阶段调用核销单服务时
+    if isinstance(exc, (HTTPError, URLError, TimeoutError, ConnectionError, OSError)):
+        return "process"
+    return "process"
 
 
 def _resolve_retry_count(properties: Any) -> int:
@@ -665,6 +763,30 @@ def _is_retryable_processing_error(exc: Exception) -> bool:
         return True
 
     return False
+
+
+def _prepared_receipt_json_default(obj: Any) -> Any:
+    """``json.dumps(default=...)`` 钩子：把 prepared_receipt 里不可直接序列化的对象
+    转成可读元数据，避免 ``ExpenseProfile`` / ``Path`` / ``Callable`` 等导致
+    ``TypeError: Object of type ... is not JSON serializable``。
+
+    仅用于导出诊断文件，不影响 process_prepared_receipt 的运行时行为。
+    """
+    # ExpenseProfile（dataclass）：导出 name + default_graph_path，enricher/rule 等
+    # Callable 不导出（既不可序列化也无诊断价值）。
+    if hasattr(obj, "__dataclass_fields__"):
+        name = getattr(obj, "name", None)
+        graph_path = getattr(obj, "default_graph_path", None)
+        return {
+            "__dataclass__": type(obj).__name__,
+            "name": name,
+            "default_graph_path": str(graph_path) if graph_path is not None else None,
+        }
+    if isinstance(obj, Path):
+        return str(obj)
+    if callable(obj):
+        return f"<callable {getattr(obj, '__name__', obj.__class__.__name__)}>"
+    return f"<unserializable {type(obj).__name__}>"
 
 
 def _build_retry_properties(retry_count: int) -> Any:
@@ -858,9 +980,13 @@ def main_cli(argv: Sequence[str] | None = None) -> int:
         amqp_url=resolve_amqp_url(args.amqp_url),
         delay_time_millis=resolve_delay_time_millis(args.delay_time_millis),
     )
+    # 动态路由模式下，profile/graph_path 传静态默认值（telecom/None），
+    # 由 profile_resolver 按单据 eiCode 选 profile/图；避免触发 bootstrap 互斥检查。
+    worker_profile = "telecom" if profile_resolver is not None else args.profile
+    worker_graph_path = None if profile_resolver is not None else args.graph_path
     worker = create_worker(
-        profile=args.profile,
-        graph_path=args.graph_path,
+        profile=worker_profile,
+        graph_path=worker_graph_path,
         audit_service_url=resolve_audit_service_url(args.audit_service_url),
         graph_runtime_url=args.graph_runtime_url,
         ocr_sample_path=args.ocr_sample_path,

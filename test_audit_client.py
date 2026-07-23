@@ -502,7 +502,8 @@ class AuditClientHeaderTests(unittest.TestCase):
         self.assertEqual(headers["sysid"], "override-sysid")
 
     @patch("expense_audit_orchestrator.audit_client.urlopen")
-    def test_update_audit_task_status_can_include_fail_reason(self, mock_urlopen) -> None:
+    def test_update_audit_task_status_omits_fail_reason_field(self, mock_urlopen) -> None:
+        # 接口文档不支持 failReason 字段，payload 仅含 instanceCode/newStatus/systemIdentifier
         mock_urlopen.return_value = FakeHttpResponse(
             {
                 "code": 0,
@@ -515,7 +516,6 @@ class AuditClientHeaderTests(unittest.TestCase):
             "rjw260617000006",
             new_status=2,
             system_identifier=4,
-            fail_reason="URLError: timed out",
             service_url="https://service.example",
         )
 
@@ -527,7 +527,6 @@ class AuditClientHeaderTests(unittest.TestCase):
                 "instanceCode": "rjw260617000006",
                 "newStatus": 2,
                 "systemIdentifier": 4,
-                "failReason": "URLError: timed out",
             },
         )
 

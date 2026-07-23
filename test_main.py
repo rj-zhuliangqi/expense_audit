@@ -3245,12 +3245,16 @@ class ProfileRoutingTests(unittest.TestCase):
         """端到端：不同 eiCode 路由到不同 profile，使用不同图路径。"""
         from expense_audit_orchestrator.profiles import (
             ENTERTAINMENT_GRAPH_PATH,
-            TRAVEL_GRAPH_PATH,
+            PERSONAL_TRANSPORT_GRAPH_PATH,
             ProfileResolver,
         )
 
         resolver = ProfileResolver(
-            ei_code_map={"EI001": "telecom", "EI002": "travel", "EI003": "entertainment"}
+            ei_code_map={
+                "EI001": "telecom",
+                "EI024": "personal_transport",
+                "EI003": "entertainment",
+            }
         )
 
         # EI001 -> telecom profile
@@ -3264,6 +3268,21 @@ class ProfileRoutingTests(unittest.TestCase):
         )
         result1 = service1.prepare_receipt("R1")
         self.assertEqual(result1["resolvedProfile"].name, "telecom")
+
+        # EI024 -> personal_transport profile（图路径应为个人交通费图）
+        personal_transport_preparer = self._build_data_preparer_with_audit_info(
+            {"instanceCode": "R2", "eiCode": "EI024"}
+        )
+        service2 = ReceiptAuditService(
+            graph_runtime_client=MagicMock(),
+            data_preparer=personal_transport_preparer,
+            profile_resolver=resolver,
+        )
+        result2 = service2.prepare_receipt("R2")
+        self.assertEqual(result2["resolvedProfile"].name, "personal_transport")
+        self.assertEqual(
+            result2["resolvedProfile"].default_graph_path, PERSONAL_TRANSPORT_GRAPH_PATH
+        )
 
         # EI003 -> entertainment profile（图路径应为招待费图）
         entertainment_preparer = self._build_data_preparer_with_audit_info(

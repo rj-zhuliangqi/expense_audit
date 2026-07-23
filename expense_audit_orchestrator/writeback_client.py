@@ -58,7 +58,15 @@ class AuditInfoWritebackClient:
         if save_path is not None:
             resolved_save_path = save_path if save_path.startswith("/") else f"/{save_path}"
         endpoint = f"{self._service_url}{resolved_save_path}"
-        _logger.info("回写稽核结果", extra={"event": "writeback.save", "endpoint": endpoint})
+        _logger.info(
+            "回写稽核结果",
+            extra={
+                "event": "writeback.save",
+                "stage": "writeback",
+                "status": "start",
+                "endpoint": endpoint,
+            },
+        )
 
         response_payload = self._post_payload(endpoint, payload)
 
@@ -68,6 +76,15 @@ class AuditInfoWritebackClient:
         if not isinstance(response_payload, dict):
             raise ValueError("回写稽核结果 service returned invalid payload")
 
+        _logger.info(
+            "回写稽核结果成功",
+            extra={
+                "event": "writeback.save",
+                "stage": "writeback",
+                "status": "success",
+                "endpoint": endpoint,
+            },
+        )
         return response_payload
 
     def _post_payload(self, endpoint: str, payload: Mapping[str, Any]) -> Any:
@@ -108,6 +125,8 @@ class AuditInfoWritebackClient:
                         "回写服务端异常，移除 aiAuditAdvice 后重试",
                         extra={
                             "event": "writeback.retry.fallback",
+                            "stage": "writeback",
+                            "status": "retry",
                             "endpoint": endpoint,
                             "attempt": attempt + 1,
                             "max_retries": max_retries,
@@ -122,6 +141,8 @@ class AuditInfoWritebackClient:
                         "回写接口请求超时或临时失败，准备重试",
                         extra={
                             "event": "writeback.retry",
+                            "stage": "writeback",
+                            "status": "retry",
                             "endpoint": endpoint,
                             "attempt": attempt + 1,
                             "max_retries": max_retries,
@@ -135,11 +156,32 @@ class AuditInfoWritebackClient:
                         time.sleep(retry_delay)
                     continue
 
+                _logger.error(
+                    "回写稽核结果失败",
+                    extra={
+                        "event": "writeback.save",
+                        "stage": "writeback",
+                        "status": "error",
+                        "endpoint": endpoint,
+                        "error_type": type(exc).__name__,
+                        "status_code": exc.code,
+                    },
+                )
                 if response_text:
                     raise ValueError(f"回写稽核结果 HTTP {exc.code}: {response_text}") from exc
                 raise ValueError(f"回写稽核结果 HTTP {exc.code}") from exc
             except (URLError, TimeoutError) as exc:
                 if attempt >= max_retries:
+                    _logger.error(
+                        "回写稽核结果失败",
+                        extra={
+                            "event": "writeback.save",
+                            "stage": "writeback",
+                            "status": "error",
+                            "endpoint": endpoint,
+                            "error_type": type(exc).__name__,
+                        },
+                    )
                     raise
 
                 retry_delay = backoff_seconds * (2 ** attempt)
@@ -147,6 +189,8 @@ class AuditInfoWritebackClient:
                     "回写接口请求超时或临时失败，准备重试",
                     extra={
                         "event": "writeback.retry",
+                        "stage": "writeback",
+                        "status": "retry",
                         "endpoint": endpoint,
                         "attempt": attempt + 1,
                         "max_retries": max_retries,

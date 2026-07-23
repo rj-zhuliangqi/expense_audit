@@ -1,6 +1,6 @@
 # 交通费工作流 - 数据准备清单
 
-> 对应工作流文件：`graph-latest-travel-0722.json`（25 节点 / 41 边）
+> 对应工作流文件：`graph-latest-personal-transport-0722.json`（25 节点 / 41 边）
 > 规则来源：`交通费/交通费-AI-20260721 - Sheet1.csv`（14 条规则）
 
 ---

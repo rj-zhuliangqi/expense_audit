@@ -261,6 +261,61 @@ class WritebackAssemblerTests(unittest.TestCase):
         self.assertEqual(payload["auditLogs"][1]["employeeSuggestionTips"], "")
         self.assertEqual(payload["auditInvoiceInfos"][0]["reasonCode"], "E31")
 
+    def test_reason_code_falls_back_to_decision_output_when_primary_rule_result_lacks_reason_code(self) -> None:
+        """回归测试：primary_rule_result 存在但 reason_code 为空时，
+        reasonCode 应 fallback 到 decision_output 顶层的 reasonCode，
+        而非落为 None（避免回写 payload reasonCode=null 导致服务端 SQL 异常）。
+        """
+        prepared_receipt = {
+            "receiptCode": "REC-REASONCODE-FALLBACK-001",
+            "serviceData": {
+                "auditInfo": {"instanceCode": "REC-REASONCODE-FALLBACK-001"},
+            },
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "invoiceFile": {"fid": "FID-001"},
+                    "preparedInput": {
+                        "serviceData": {
+                            "currentInvoiceInfo": {"aiiid": "AIIID-001"},
+                            "currentAuditInvoiceFile": {"fid": "FID-001", "aiid": "AIID-001"},
+                        },
+                    },
+                },
+            ],
+        }
+        processed_receipt = {
+            "receiptCode": "REC-REASONCODE-FALLBACK-001",
+            "serviceData": prepared_receipt["serviceData"],
+            "invoiceResults": [
+                {
+                    "invoiceKey": "FID-001",
+                    "preparedInput": prepared_receipt["invoicePreparations"][0]["preparedInput"],
+                    "decisionOutput": {
+                        # 顶层 reasonCode（执行图整体结论）
+                        "reasonCode": "E34",
+                        "checkStatus": "failed",
+                        # 规则结果：distinguish_result=REJECT 但没有 reason_code 字段
+                        "phone_result": {
+                            "audit_content": "电话校验",
+                            "distinguish_result": "REJECT",
+                            "message": "电话不匹配",
+                        },
+                    },
+                    "decisionStatus": "reject",
+                    "executionStatus": "SUCCEEDED",
+                }
+            ],
+            "summary": {"overallStatus": "SUCCESS"},
+            "isAmountSufficient": True,
+        }
+
+        payload = assemble_result_audit_info(prepared_receipt, processed_receipt)
+
+        # primary_rule_result 会选中 phone_result（REJECT），但其 reason_code 为空，
+        # 应 fallback 到 decision_output["reasonCode"] = "E34"，而非 None
+        self.assertEqual(payload["auditInvoiceInfos"][0]["reasonCode"], "E34")
+
     def test_assemble_result_audit_info_uses_real_aifid_field_for_invoice_file_id_fallback(self) -> None:
         prepared_receipt = {
             "receiptCode": "REC-AIFID-001",

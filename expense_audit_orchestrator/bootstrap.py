@@ -270,11 +270,12 @@ def _build_dynamic_writeback_sink(
             "form_invoice_tax_views_builder": profile.form_invoice_tax_views_builder if profile else None,
         }
         payload = build_writeback_payload(receipt_result, **strategy_kwargs)
+        # 先导出 payload 再回写：回写失败时也能拿到实际发送的 payload 供排查
+        if writeback_output_dir is not None:
+            _export_dynamic_payload(payload, writeback_output_dir, receipt_result)
         # 动态模式下 save_path 也按 profile 决定（默认 AUDIT_INFO_SAVE_PATH）
         save_path = profile.writeback_save_path if profile else AUDIT_INFO_SAVE_PATH
         resolved_client.save_result_audit_info(payload, save_path=save_path)
-        if writeback_output_dir is not None:
-            _export_dynamic_payload(payload, writeback_output_dir, receipt_result)
 
     writeback_sink = dynamic_sink
     if receipt_result_sink is not None:

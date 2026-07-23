@@ -197,7 +197,7 @@ start_bg \
   env GRAPH_RUNTIME_URL="http://127.0.0.1:$GRAPH_PORT" "$VENV_PY" -u rabbitmq_worker.py \
     --amqp-url "$RABBITMQ_URL" \
     --audit-service-url "https://service-uate-gw.ruijie.com.cn" \
-    --graph-path "graph-latest-0707-2301.json" \
+    --ei-code-map-path "expense_audit_orchestrator/profiles/ei_code_map.json" \
     --queues "audit" \
     --prepared-output-dir "output/worker-debug/prepared" \
     --writeback-output-dir "output/worker-debug/writeback"

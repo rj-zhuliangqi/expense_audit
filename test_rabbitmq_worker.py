@@ -579,6 +579,70 @@ class RabbitMQWorkerTests(unittest.TestCase):
             self.assertEqual(channel.acked_tags, [12])
             self.assertEqual(channel.nacked_tags, [])
 
+    def test_handle_delivery_exports_prepared_receipt_with_unserializable_profile(self) -> None:
+        """回归测试：prepared_receipt 含 ExpenseProfile 等不可序列化对象时，
+        导出不应崩溃，且 process_prepared_receipt 仍应正常执行。"""
+        from expense_audit_orchestrator.profiles import ExpenseProfile
+
+        class FakeServiceWithProfile:
+            def __init__(self) -> None:
+                self.process_prepared_calls: list[dict] = []
+
+            def prepare_receipt(self, receipt_code: str, ocr_sample_path=None) -> dict:
+                return {
+                    "receiptCode": receipt_code,
+                    "invoiceCount": 1,
+                    "invoicePreparations": [
+                        {
+                            "invoiceKey": "FID-001",
+                            "invoiceFile": {"fid": "FID-001"},
+                            "preparedInput": {"receipt": {"code": receipt_code}},
+                        }
+                    ],
+                    # 模拟动态路由场景：resolvedProfile 是 ExpenseProfile 对象
+                    "resolvedProfile": ExpenseProfile(name="telecom"),
+                }
+
+            def process_prepared_receipt(self, prepared_receipt: dict) -> dict:
+                self.process_prepared_calls.append(prepared_receipt)
+                return {
+                    "receiptCode": prepared_receipt["receiptCode"],
+                    "invoiceCount": 1,
+                    "invoiceResults": [
+                        {"decisionOutput": {"checkStatus": "passed", "message": "FID-001"}},
+                    ],
+                }
+
+        service = FakeServiceWithProfile()
+        channel = FakeChannel()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            worker = rabbitmq_worker.ReceiptAuditWorker(
+                service=service,
+                prepared_output_dir=temp_dir,
+            )
+
+            worker.handle_delivery(
+                channel, FakeMethod(15), None, b'{"receiptCode": "REC-PROFILE-001"}'
+            )
+
+            # 导出文件应成功生成（ExpenseProfile 被转成可读元数据）
+            output_file = Path(temp_dir) / "REC-PROFILE-001.prepared-receipt.json"
+            self.assertTrue(output_file.exists())
+            payload = json.loads(output_file.read_text(encoding="utf-8"))
+            self.assertEqual(payload["receiptCode"], "REC-PROFILE-001")
+            # ExpenseProfile 应被序列化为含 name 的元数据，而非整个对象
+            self.assertEqual(payload["resolvedProfile"]["name"], "telecom")
+            self.assertEqual(payload["resolvedProfile"]["__dataclass__"], "ExpenseProfile")
+            # process_prepared_receipt 仍应被调用且收到原始对象（非元数据）
+            self.assertEqual(len(service.process_prepared_calls), 1)
+            self.assertEqual(
+                service.process_prepared_calls[0]["resolvedProfile"].name, "telecom"
+            )
+            # 消息应被 ack（不应因导出问题被 nack）
+            self.assertEqual(channel.acked_tags, [15])
+            self.assertEqual(channel.nacked_tags, [])
+
     def test_handle_delivery_rejects_invalid_payload_without_requeue(self) -> None:
         service = FakeReceiptAuditService()
         worker = rabbitmq_worker.ReceiptAuditWorker(service=service)
@@ -631,7 +695,6 @@ class RabbitMQWorkerTests(unittest.TestCase):
         called_kwargs = task_status_update_provider.call_args.kwargs
         self.assertEqual(called_kwargs["new_status"], 2)
         self.assertEqual(called_kwargs["system_identifier"], 4)
-        self.assertIn("timed out", called_kwargs["fail_reason"])
 
     def test_create_blocking_connection_reports_actionable_error_when_broker_unreachable(self) -> None:
         settings = rabbitmq_worker.RabbitMQSettings(amqp_url="amqp://guest:guest@127.0.0.1:5672/%2F")
@@ -702,7 +765,6 @@ class UnknownExpenseTypeRoutingTests(unittest.TestCase):
         called_kwargs = task_status_update_provider.call_args.kwargs
         self.assertEqual(called_kwargs["new_status"], 2)
         self.assertEqual(called_kwargs["system_identifier"], 4)
-        self.assertIn("EI999", called_kwargs["fail_reason"])
 
     @patch("rabbitmq_worker.create_worker")
     def test_main_cli_enables_dynamic_routing_with_ei_code_map_path(self, mock_create_worker: MagicMock) -> None:
