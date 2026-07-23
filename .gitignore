@@ -25,7 +25,7 @@ prepared-input.json
 # DEFAULT_GRAPH_PATH graph is tracked; the rest are local experiments.
 graph-latest-* copy.json
 graph-latest-*-*.json
-!graph-latest-0707-2301.json
+!graph-latest-0722-1100.json
 
 # Local requirement spec sheets (not source code)
 *.csv

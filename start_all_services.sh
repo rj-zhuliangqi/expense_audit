@@ -24,6 +24,17 @@ WORKER_PID_FILE="$PID_DIR/rabbitmq_worker.pid"
 
 mkdir -p "$LOG_DIR" "$PID_DIR"
 
+# Parse command argument: stop | start | restart (default)
+ACTION="${1:-restart}"
+case "$ACTION" in
+  stop|start|restart) ;;
+  *)
+    echo "[error] Unknown action: $ACTION"
+    echo "[usage] $0 {stop|start|restart}"
+    exit 1
+    ;;
+esac
+
 if [[ ! -x "$VENV_PY" ]]; then
   echo "[error] Missing python runtime: $VENV_PY"
   echo "[hint] Run: python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt"
@@ -152,6 +163,11 @@ kill_by_port "$NODE_PORT"
 kill_by_pattern "uvicorn graph_runtime.api:create_app"
 kill_by_pattern "uvicorn node_gateway.api:create_app"
 kill_by_pattern "rabbitmq_worker.py"
+
+if [[ "$ACTION" == "stop" ]]; then
+  echo "[done] services stopped"
+  exit 0
+fi
 
 cleanup_old_logs
 
