@@ -6,11 +6,13 @@ from unittest.mock import patch
 import httpx
 
 from expense_audit_orchestrator.overall_advice import (
-    DEFAULT_NODE_GATEWAY_URL,
     LlmOverallAdviceProvider,
     NoopOverallAdviceProvider,
+    _build_fallback_advice,
     _build_problems_digest,
     create_overall_advice_provider_from_env,
+    resolve_llm_evaluate_endpoint,
+    resolve_node_gateway_url,
 )
 
 PROMPT_DIR = Path(__file__).resolve().parent / "expense_audit_orchestrator" / "prompts"
@@ -104,19 +106,24 @@ class LlmOverallAdviceProviderTests(unittest.TestCase):
         self.assertIn("E05", captured["body"])
         self.assertNotIn("{{", captured["body"])
 
-    def test_llm_status_error_returns_none(self):
+    def test_llm_status_error_returns_fallback(self):
         def handler(request):
             return httpx.Response(200, json={"llmStatus": "error", "errorMessage": "missing key", "llmResult": None})
 
         provider = _make_provider(handler)
-        self.assertIsNone(provider("REC-001", [_invoice("INV-1", {"r": _rule("E05", "REJECT")})]))
+        suggestion = provider("REC-001", [_invoice("INV-1", {"r": _rule("E05", "REJECT")})])
+        self.assertIsInstance(suggestion, str)
+        self.assertIn("整体建议生成失败", suggestion)
+        self.assertIn("missing key", suggestion)
 
-    def test_llm_result_without_suggestion_returns_none(self):
+    def test_llm_result_without_suggestion_returns_fallback(self):
         def handler(request):
             return httpx.Response(200, json={"llmStatus": "success", "llmResult": {"foo": "bar"}})
 
         provider = _make_provider(handler)
-        self.assertIsNone(provider("REC-001", [_invoice("INV-1", {"r": _rule("E05", "REJECT")})]))
+        suggestion = provider("REC-001", [_invoice("INV-1", {"r": _rule("E05", "REJECT")})])
+        self.assertIsInstance(suggestion, str)
+        self.assertIn("整体建议生成失败", suggestion)
 
     def test_falls_back_to_raw_content_json(self):
         def handler(request):
@@ -132,12 +139,15 @@ class LlmOverallAdviceProviderTests(unittest.TestCase):
         provider = _make_provider(handler)
         self.assertEqual(provider("REC-001", [_invoice("INV-1", {"r": _rule("E05", "REJECT")})]), "回退建议")
 
-    def test_http_500_returns_none(self):
+    def test_http_500_returns_fallback(self):
         def handler(request):
             return httpx.Response(500, text="boom")
 
         provider = _make_provider(handler)
-        self.assertIsNone(provider("REC-001", [_invoice("INV-1", {"r": _rule("E05", "REJECT")})]))
+        suggestion = provider("REC-001", [_invoice("INV-1", {"r": _rule("E05", "REJECT")})])
+        self.assertIsInstance(suggestion, str)
+        self.assertIn("整体建议生成失败", suggestion)
+        self.assertIn("500", suggestion)
 
     @patch.dict(
         os.environ,
@@ -160,12 +170,15 @@ class LlmOverallAdviceProviderTests(unittest.TestCase):
         self.assertEqual(provider("REC-001", [_invoice("INV-1", {"r": _rule("E05", "REJECT")})]), "重试成功")
         self.assertEqual(calls["n"], 2)
 
-    def test_transport_error_returns_none(self):
+    def test_transport_error_returns_fallback(self):
         def handler(request):
             raise httpx.ConnectError("refused")
 
         provider = _make_provider(handler)
-        self.assertIsNone(provider("REC-001", [_invoice("INV-1", {"r": _rule("E05", "REJECT")})]))
+        suggestion = provider("REC-001", [_invoice("INV-1", {"r": _rule("E05", "REJECT")})])
+        self.assertIsInstance(suggestion, str)
+        self.assertIn("整体建议生成失败", suggestion)
+        self.assertIn("LLM 调用异常", suggestion)
 
     def test_all_pass_still_calls_llm(self):
         calls = {"n": 0}
@@ -182,12 +195,46 @@ class LlmOverallAdviceProviderTests(unittest.TestCase):
     def test_noop_returns_none(self):
         self.assertIsNone(NoopOverallAdviceProvider()("REC-001", []))
 
+    def test_fallback_advice_contains_reason_and_prefix(self):
+        advice = _build_fallback_advice("测试错误原因")
+        self.assertIsInstance(advice, str)
+        self.assertIn("整体建议生成失败", advice)
+        self.assertIn("测试错误原因", advice)
+
 
 class EnvFactoryTests(unittest.TestCase):
     def test_disabled_returns_noop(self):
         with patch.dict(os.environ, {"OVERALL_ADVICE_ENABLED": "false"}, clear=False):
             provider = create_overall_advice_provider_from_env()
             self.assertIsInstance(provider, NoopOverallAdviceProvider)
+
+    def test_resolve_node_gateway_url_from_env(self):
+        with patch.dict(
+            os.environ,
+            {"NODE_GATEWAY_URL": "http://172.16.3.231:8091"},
+            clear=False,
+        ):
+            self.assertEqual(resolve_node_gateway_url(), "http://172.16.3.231:8091")
+
+    def test_resolve_llm_evaluate_endpoint_from_env(self):
+        with patch.dict(
+            os.environ,
+            {"NODE_GATEWAY_URL": "http://172.16.3.231:8091"},
+            clear=False,
+        ):
+            endpoint = resolve_llm_evaluate_endpoint()
+            self.assertEqual(
+                endpoint,
+                "http://172.16.3.231:8091/api/v1/node-gateway/llm/evaluate",
+            )
+
+    def test_resolve_node_gateway_url_raises_when_unset(self):
+        # 未配置 NODE_GATEWAY_URL 时必须抛 RuntimeError，不再回退到硬编码地址
+        # 显式置空以防止 load_dotenv 从 .env 重新加载
+        env = {"OVERALL_ADVICE_ENABLED": "true", "NODE_GATEWAY_URL": ""}
+        with patch.dict(os.environ, env, clear=True):
+            with self.assertRaises(RuntimeError):
+                resolve_node_gateway_url()
 
     def test_enabled_returns_llm_with_url(self):
         with patch.dict(
@@ -199,13 +246,13 @@ class EnvFactoryTests(unittest.TestCase):
             self.assertIsInstance(provider, LlmOverallAdviceProvider)
             self.assertTrue(provider._endpoint.startswith("http://example:9999"))
 
-    def test_defaults_when_unset(self):
-        env = {"OVERALL_ADVICE_ENABLED": "true"}
-        # ensure NODE_GATEWAY_URL not present
+    def test_factory_raises_when_gateway_url_unset(self):
+        # 未配置 NODE_GATEWAY_URL 时工厂必须抛 RuntimeError，不再回退到硬编码地址
+        # 显式置空以防止 load_dotenv 从 .env 重新加载
+        env = {"OVERALL_ADVICE_ENABLED": "true", "NODE_GATEWAY_URL": ""}
         with patch.dict(os.environ, env, clear=True):
-            provider = create_overall_advice_provider_from_env()
-            self.assertIsInstance(provider, LlmOverallAdviceProvider)
-            self.assertTrue(provider._endpoint.startswith(DEFAULT_NODE_GATEWAY_URL))
+            with self.assertRaises(RuntimeError):
+                create_overall_advice_provider_from_env()
 
 
 if __name__ == "__main__":

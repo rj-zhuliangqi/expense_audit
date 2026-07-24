@@ -357,15 +357,21 @@ def _build_content_compliance_prompt_node() -> dict:
 
 
 def _build_content_compliance_llm_node() -> dict:
-    """调用llm 节点（复用通讯费的 LLM 调用代码）。"""
+    """调用llm 节点（复用通讯费的 LLM 调用代码）。
+
+    LLM 网关地址必须从 context.llmGatewayUrl 读取（由 orchestrator 注入，
+    统一来自 .env 的 NODE_GATEWAY_URL）；未注入时抛错，不再回退到硬编码地址。
+    """
     source = (
         "import http from 'http';\r\n"
-        "\r\n"
-        "const LOCAL_LLM_URL = 'http://172.16.3.231:8091/api/v1/node-gateway/llm/evaluate';\r\n"
         "\r\n"
         "export const handler = async (input) => {\r\n"
         "  try {\r\n"
         "    const context = input && input.context ? input.context : {};\r\n"
+        "    if (!context.llmGatewayUrl) {\r\n"
+        "      throw new Error('llmGatewayUrl not injected in context; configure NODE_GATEWAY_URL in .env');\r\n"
+        "    }\r\n"
+        "    const LOCAL_LLM_URL = context.llmGatewayUrl;\r\n"
         "    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\r\n"
         "\r\n"
         "    if (!prompt) {\r\n"
@@ -633,11 +639,13 @@ def _build_fraud_address_prompt_node() -> dict:
 
 
 def _build_fraud_address_llm_node() -> dict:
-    """虚开发票地址检查调用llm functionNode（复用通用 LLM 调用代码）。"""
+    """虚开发票地址检查调用llm functionNode（复用通用 LLM 调用代码）。
+
+    LLM 网关地址必须从 context.llmGatewayUrl 读取（由 orchestrator 注入，
+    统一来自 .env 的 NODE_GATEWAY_URL）；未注入时抛错，不再回退到硬编码地址。
+    """
     source = (
         "import http from 'http';\r\n"
-        "\r\n"
-        "const LOCAL_LLM_URL = 'http://172.16.3.231:8091/api/v1/node-gateway/llm/evaluate';\r\n"
         "\r\n"
         "export const handler = async (input) => {\r\n"
         "  try {\r\n"
@@ -651,6 +659,10 @@ def _build_fraud_address_llm_node() -> dict:
         "      };\r\n"
         "    }\r\n"
         "    const context = input && input.context ? input.context : {};\r\n"
+        "    if (!context.llmGatewayUrl) {\r\n"
+        "      throw new Error('llmGatewayUrl not injected in context; configure NODE_GATEWAY_URL in .env');\r\n"
+        "    }\r\n"
+        "    const LOCAL_LLM_URL = context.llmGatewayUrl;\r\n"
         "    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\r\n"
         "\r\n"
         "    if (!prompt) {\r\n"

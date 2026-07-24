@@ -10,7 +10,7 @@ from expense_audit_orchestrator.runtime_client import DEFAULT_GRAPH_PATH, GraphR
 
 from .core import DEFAULT_OCR_PATH, ReceiptDataPreparer
 from .observability import get_logger, new_run_id, run_context
-from .overall_advice import OverallAdviceProvider
+from .overall_advice import OverallAdviceProvider, resolve_llm_evaluate_endpoint
 
 if TYPE_CHECKING:
     from .profiles import ExpenseProfile, ProfileResolver
@@ -58,6 +58,9 @@ class ReceiptAuditService:
         self._receipt_result_sink = receipt_result_sink or _noop_receipt_result_sink
         self._run_id_factory = run_id_factory
         self._overall_advice_provider = overall_advice_provider
+        # LLM 网关端点：统一从 .env 的 NODE_GATEWAY_URL 解析，注入到图节点 context.llmGatewayUrl，
+        # 让所有费用流程图共用同一配置，避免图 JSON 内硬编码 IP 地址。
+        self._llm_evaluate_endpoint = resolve_llm_evaluate_endpoint()
 
     def prepare_input(
         self,
@@ -209,6 +212,7 @@ class ReceiptAuditService:
             run_id=run_id,
             invoice_key=invoice_key,
             execution_time=started_at,
+            llm_gateway_url=self._llm_evaluate_endpoint,
         )
 
         # 动态路由模式下用传入的 graph_path（来自 resolved profile），静态模式用 self._graph_path
@@ -362,12 +366,14 @@ def _inject_run_context(
     run_id: str,
     invoice_key: str,
     execution_time: str | None = None,
+    llm_gateway_url: str | None = None,
 ) -> None:
-    """把 runId/receiptCode/invoiceKey/executionTime 注入 preparedInput.context。
+    """把 runId/receiptCode/invoiceKey/executionTime/llmGatewayUrl 注入 preparedInput.context。
 
     runId/receiptCode/invoiceKey 供图内 LLM 节点透传给 node_gateway；
     executionTime 作为各稽核点 decisionTable 输出列 create_time 的取值来源
-    （图内规则用 `context.executionTime` 引用），即「该发票本次执行的时刻」。
+    （图内规则用 `context.executionTime` 引用），即「该发票本次执行的时刻」；
+    llmGatewayUrl 供图内 LLM 节点读取网关地址（统一从 .env 配置，避免图内硬编码 IP）。
     """
     if not isinstance(prepared_input, dict):
         return
@@ -380,6 +386,8 @@ def _inject_run_context(
     context.setdefault("invoiceKey", invoice_key)
     if execution_time is not None:
         context.setdefault("executionTime", execution_time)
+    if llm_gateway_url:
+        context.setdefault("llmGatewayUrl", llm_gateway_url)
 
 
 def _build_invoice_result(

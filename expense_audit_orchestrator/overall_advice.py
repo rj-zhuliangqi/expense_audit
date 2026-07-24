@@ -6,7 +6,8 @@
 容错是硬约束：任何 LLM / 网络 / 解析失败都降级为返回 None，
 绝不打断审计/回写主链路（与 bootstrap 的 safe-sink 同原则）。
 
-LLM 调用复用 node_gateway 的 /api/v1/node-gateway/llm/evaluate（默认 8091），
+LLM 调用复用 node_gateway 的 /api/v1/node-gateway/llm/evaluate，
+网关地址统一从 .env 的 NODE_GATEWAY_URL 读取（与图内 LLM 节点共用同一配置），
 orchestrator 侧用同步 httpx（与 runtime_client / kingdee_ocr 同约定）。
 """
 
@@ -26,7 +27,8 @@ from .observability import get_logger, new_run_id, run_context
 from .writeback import _extract_rule_results, _normalize_rule_distinguish_result
 
 
-DEFAULT_NODE_GATEWAY_URL = "http://127.0.0.1:8091"
+# 网关地址必须从 .env 的 NODE_GATEWAY_URL 读取，不再提供硬编码 fallback。
+# 与图内 LLM 节点共用同一配置，避免多处硬编码 IP 导致环境切换困难。
 DEFAULT_OVERALL_ADVICE_TIMEOUT = 30.0
 DEFAULT_LLM_MODEL = "gpt-4o-mini"
 DEFAULT_OVERALL_ADVICE_MAX_RETRIES = 2
@@ -37,6 +39,35 @@ USER_PROMPT_FILENAME = "receipt_overall_advice.user.md"
 NODE_GATEWAY_LLM_EVALUATE_PATH = "/api/v1/node-gateway/llm/evaluate"
 OVERALL_ADVICE_MAX_RETRIES_ENV = "OVERALL_ADVICE_MAX_RETRIES"
 OVERALL_ADVICE_RETRY_BACKOFF_SECONDS_ENV = "OVERALL_ADVICE_RETRY_BACKOFF_SECONDS"
+
+# LLM 调用失败时的 fallback 提示前缀，确保 aiAuditAdvice 字段始终有值。
+_OVERALL_ADVICE_FALLBACK_PREFIX = "【整体建议生成失败】"
+
+
+def resolve_node_gateway_url() -> str:
+    """统一解析 node_gateway 地址，供整体建议与图内 LLM 节点共用。
+
+    必须从 .env 的 NODE_GATEWAY_URL 读取；未配置时直接抛 RuntimeError，
+    不再回退到任何硬编码地址。图节点注入 context.llmGatewayUrl 时应调用此函数，
+    避免在多处硬编码 IP 地址。
+    """
+    _load_project_env()
+    raw_url = (os.getenv("NODE_GATEWAY_URL") or "").strip()
+    if not raw_url:
+        _logger.error(
+            "NODE_GATEWAY_URL not configured in .env, refusing to start",
+            extra={"event": "overall_advice.config_missing"},
+        )
+        raise RuntimeError(
+            "NODE_GATEWAY_URL is not configured in .env; "
+            "LLM gateway address must be provided via environment variable."
+        )
+    return raw_url
+
+
+def resolve_llm_evaluate_endpoint() -> str:
+    """返回完整的 LLM evaluate 端点 URL（base + path），供图节点注入使用。"""
+    return f"{resolve_node_gateway_url().rstrip('/')}{NODE_GATEWAY_LLM_EVALUATE_PATH}"
 
 # 只把这些状态的问题纳入摘要；pass 不出现。
 _PROBLEM_STATUSES = frozenset({"reject", "failed", "warning"})
@@ -170,6 +201,15 @@ def _extract_advice(response_json: Mapping[str, Any]) -> str | None:
     return None
 
 
+def _build_fallback_advice(reason: str) -> str:
+    """LLM 调用失败时生成 fallback 提示，确保 aiAuditAdvice 字段始终有值。
+
+    回写下游要求 aiAuditAdvice 必须存在；LLM 失败时用此函数给出可读的错误提示，
+    便于运维和报销人感知到整体建议生成异常。
+    """
+    return f"{_OVERALL_ADVICE_FALLBACK_PREFIX}{reason}。请稍后重试或联系管理员检查 LLM 服务。"
+
+
 class LlmOverallAdviceProvider:
     """调用 node_gateway 生成核销单整体建议。任何失败降级为 None。"""
 
@@ -217,7 +257,7 @@ class LlmOverallAdviceProvider:
                     "event": "overall_advice.prompt_failed",
                 },
             )
-            return None
+            return _build_fallback_advice("整体建议 prompt 加载失败")
 
         payload: dict[str, Any] = {
             "prompt": user_prompt,
@@ -258,7 +298,7 @@ class LlmOverallAdviceProvider:
                                 "error": str(exc),
                             },
                         )
-                        return None
+                        return _build_fallback_advice(f"LLM 调用异常: {exc}")
 
                     _sleep_before_retry(attempt, backoff_seconds=backoff_seconds)
                     continue
@@ -275,9 +315,10 @@ class LlmOverallAdviceProvider:
                             "run_id": run_id,
                             "event": "overall_advice.failed",
                             "status_code": response.status_code,
+                            "response_body": response.text,
                         },
                     )
-                    return None
+                    return _build_fallback_advice(f"LLM 网关返回 HTTP {response.status_code}")
 
                 try:
                     decoded = response.json()
@@ -289,9 +330,10 @@ class LlmOverallAdviceProvider:
                             "run_id": run_id,
                             "event": "overall_advice.failed",
                             "error": str(exc),
+                            "raw_content": response.text,
                         },
                     )
-                    return None
+                    return _build_fallback_advice(f"LLM 响应非合法 JSON: {exc}")
 
                 if isinstance(decoded, Mapping):
                     response_json = decoded
@@ -305,10 +347,10 @@ class LlmOverallAdviceProvider:
                         "event": "overall_advice.failed",
                     },
                 )
-                return None
+                return _build_fallback_advice("LLM 响应格式无效")
 
             if response_json is None:
-                return None
+                return _build_fallback_advice("LLM 调用未返回响应")
 
         suggestion = _extract_advice(response_json)
         if suggestion is None:
@@ -319,9 +361,14 @@ class LlmOverallAdviceProvider:
                     "run_id": run_id,
                     "event": "overall_advice.empty",
                     "llm_status": response_json.get("llmStatus"),
+                    "error_message": response_json.get("errorMessage"),
+                    "raw_content": response_json.get("rawContent"),
                 },
             )
-            return suggestion
+            return _build_fallback_advice(
+                f"LLM 返回状态: {response_json.get('llmStatus')}; "
+                f"错误: {response_json.get('errorMessage') or '未知'}"
+            )
 
         _logger.info(
             "overall advice generated",
@@ -376,12 +423,13 @@ def create_overall_advice_provider_from_env() -> OverallAdviceProvider:
     """从环境变量构造整体建议 provider。关闭时返回 Noop。
 
     不在构造期连网或校验文件，prompt 缺失等延迟到调用期由外层兜住。
+    网关地址统一走 resolve_node_gateway_url()（与图内 LLM 节点共用同一配置）。
     """
     _load_project_env()
     if not _resolve_bool_env("OVERALL_ADVICE_ENABLED", default=True):
         return NoopOverallAdviceProvider()
 
-    node_gateway_url = (os.getenv("NODE_GATEWAY_URL") or DEFAULT_NODE_GATEWAY_URL).strip()
+    node_gateway_url = resolve_node_gateway_url()
     model = (os.getenv("OVERALL_ADVICE_MODEL") or os.getenv("LLM_MODEL") or DEFAULT_LLM_MODEL).strip()
     prompt_dir = Path(os.getenv("OVERALL_ADVICE_PROMPT_DIR") or DEFAULT_PROMPT_DIR)
     timeout_raw = (os.getenv("OVERALL_ADVICE_TIMEOUT") or "").strip()
@@ -403,4 +451,6 @@ __all__ = [
     "NoopOverallAdviceProvider",
     "OverallAdviceProvider",
     "create_overall_advice_provider_from_env",
+    "resolve_llm_evaluate_endpoint",
+    "resolve_node_gateway_url",
 ]
