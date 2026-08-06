@@ -161,14 +161,22 @@ class ReceiptAuditService:
         if resolved_profile is not None and resolved_profile.default_graph_path is not None:
             effective_graph_path = resolved_profile.default_graph_path
 
+        previous_invoice_numbers: list[str] = []
+
         for invoice_preparation in prepared_receipt["invoicePreparations"]:
             if remaining_apply_amount is not None:
                 _update_preparation_apply_amount(invoice_preparation, remaining_apply_amount)
+
+            # 出租车连号检测：注入本张发票之前已处理的所有发票号，供图中 W19 节点判断连号
+            _inject_previous_invoice_numbers(invoice_preparation, previous_invoice_numbers)
 
             invoice_result = self._process_invoice_preparation(
                 receipt_code, invoice_preparation, graph_path=effective_graph_path,
             )
             invoice_results.append(invoice_result)
+
+            # 收集当前发票号用于后续发票的连号检测
+            _collect_invoice_number(invoice_preparation, previous_invoice_numbers)
 
             used_amount = _extract_invoice_final_amount(invoice_result)
             if used_amount is not None and remaining_apply_amount is not None:
@@ -189,6 +197,7 @@ class ReceiptAuditService:
             "applyAmount": _resolve_initial_apply_amount(prepared_receipt),
             "remainingApplyAmount": remaining_apply_amount,
             "validInvoiceTotal": _resolve_valid_invoice_total(invoice_results, _resolve_initial_apply_amount(prepared_receipt), remaining_apply_amount),
+            "resolvedProfile": resolved_profile,
         }
         # 核销单级整体建议：所有发票跑完后、回写 sink 前生成。
         self._augment_with_overall_advice(receipt_result)
@@ -452,6 +461,34 @@ def _noop_receipt_result_sink(_receipt_result: dict[str, Any]) -> None:
 
 def _utc_now_isoformat() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _inject_previous_invoice_numbers(
+    invoice_preparation: Mapping[str, Any],
+    previous_invoice_numbers: list[str],
+) -> None:
+    """将前序发票号列表注入 preparedInput，供图中 W19 出租车连号检测使用。
+
+    图中 isTaxiConsecutive 表达式读取 previousInvoiceNumbers 来判断当前
+    invoiceNo 是否与之前任一张发票号相差 ±1（连号风险）。
+    """
+    prepared_input = invoice_preparation.get("preparedInput")
+    if not isinstance(prepared_input, dict):
+        return
+    prepared_input["previousInvoiceNumbers"] = list(previous_invoice_numbers)
+
+
+def _collect_invoice_number(
+    invoice_preparation: Mapping[str, Any],
+    previous_invoice_numbers: list[str],
+) -> None:
+    """从发票准备数据中提取 invoiceNo，追加到前序发票号列表中。"""
+    invoice_file = invoice_preparation.get("invoiceFile")
+    if not isinstance(invoice_file, dict):
+        invoice_file = {}
+    invoice_no = str(invoice_file.get("invoiceNo") or "")
+    if invoice_no:
+        previous_invoice_numbers.append(invoice_no)
 
 
 def _resolve_initial_apply_amount(prepared_receipt: Mapping[str, Any]) -> float | None:

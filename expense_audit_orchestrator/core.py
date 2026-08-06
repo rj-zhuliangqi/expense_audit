@@ -1,5 +1,6 @@
 import inspect
 import json
+import os
 import time
 import uuid
 from collections.abc import Callable, Mapping
@@ -7,6 +8,8 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from dotenv import load_dotenv
 
 from expense_audit_orchestrator import audit_client
 from expense_audit_orchestrator.observability import get_logger
@@ -29,6 +32,8 @@ AuditInvoiceFileInfoProvider = Callable[[str], list[dict[str, Any]]]
 FieldMappingsProvider = Callable[[str], list[dict[str, Any]]]
 ReceiptEnricher = Callable[[str, Mapping[str, Any]], Any]
 DataEnricher = Callable[[str, str, dict[str, Any], dict[str, Any]], Any]
+# 企查查企业信息查询器：输入企业名称，返回 dict(含 establishDate/address) 或 None（失败/未找到）
+EnterpriseInfoProvider = Callable[[str], dict[str, Any] | None]
 
 
 def get_invoice_file_from_server(receipt_code: str) -> str:
@@ -289,12 +294,44 @@ def build_rule_input(
             "filePath": file_path,
         },
         "serviceData": normalized_service_data,
-        "context": {
-            "serviceData": normalized_service_data,
-            "receiptCode": receipt_code,
-            "employee": _build_employee_context(audit_info),
-        },
+        "context": _build_context(normalized_service_data, receipt_code, audit_info),
     }
+
+
+# LLM 网关地址统一从 .env 的 NODE_GATEWAY_URL 读取，与 overall_advice.py 共用同一配置。
+# 在 build_rule_input 阶段就注入 context.llmGatewayUrl，确保存盘的 prepared-receipt.json
+# 自带网关地址，方便 Gorules Editor 等离线工具模拟运行时无需环境变量即可调用 LLM。
+_NODE_GATEWAY_LLM_EVALUATE_PATH = "/api/v1/node-gateway/llm/evaluate"
+
+
+def _resolve_llm_gateway_url() -> str | None:
+    """读取 NODE_GATEWAY_URL 环境变量，拼接完整 LLM evaluate 端点。
+
+    若未配置则返回 None — 此时 context 中不写 llmGatewayUrl 字段，
+    application.py 的 _inject_run_context 会作为 fallback 兜底。
+    """
+    load_dotenv(ROOT / ".env", override=False)
+    raw_url = (os.getenv("NODE_GATEWAY_URL") or "").strip()
+    if not raw_url:
+        return None
+    return f"{raw_url.rstrip('/')}{_NODE_GATEWAY_LLM_EVALUATE_PATH}"
+
+
+def _build_context(
+    normalized_service_data: dict[str, Any],
+    receipt_code: str,
+    audit_info: Mapping[str, Any],
+) -> dict[str, Any]:
+    """构建 preparedInput.context，包含 serviceData / receiptCode / employee 以及可选的 llmGatewayUrl。"""
+    context: dict[str, Any] = {
+        "serviceData": normalized_service_data,
+        "receiptCode": receipt_code,
+        "employee": _build_employee_context(audit_info),
+    }
+    llm_gateway_url = _resolve_llm_gateway_url()
+    if llm_gateway_url:
+        context["llmGatewayUrl"] = llm_gateway_url
+    return context
 
 
 def _build_employee_context(audit_info: Mapping[str, Any]) -> dict[str, Any]:
@@ -321,6 +358,58 @@ def _build_employee_context(audit_info: Mapping[str, Any]) -> dict[str, Any]:
     return employee
 
 
+def _lookup_enterprise_info(
+    service_data: dict[str, Any],
+    provider: EnterpriseInfoProvider,
+    saler_name: str | None,
+) -> dict[str, Any] | None:
+    """调用企查查 provider 查询企业工商信息，注入 serviceData.salerCompanyInfo。
+
+    查询成功时写入包含 establishDate / address 的 dict；失败时写入 null，
+    确保当前核销单内后续发票不再重复查询。
+    """
+    company_name = saler_name or ""
+    if not company_name:
+        service_data["salerCompanyInfo"] = None
+        return None
+
+    try:
+        result = provider(company_name)
+    except Exception:
+        _logger.warning(
+            "企查查企业信息查询异常，降级为无数据",
+            extra={
+                "event": "enterprise_info.provider_error",
+                "company_name": company_name,
+            },
+            exc_info=True,
+        )
+        service_data["salerCompanyInfo"] = None
+        return None
+
+    if result is not None and isinstance(result, dict) and result.get("establishDate"):
+        service_data["salerCompanyInfo"] = result
+        _logger.info(
+            "企查查企业信息已注入",
+            extra={
+                "event": "enterprise_info.injected",
+                "company_name": company_name,
+                "establish_date": result.get("establishDate"),
+            },
+        )
+        return result
+    else:
+        service_data["salerCompanyInfo"] = None
+        _logger.info(
+            "企查查未查到企业信息或缺少注册日期，设为 null",
+            extra={
+                "event": "enterprise_info.not_found",
+                "company_name": company_name,
+            },
+        )
+        return None
+
+
 @dataclass(slots=True)
 class ReceiptDataPreparer:
     """规则执行前的数据准备层，统一编排文件、OCR 和多个上游业务服务。"""
@@ -337,6 +426,7 @@ class ReceiptDataPreparer:
     field_mappings_provider: FieldMappingsProvider = audit_client.fetch_field_mappings
     receipt_enrichers: Mapping[str, ReceiptEnricher] = field(default_factory=dict)
     extra_enrichers: Mapping[str, DataEnricher] = field(default_factory=dict)
+    qichacha_provider: EnterpriseInfoProvider | None = None
 
     def prepare_receipt_context(
         self,
@@ -390,6 +480,7 @@ class ReceiptDataPreparer:
             "receiptCode": receipt_code,
             "serviceData": service_data,
             "invoiceFiles": invoice_files,
+            "enterpriseInfoCache": {},
         }
 
     def prepare_invoice_input(
@@ -403,6 +494,9 @@ class ReceiptDataPreparer:
     ) -> dict[str, Any]:
         normalized_receipt_context = dict(receipt_context or self.prepare_receipt_context(receipt_code))
         receipt_service_data = dict(normalized_receipt_context.get("serviceData") or {})
+        enterprise_info_cache = normalized_receipt_context.get("enterpriseInfoCache")
+        if not isinstance(enterprise_info_cache, dict):
+            enterprise_info_cache = {}
         audit_info = dict(receipt_service_data.get("auditInfo") or {})
         company_list = list(receipt_service_data.get("companyList") or [])
         file_path = _get_string_value(invoice_file, "filePath")
@@ -473,6 +567,21 @@ class ReceiptDataPreparer:
             service_data["ocrEnvelope"] = ocr_envelope
         for service_name, enricher in self.extra_enrichers.items():
             service_data[service_name] = enricher(receipt_code, file_path, ocr_data, dict(service_data))
+
+        # 企查查企业信息查询：OCR 完成后按当前发票的销方公司名称查询企业工商信息，
+        # 将原始注册日期/地址注入该张发票的 serviceData，供图中规则使用。
+        # 同一核销单内按公司名称复用结果，包括 None 失败结果；企查查接口不接受税号查询。
+        if self.qichacha_provider is not None and "salerCompanyInfo" not in receipt_service_data:
+            saler_name = _get_string_value(ocr_data, "salerName")
+            if saler_name:
+                if saler_name in enterprise_info_cache:
+                    service_data["salerCompanyInfo"] = enterprise_info_cache[saler_name]
+                else:
+                    enterprise_info_cache[saler_name] = _lookup_enterprise_info(
+                        service_data,
+                        self.qichacha_provider,
+                        saler_name,
+                    )
 
         return build_rule_input(
             receipt_code=receipt_code,

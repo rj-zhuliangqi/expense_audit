@@ -76,6 +76,7 @@ class ExpenseProfile:
     compliance_rule: ComplianceRule = _default_compliance
     audit_travels_builder: AuditTravelsBuilder | None = None
     form_invoice_tax_views_builder: FormBuilder | None = None
+    audit_rule_catalog: Mapping[str, Mapping[str, Any]] | None = None
     writeback_save_path: str = AUDIT_INFO_SAVE_PATH
 
 
@@ -164,12 +165,14 @@ def _build_personal_transport_profile(asset_dir: Path | str | None = None) -> Ex
 def _build_entertainment_profile(asset_dir: Path | str | None = None) -> ExpenseProfile:
     from .entertainment.data import entertainment_receipt_enricher
     from .entertainment.writeback import entertainment_compliance_rule
+    from .entertainment.writeback import entertainment_audit_rule_catalog
 
     return ExpenseProfile(
         name="entertainment",
         default_graph_path=ENTERTAINMENT_GRAPH_PATH,
         receipt_enrichers={"entertainment_data": entertainment_receipt_enricher},
         compliance_rule=entertainment_compliance_rule,
+        audit_rule_catalog=entertainment_audit_rule_catalog,
         writeback_save_path=AUDIT_INFO_SAVE_PATH,
     )
 

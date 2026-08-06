@@ -8,6 +8,7 @@ from uuid import uuid4
 ComplianceRule = Callable[[str, Mapping[str, Any]], bool]
 AuditTravelsBuilder = Callable[[list[tuple[dict[str, Any], dict[str, Any]]], Mapping[str, Any]], list[dict[str, Any]]]
 FormBuilder = Callable[[list[tuple[dict[str, Any], dict[str, Any]]], Mapping[str, Any]], list[dict[str, Any]]]
+AuditRuleCatalog = Mapping[str, Mapping[str, Any]]
 
 
 # E31 (发票合计金额不足) employeeSuggestionTips 文本 — CSV 第四列，两场景全文。
@@ -32,6 +33,7 @@ def assemble_result_audit_info(
     compliance_rule: ComplianceRule = _default_compliance,
     audit_travels_builder: AuditTravelsBuilder | None = None,
     form_invoice_tax_views_builder: FormBuilder | None = None,
+    audit_rule_catalog: AuditRuleCatalog | None = None,
 ) -> dict[str, Any]:
     receipt_code = str(processed_receipt.get("receiptCode") or prepared_receipt.get("receiptCode") or "")
     service_data = dict(prepared_receipt.get("serviceData") or processed_receipt.get("serviceData") or {})
@@ -62,6 +64,7 @@ def assemble_result_audit_info(
             is_amount_sufficient=is_amount_sufficient,
             apply_amount=apply_amount,
             valid_invoice_total=valid_invoice_total,
+            audit_rule_catalog=audit_rule_catalog,
         ),
         "auditInvoiceInfos": _build_audit_invoice_infos(instance_code, audit_info, invoice_pairs, is_amount_sufficient=is_amount_sufficient),
         "auditInvoiceFiles": _build_audit_invoice_files(service_data),
@@ -172,6 +175,7 @@ def _build_audit_logs(
     is_amount_sufficient: bool | None = None,
     apply_amount: float | None = None,
     valid_invoice_total: float | None = None,
+    audit_rule_catalog: AuditRuleCatalog | None = None,
 ) -> list[dict[str, Any]]:
     audit_logs: list[dict[str, Any]] = []
     for index, (preparation, result) in enumerate(invoice_pairs):
@@ -192,6 +196,7 @@ def _build_audit_logs(
         )
         rule_results = _extract_rule_results(decision_output)
         if rule_results:
+            invoice_logs: list[dict[str, Any]] = []
             for rule_result in rule_results:
                 reason_code = rule_result.get("reason_code") or rule_result.get("reasonCode")
                 if reason_code == "E31":
@@ -216,7 +221,7 @@ def _build_audit_logs(
 
                 # createTime 取图内各稽核点输出的 create_time（来自 context.executionTime），
                 # 兼容 create_time / createTime 两种键名；回写层不另行生成时间戳。
-                audit_logs.append(
+                invoice_logs.append(
                     {
                         "instanceCode": _get_string_value(rule_result, "instance_code")
                         or prepared_instance_code
@@ -242,6 +247,29 @@ def _build_audit_logs(
                         "createTime": rule_result.get("create_time") or rule_result.get("createTime"),
                     }
                 )
+            if audit_rule_catalog:
+                actual_codes = {str(log.get("reasonCode") or "") for log in invoice_logs}
+                for reason_code, metadata in audit_rule_catalog.items():
+                    if reason_code in actual_codes or reason_code in {"E31", "sys-001", "sys-003", "sys-004"}:
+                        continue
+                    invoice_logs.append(
+                        {
+                            "instanceCode": prepared_instance_code or instance_code,
+                            "invoiceFileId": prepared_invoice_file_id,
+                            "invoiceInfoId": prepared_invoice_info_id,
+                            "reasonCode": reason_code,
+                            "auditType": metadata.get("auditType", "general-rules"),
+                            "auditContent": metadata.get("auditContent", ""),
+                            "distinguishContent": metadata.get("distinguishContent", ""),
+                            "distinguishResult": "pass",
+                            "message": "",
+                            "specificProblemDes": "",
+                            "policiesIndex": metadata.get("policiesIndex", ""),
+                            "employeeSuggestionTips": "",
+                            "createTime": None,
+                        }
+                    )
+            audit_logs.extend(invoice_logs)
             continue
 
         audit_logs.append(

@@ -25,6 +25,7 @@ DST_GRAPH = REPO_ROOT / "graph-latest-entertainment-0722.json"
 # 通讯费中需要删除的节点 ID（通讯费特有）
 NODE_IDS_TO_DELETE = {
     "d3046965-dbaf-41cd-ba93-0d957fe67ec8",  # 抬头检查 E01
+    "e2b630c8-096d-4fea-ad4c-986473d8a880",  # 抬头个人检查 W28
     "d13f7062-96e4-4d74-a552-dfcc60d98ff4",  # 税号检查 E02
     "b9c42bf4-8560-4493-bf19-b8623f635c4d",  # 发票运营商检查 E19
     "df8506e4-11fd-4e0d-8198-17a25fcb4f50",  # 发票抬头预处理
@@ -189,6 +190,13 @@ ENTERTAINMENT_PREPROCESS_EXPRESSIONS = [
         "key": "isGiftCountReasonable",
         "value": '(serviceData.auditInfo.receptionCount ?? 0) == 0 or number(serviceData.auditInfo.receptionCount ?? 0) <= number(totalGoodsCount ?? sum(map((items ?? []) as i, number(i.detailAmount ?? i.quantity ?? 1))))',
     },
+    {
+        # 规则：同一核销单内发票号应连续。预处理层可提供完整发票号序列；
+        # 未提供序列时不作猜测，按通过处理。
+        "id": _new_uuid(),
+        "key": "isInvoiceNumberContinuous",
+        "value": '(previousInvoiceNumbers ?? []).length == 0 or invoiceNo == "" or some((previousInvoiceNumbers ?? []) as prev, abs(number(invoiceNo) - number(prev)) == 1)',
+    },
 ]
 
 
@@ -265,6 +273,42 @@ def _build_gift_count_check_node() -> dict:
         rules=rules,
         output_path="gift_count_result",
         position={"x": 660, "y": 1080},
+    )
+
+
+def _build_invoice_number_check_node() -> dict:
+    """发票号码连续性检查 W34（普通规则）。"""
+    node_id = "ent-invoice-number-check"
+    rules = [
+        _std_rule_row(
+            input_value="true",
+            reason_code="W34",
+            distinguish_result="PASS",
+            audit_content="检查同一核销单内发票号码是否连续",
+            audit_type="general-rules",
+            message='""',
+            policies_index='""',
+            suggestion='""',
+        ),
+        _std_rule_row(
+            input_value="false",
+            reason_code="W34",
+            distinguish_result="WARNING",
+            audit_content="检查同一核销单内发票号码是否连续",
+            audit_type="general-rules",
+            message='"发票号【"+(invoiceNo??"")+"】与本核销单其他发票号码不连续，存在发票缺失风险"',
+            policies_index='"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范"',
+            suggestion='"【补充确认】请核对本核销单发票号码是否完整连续，并补充缺失票据或说明原因"',
+        ),
+    ]
+    return _make_decision_table(
+        node_id=node_id,
+        name="发票号码连续性检查",
+        input_field="isInvoiceNumberContinuous",
+        input_name="发票号码是否连续",
+        rules=rules,
+        output_path="invoice_number_result",
+        position={"x": 660, "y": 1180},
     )
 
 
@@ -386,10 +430,6 @@ def _build_content_compliance_llm_node() -> dict:
         "      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\r\n"
         "    }\r\n"
         "\r\n"
-        "    if (input.model || context.llmModel) {\r\n"
-        "      payload.model = input.model || context.llmModel;\r\n"
-        "    }\r\n"
-        "\r\n"
         "    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\r\n"
         "      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\r\n"
         "    }\r\n"
@@ -497,17 +537,6 @@ def _build_content_compliance_check_node() -> dict:
             policies_index='"《锐捷网络员工费用管理与报销制度》\\n4.4.2.2 禁止报销（高档烟酒如茅台、五粮液；现金及其等价物如黄金、珠宝首饰、预付卡、礼品卡等）；4.4.3.1 业务招待要遵循\"厉行节约，合理开支\"原则"',
             suggestion='"【删除发票】删除本票据，不得上传禁止报销范围内的发票"',
         ),
-        # 充值卡/预付卡
-        _std_rule_row(
-            input_value='"recharge_card"',
-            reason_code="E17",
-            distinguish_result="REJECT",
-            audit_content="检查发票内容是否含禁止核销内容或充值卡信息",
-            audit_type="general-rules",
-            message='"发票号【"+(invoiceNo??"")+"】✗ 发票内容【"+(contents??"")+"】包含充值卡/预付卡/预存等公司禁止报销项，✓ 发票内容不得包含预付卡销售、充值卡、预存、储值等资金前置占用项目"',
-            policies_index='"《锐捷网络员工费用管理与报销制度》\\n4.2.2.2 禁止报销：预付卡销售、充值卡、成品油(卡)；上述允许报销范围以外的费用"',
-            suggestion='"【删除发票】删除本票据，并提供非充值内容的发票"',
-        ),
     ]
     return _make_decision_table(
         node_id=node_id,
@@ -517,6 +546,51 @@ def _build_content_compliance_check_node() -> dict:
         rules=rules,
         output_path="content_compliance_result",
         position={"x": 675, "y": 1390},
+    )
+
+
+def _build_recharge_card_check_node() -> dict:
+    """独立输出 E17，确保普通内容也有 E17/PASS 结果。"""
+    rules = [
+        _std_rule_row(
+            input_value='"pass"',
+            reason_code="E17",
+            distinguish_result="PASS",
+            audit_content="检查发票内容是否包含充值卡、预付卡或预存类项目",
+            audit_type="general-rules",
+            message='""',
+            policies_index='""',
+            suggestion='""',
+        ),
+        _std_rule_row(
+            input_value='"prohibited_item"',
+            reason_code="E17",
+            distinguish_result="PASS",
+            audit_content="检查发票内容是否包含充值卡、预付卡或预存类项目",
+            audit_type="general-rules",
+            message='""',
+            policies_index='""',
+            suggestion='""',
+        ),
+        _std_rule_row(
+            input_value='"recharge_card"',
+            reason_code="E17",
+            distinguish_result="REJECT",
+            audit_content="检查发票内容是否包含充值卡、预付卡或预存类项目",
+            audit_type="general-rules",
+            message='"发票号【"+(invoiceNo??"")+"】✗ 发票内容【"+(contents??"")+"】包含充值卡/预付卡/预存等公司禁止报销项"',
+            policies_index='"《锐捷网络员工费用管理与报销制度》\\n4.2.2.2 禁止报销：预付卡销售、充值卡、成品油(卡)"',
+            suggestion='"【删除发票】删除本票据，并提供非充值内容的发票"',
+        ),
+    ]
+    return _make_decision_table(
+        node_id="ent-recharge-card-check",
+        name="充值卡检查",
+        input_field="contentCheckResult",
+        input_name="充值卡检查结果",
+        rules=rules,
+        output_path="recharge_card_result",
+        position={"x": 900, "y": 1390},
     )
 
 
@@ -544,8 +618,12 @@ FRAUD_PREPROCESS_EXPRESSIONS = [
         # 企查查规则2：企业注册日期与发票开具日期相差在6个月以内
         "key": "isRecentlyRegistered",
         "value": (
-            '(serviceData.salerCompanyInfo ?? null) != null '
-            'and d(serviceData.salerCompanyInfo.establishDate ?? "").addMonths(6) > d(invoiceDate ?? "")'
+            '(d(serviceData.salerCompanyInfo.establishDate ?? "").isValid() '
+            'and d(invoiceDate ?? "").isValid()) '
+            '? (d(invoiceDate).isSameOrAfter(d(serviceData.salerCompanyInfo.establishDate)) '
+            'and d(invoiceDate).isSameOrBefore('
+            'd(serviceData.salerCompanyInfo.establishDate).add(6, "month"))) '
+            ': false'
         ),
     },
     {
@@ -677,10 +755,6 @@ def _build_fraud_address_llm_node() -> dict:
         "      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\r\n"
         "    }\r\n"
         "\r\n"
-        "    if (input.model || context.llmModel) {\r\n"
-        "      payload.model = input.model || context.llmModel;\r\n"
-        "    }\r\n"
-        "\r\n"
         "    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\r\n"
         "      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\r\n"
         "    }\r\n"
@@ -730,13 +804,13 @@ def _build_fraud_postprocess_node() -> dict:
                 {
                     "id": _new_uuid(),
                     "key": "llmAddressPassed",
-                    "value": 'llm_status == "success" ? (llm_result.passed == true) : true',
+                    "value": '(llm_status ?? "error") == "success" ? ((llm_result ?? {}).passed == true) : true',
                 },
                 {
                     "id": _new_uuid(),
                     # 综合三项标志：任一为 true 则高风险
                     "key": "isHighRiskInvoice",
-                    "value": '($.isHighRiskByRule or $.isRecentlyRegistered or ($.llm_status == "success" and llm_result.passed == false)) ? "true" : "false"',
+                    "value": '(($.isHighRiskByRule ?? false) or ($.isRecentlyRegistered ?? false) or ((llm_status ?? "error") == "success" ? ((llm_result ?? {}).passed == false) : false)) ? "true" : "false"',
                 },
             ],
             "passThrough": True,
@@ -837,6 +911,7 @@ def build_entertainment_graph() -> dict:
     # --- Phase 2: 新增业务招待费特有规则节点 ---
     nodes.append(_build_self_expense_check_node())      # E15
     nodes.append(_build_gift_count_check_node())        # W33
+    nodes.append(_build_invoice_number_check_node())    # W34
 
     # --- Phase 3: LLM 内容合规节点改造 ---
     # 删除旧的充值卡检查prompt、调用llm、后处理、充值卡检查节点
@@ -857,6 +932,7 @@ def build_entertainment_graph() -> dict:
     nodes.append(_build_content_compliance_llm_node())          # 调用llm
     nodes.append(_build_content_compliance_postprocess_node())  # 后处理
     nodes.append(_build_content_compliance_check_node())         # 决策表
+    nodes.append(_build_recharge_card_check_node())              # E17 独立决策表
 
     # --- Phase 4: 虚开发票预警节点 ---
     nodes.append(_build_fraud_preprocess_node())
@@ -875,10 +951,12 @@ def build_entertainment_graph() -> dict:
     # 新增节点 ID
     SELF_EXPENSE_CHECK = "ent-self-expense-check"
     GIFT_COUNT_CHECK = "ent-gift-count-check"
+    INVOICE_NUMBER_CHECK = "ent-invoice-number-check"
     CONTENT_PROMPT = "ent-content-compliance-prompt"
     CONTENT_LLM = "ent-content-compliance-llm"
     CONTENT_POSTPROCESS = "ent-content-compliance-postprocess"
     CONTENT_CHECK = "ent-content-compliance-check"
+    RECHARGE_CARD_CHECK = "ent-recharge-card-check"
     FRAUD_PREPROCESS = "ent-fraud-preprocess"
     FRAUD_PROMPT = "ent-fraud-address-prompt"
     FRAUD_LLM = "ent-fraud-address-llm"
@@ -909,6 +987,7 @@ def build_entertainment_graph() -> dict:
         YEAR_CHECK,
         SELF_EXPENSE_CHECK,
         GIFT_COUNT_CHECK,
+        INVOICE_NUMBER_CHECK,
     ]:
         new_edges.append(_edge(DATA_PREPROCESS_ID, check_id))
         new_edges.append(_edge(check_id, RESPONSE_ID))
@@ -929,6 +1008,9 @@ def build_entertainment_graph() -> dict:
     # 发票内容预处理也连到决策表（提供 contents 字段）
     new_edges.append(_edge(CONTENT_PREPROCESS_ID, CONTENT_CHECK))
     new_edges.append(_edge(CONTENT_CHECK, RESPONSE_ID))
+    new_edges.append(_edge(CONTENT_POSTPROCESS, RECHARGE_CARD_CHECK))
+    new_edges.append(_edge(REQUEST_ID, RECHARGE_CARD_CHECK))
+    new_edges.append(_edge(RECHARGE_CARD_CHECK, RESPONSE_ID))
 
     # 分支4: request → 虚开发票预警预处理 → 地址检查prompt → 调用llm → 后处理 → 预警检查 → response
     new_edges.append(_edge(REQUEST_ID, FRAUD_PREPROCESS))

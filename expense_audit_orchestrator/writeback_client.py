@@ -259,6 +259,7 @@ def build_writeback_payload(
     compliance_rule: ComplianceRule | None = None,
     audit_travels_builder: AuditTravelsBuilder | None = None,
     form_invoice_tax_views_builder: FormBuilder | None = None,
+    audit_rule_catalog: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     prepared_receipt = _build_prepared_receipt_from_result(receipt_result)
     kwargs: dict[str, Any] = {}
@@ -268,6 +269,8 @@ def build_writeback_payload(
         kwargs["audit_travels_builder"] = audit_travels_builder
     if form_invoice_tax_views_builder is not None:
         kwargs["form_invoice_tax_views_builder"] = form_invoice_tax_views_builder
+    if audit_rule_catalog is not None:
+        kwargs["audit_rule_catalog"] = audit_rule_catalog
     return assemble_result_audit_info(prepared_receipt, receipt_result, **kwargs)
 
 
@@ -277,6 +280,7 @@ def build_receipt_writeback_sink(
     compliance_rule: ComplianceRule | None = None,
     audit_travels_builder: AuditTravelsBuilder | None = None,
     form_invoice_tax_views_builder: FormBuilder | None = None,
+    audit_rule_catalog: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> ReceiptResultSink:
     def sink(receipt_result: dict[str, Any]) -> None:
         payload = build_writeback_payload(
@@ -284,6 +288,7 @@ def build_receipt_writeback_sink(
             compliance_rule=compliance_rule,
             audit_travels_builder=audit_travels_builder,
             form_invoice_tax_views_builder=form_invoice_tax_views_builder,
+            audit_rule_catalog=audit_rule_catalog,
         )
         client.save_result_audit_info(payload)
 
@@ -296,6 +301,7 @@ def build_receipt_writeback_file_sink(
     compliance_rule: ComplianceRule | None = None,
     audit_travels_builder: AuditTravelsBuilder | None = None,
     form_invoice_tax_views_builder: FormBuilder | None = None,
+    audit_rule_catalog: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> ReceiptResultSink:
     resolved_output_dir = Path(output_dir)
 
@@ -306,6 +312,7 @@ def build_receipt_writeback_file_sink(
             compliance_rule=compliance_rule,
             audit_travels_builder=audit_travels_builder,
             form_invoice_tax_views_builder=form_invoice_tax_views_builder,
+            audit_rule_catalog=audit_rule_catalog,
         )
         output_file = resolved_output_dir / f"{receipt_code}.writeback-payload.json"
         _export_json_payload(payload, output_file, "writeback payload")

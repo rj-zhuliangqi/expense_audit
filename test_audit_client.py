@@ -29,6 +29,35 @@ class FakeHttpResponse:
 
 class AuditClientHeaderTests(unittest.TestCase):
     @patch("expense_audit_orchestrator.audit_client.urlopen")
+    def test_fetch_enterprise_base_info_maps_company_fields(self, mock_urlopen) -> None:
+        mock_urlopen.return_value = FakeHttpResponse(
+            {
+                "code": "0",
+                "data": {
+                    "customerName": "测试企业",
+                    "taxIdNum": "91350000TEST",
+                    "customerCreateTime": "2020-09-28 00:00:00",
+                    "customerRegisterAddress": "测试地址",
+                },
+            }
+        )
+
+        result = audit_client.fetch_enterprise_base_info(
+            "测试企业",
+            service_url="https://service.example",
+        )
+
+        self.assertEqual(
+            result,
+            {
+                "name": "测试企业",
+                "taxNo": "91350000TEST",
+                "establishDate": "2020-09-28",
+                "address": "测试地址",
+            },
+        )
+
+    @patch("expense_audit_orchestrator.audit_client.urlopen")
     def test_fetch_field_mappings_requests_bill_mapping_path(self, mock_urlopen) -> None:
         mock_urlopen.return_value = FakeHttpResponse(
             {
@@ -90,21 +119,17 @@ class AuditClientHeaderTests(unittest.TestCase):
         )
 
     @patch("expense_audit_orchestrator.audit_client.urlopen")
-    def test_fetch_expense_invoice_types_prefers_company_list_and_falls_back_to_legacy_companylist(
+    def test_fetch_expense_invoice_types_requests_correct_endpoint(
         self,
         mock_urlopen,
     ) -> None:
-        primary_url = "https://service.example/api/audit-service/audit/company-list?eiCode=EI001"
-        mock_urlopen.side_effect = [
-            HTTPError(primary_url, 404, "Not Found", None, io.BytesIO(b"{}")),
-            FakeHttpResponse(
-                {
-                    "code": 0,
-                    "message": "success",
-                    "data": [{"eiCode": "EI001", "invoiceType": "26"}],
-                }
-            ),
-        ]
+        mock_urlopen.return_value = FakeHttpResponse(
+            {
+                "code": 0,
+                "message": "success",
+                "data": [{"eiCode": "EI001", "invoiceType": "26"}],
+            }
+        )
 
         result = audit_client.fetch_expense_invoice_types(
             "EI001",
@@ -112,10 +137,9 @@ class AuditClientHeaderTests(unittest.TestCase):
         )
 
         self.assertEqual(result, [{"eiCode": "EI001", "invoiceType": "26"}])
-        requests = [call.args[0] for call in mock_urlopen.call_args_list]
-        request_urls = [request.full_url if isinstance(request, Request) else request for request in requests]
-        self.assertTrue(request_urls[0].endswith("/api/audit-service/audit/company-list?eiCode=EI001"))
-        self.assertTrue(request_urls[1].endswith("/api/audit-service/audit/companylist?eiCode=EI001"))
+        request = mock_urlopen.call_args.args[0]
+        request_url = request.full_url if isinstance(request, Request) else request
+        self.assertTrue(request_url.endswith("/api/audit-service/audit/expense-item-relation-invoice-type/EI001"))
 
     def test_repo_env_uses_current_invoice_secret_key_name(self) -> None:
         env_path = audit_client.PROJECT_ROOT / ".env"

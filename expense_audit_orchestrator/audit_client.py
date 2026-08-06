@@ -24,6 +24,8 @@ AUDIT_SERVICE_TIMEOUT_ENV = "AUDIT_SERVICE_TIMEOUT"
 AUDIT_SERVICE_MAX_RETRIES_ENV = "AUDIT_SERVICE_MAX_RETRIES"
 AUDIT_SERVICE_RETRY_BACKOFF_SECONDS_ENV = "AUDIT_SERVICE_RETRY_BACKOFF_SECONDS"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_ENTERPRISE_SERVICE_URL = "https://service-e-gw.ruijie.com.cn"
+ENTERPRISE_SERVICE_TIMEOUT = 15
 DEFAULT_AUDIT_INVOICE_FILE_HEADERS = {
     "Accept": "*/*",
     "Accept-Encoding": "gzip, deflate, br",
@@ -90,31 +92,14 @@ def fetch_expense_invoice_types(
     timeout: float | None = None,
 ) -> list[dict[str, Any]]:
     """按费用项编码获取允许的发票类型。"""
-    paths = [
-        "/api/audit-service/audit/company-list",
-        "/api/audit-service/audit/companylist",
-    ]
-    last_http_error: HTTPError | None = None
-    for path in paths:
-        try:
-            data = _fetch_service_data(
-                path,
-                service_url=service_url,
-                timeout=timeout,
-                description="费用项发票类型",
-                query_params={"eiCode": ei_code},
-                headers=_build_auth_headers(),
-            )
-            return _expect_list_payload(data, "expense invoice types")
-        except HTTPError as exc:
-            if exc.code != 404 or path == paths[-1]:
-                raise
-            last_http_error = exc
-
-    if last_http_error is not None:
-        raise last_http_error
-
-    raise ValueError("expense invoice types service returned invalid payload")
+    data = _fetch_service_data(
+        f"/api/audit-service/audit/expense-item-relation-invoice-type/{quote(ei_code, safe='')}",
+        service_url=service_url,
+        timeout=timeout,
+        description="费用项发票类型",
+        headers=_build_auth_headers(),
+    )
+    return _expect_list_payload(data, "expense invoice types")
 
 
 def fetch_field_mappings(
@@ -243,9 +228,94 @@ def update_audit_task_status(
     )
 
 
+def fetch_enterprise_base_info(
+    company_name: str,
+    *,
+    service_url: str = DEFAULT_ENTERPRISE_SERVICE_URL,
+    timeout: float | None = None,
+) -> dict[str, Any] | None:
+    """通过企查查 API 查询企业工商基础信息（精确查询）。
+
+    根据销方企业名称调用企查查「企业工商基础信息精确查询」接口，
+    返回包含成立日期（customerCreateTime）、注册地址（customerRegisterAddress）的字典。
+    查询失败或未找到企业时返回 None。
+
+    Args:
+        company_name: 销方企业完整名称，将进行 URL 编码后传入 name 参数。
+        service_url: 企业服务网关地址，默认 https://service-e-gw.ruijie.com.cn。
+        timeout: 超时秒数；默认取 ENTERPRISE_SERVICE_TIMEOUT。
+
+    Returns:
+        成功时返回 dict 包含 name / taxNo / establishDate / address 等字段，
+        失败或查无结果时返回 None。
+    """
+    try:
+        data = _fetch_service_data(
+            "/api/enterprise-ser/enterprise/getEnterpriseBaseInfoAccurateNewTYC",
+            service_url=service_url,
+            timeout=timeout if timeout is not None else ENTERPRISE_SERVICE_TIMEOUT,
+            description="企查查企业工商基础信息查询",
+            query_params={"name": company_name, "code": "all"},
+            headers=_build_auth_headers(),
+        )
+    except Exception:
+        _logger.warning(
+            "企查查企业信息查询失败，降级为无数据",
+            extra={
+                "event": "enterprise_info.fallback",
+                "company_name": company_name,
+            },
+            exc_info=True,
+        )
+        return None
+
+    if not isinstance(data, dict):
+        _logger.warning(
+            "企查查返回数据格式异常，降级为无数据",
+            extra={
+                "event": "enterprise_info.invalid_format",
+                "company_name": company_name,
+            },
+        )
+        return None
+
+    customer_create_time = _get_string_value(data, "customerCreateTime")
+    customer_register_address = _get_string_value(data, "customerRegisterAddress")
+    customer_name = _get_string_value(data, "customerName")
+    tax_id_num = _get_string_value(data, "taxIdNum")
+
+    establish_date: str | None = None
+    if customer_create_time is not None:
+        # customerCreateTime 格式为 "2020-09-28 00:00:00"，提取日期部分
+        establish_date = customer_create_time[:10] if " " in customer_create_time else customer_create_time
+
+    return {
+        "name": customer_name or company_name,
+        "taxNo": tax_id_num or "",
+        "establishDate": establish_date or "",
+        "address": customer_register_address or "",
+    }
+
+
 def _get_env_header_value(env_key: str) -> str | None:
     value = (os.getenv(env_key) or "").strip()
     return value or None
+
+
+def _get_string_value(data: Mapping[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = data.get(key)
+        if value is None:
+            continue
+        if isinstance(value, str):
+            normalized_value = value.strip()
+            if normalized_value:
+                return normalized_value
+        else:
+            normalized_value = str(value).strip()
+            if normalized_value:
+                return normalized_value
+    return None
 
 
 def _get_first_env_value(*env_keys: str) -> str | None:
@@ -546,12 +616,14 @@ __all__ = [
     "AUDIT_INVOICE_FILE_SYSID_ENV",
     "DEFAULT_AUDIT_SERVICE_URL",
     "DEFAULT_AUDIT_INVOICE_FILE_HEADERS",
+    "DEFAULT_ENTERPRISE_SERVICE_URL",
     "fetch_audit_info",
     "fetch_audit_invoice_file_info",
     "fetch_audit_invoice_files",
     "fetch_audit_task_info_list",
     "fetch_company_blacklist",
     "fetch_company_list",
+    "fetch_enterprise_base_info",
     "fetch_expense_invoice_types",
     "fetch_field_mappings",
     "fetch_invoice_info",

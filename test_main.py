@@ -485,7 +485,7 @@ class ReceiptPipelineTests(unittest.TestCase):
         requested_urls = [url.full_url if hasattr(url, 'full_url') else url for url in requested_urls]
         self.assertTrue(requested_urls[0].endswith("/api/audit-service/audit/company-black-list"))
         self.assertTrue(requested_urls[1].endswith("/api/audit-service/audit/company-list"))
-        self.assertTrue(requested_urls[2].endswith("/api/audit-service/audit/company-list?eiCode=FEE-PROJ-1001"))
+        self.assertTrue(requested_urls[2].endswith("/api/audit-service/audit/expense-item-relation-invoice-type/FEE-PROJ-1001"))
         self.assertIn("/api/audit-service/audit/invoice-info?", requested_urls[3])
         self.assertIn("chequeNo=26357000000141826844", requested_urls[3])
         self.assertIn("instanceCode=REC-001", requested_urls[3])
@@ -1210,6 +1210,28 @@ class ReceiptPipelineTests(unittest.TestCase):
         self.assertEqual(prepared_input["context"]["serviceData"]["currentInvoiceInfo"], service_data["currentInvoiceInfo"])
         self.assertEqual(prepared_input["instanceComCode"], "112")
 
+        # llmGatewayUrl: NODE_GATEWAY_URL 未设置时不应出现该字段
+        with patch("expense_audit_orchestrator.core.load_dotenv"), patch.dict(os.environ, {}, clear=True):
+            prepared_no_gw = main.build_rule_input(
+                "REC-001",
+                {"invoiceType": "26", "orgName": "锐捷网络股份有限公司", "invoiceNo": "26357000000141826844"},
+                file_path="/tmp/invoice.pdf",
+                service_data=service_data,
+            )
+            self.assertNotIn("llmGatewayUrl", prepared_no_gw["context"])
+        # 设置 NODE_GATEWAY_URL 后应正确注入完整端点
+        with patch("expense_audit_orchestrator.core.load_dotenv"), patch.dict(os.environ, {"NODE_GATEWAY_URL": "http://172.16.3.231:8091"}):
+            prepared_with_gw = main.build_rule_input(
+                "REC-001",
+                {"invoiceType": "26", "orgName": "锐捷网络股份有限公司", "invoiceNo": "26357000000141826844"},
+                file_path="/tmp/invoice.pdf",
+                service_data=service_data,
+            )
+            self.assertEqual(
+                prepared_with_gw["context"]["llmGatewayUrl"],
+                "http://172.16.3.231:8091/api/v1/node-gateway/llm/evaluate",
+            )
+
     @patch("expense_audit_orchestrator.audit_client.urlopen")
     def test_default_data_preparer_collects_all_mock_service_data(self, mock_urlopen) -> None:
         requested_urls: list[str] = []
@@ -1233,7 +1255,7 @@ class ReceiptPipelineTests(unittest.TestCase):
                 "message": "success",
                 "data": [{"cCode": "RJCW01", "cName": "锐捷网络股份有限公司"}],
             },
-            "/api/audit-service/audit/company-list?eiCode=FEE-PROJ-1001": {
+            "/api/audit-service/audit/expense-item-relation-invoice-type/FEE-PROJ-1001": {
                 "code": 0,
                 "message": "success",
                 "data": [{"invoiceType": "26", "eiCode": "FEE-PROJ-1001"}],
@@ -1349,7 +1371,7 @@ class ReceiptPipelineTests(unittest.TestCase):
                 "/api/audit-service/audit/invoice-file-info/FID-001",
                 "/api/audit-service/audit/fie-id-mapping/bill",
                 "/api/audit-service/audit/fie-id-mapping/item",
-                "/api/audit-service/audit/company-list?eiCode=FEE-PROJ-1001",
+                "/api/audit-service/audit/expense-item-relation-invoice-type/FEE-PROJ-1001",
                 "/api/audit-service/audit/invoice-info?chequeNo=26357000000141826844&instanceCode=REC-001&accountingCode=RJCW01",
             ],
         )
@@ -2635,6 +2657,51 @@ class FormalServiceTests(unittest.TestCase):
         self.assertEqual(captured["headers"]["Authorization"], "Bearer test-key")
         self.assertEqual(captured["json"]["model"], "audit-model")
         self.assertEqual(captured["json"]["messages"][1]["content"], "请根据上游 prompt 判断是否通过")
+
+    def test_api_ignores_client_model_and_uses_env_model(self) -> None:
+        captured: dict[str, Any] = {}
+
+        class FakeLlmResponse:
+            status_code = 200
+            text = json.dumps({"choices": [{"message": {"content": '{"passed": true}'}}]})
+
+            def json(self) -> dict[str, Any]:
+                return {"choices": [{"message": {"content": '{"passed": true}'}}]}
+
+        class FakeAsyncClient:
+            def __init__(self, *args, **kwargs) -> None:
+                del args, kwargs
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb) -> bool:
+                return False
+
+            async def post(self, url: str, headers=None, json=None):
+                del url, headers
+                captured["json"] = json
+                return FakeLlmResponse()
+
+        with patch.dict(
+            "os.environ",
+            {
+                "LLM_API_KEY": "test-key",
+                "LLM_BASE_URL": "https://llm.example/v1",
+                "LLM_MODEL": "audit-model",
+            },
+            clear=False,
+        ):
+            with patch("node_gateway.api.httpx.AsyncClient", FakeAsyncClient):
+                client = TestClient(create_node_gateway_app())
+                response = client.post(
+                    NODE_GATEWAY_LLM_EVALUATE_PATH,
+                    json={"prompt": "model policy", "model": "client-forced-model"},
+                )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["llmStatus"], "success")
+        self.assertEqual(captured["json"]["model"], "audit-model")
 
     def test_api_exposes_llm_evaluate_endpoint_using_dotenv_defaults(self) -> None:
         captured: dict[str, Any] = {}

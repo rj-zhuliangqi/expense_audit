@@ -141,8 +141,8 @@ def register_node_gateway_routes(app: FastAPI) -> None:
 
         _load_project_env()
         api_key = os.getenv("LLM_API_KEY", "").strip()
-        base_url = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
-        default_model = os.getenv("LLM_MODEL", "gpt-4o-mini").strip()
+        base_url = os.getenv("LLM_BASE_URL", "").strip().rstrip("/")
+        default_model = os.getenv("LLM_MODEL", "").strip()
 
         if not api_key:
             return {
@@ -152,11 +152,26 @@ def register_node_gateway_routes(app: FastAPI) -> None:
                 "rawContent": None,
             }
 
+        if not base_url:
+            return {
+                "llmStatus": "error",
+                "errorMessage": "missing env LLM_BASE_URL",
+                "llmResult": None,
+                "rawContent": None,
+            }
+
+        if not default_model:
+            return {
+                "llmStatus": "error",
+                "errorMessage": "missing env LLM_MODEL",
+                "llmResult": None,
+                "rawContent": None,
+            }
+
         system_prompt = request.system_prompt or "You are an audit assistant. Return JSON "
-        model = request.model or default_model
 
         payload = {
-            "model": model,
+            "model": default_model,
             "temperature": request.temperature,
             "response_format": {"type": "json_object"},
             "messages": [

@@ -13,6 +13,7 @@ from expense_audit_orchestrator.audit_client import (
     fetch_audit_invoice_files,
     fetch_company_blacklist,
     fetch_company_list,
+    fetch_enterprise_base_info,
     fetch_expense_invoice_types,
     fetch_field_mappings,
     fetch_invoice_info,
@@ -108,6 +109,7 @@ def create_receipt_audit_service(
         field_mappings_provider=partial(fetch_field_mappings, service_url=audit_service_url),
         receipt_enrichers=resolved_profile.receipt_enrichers if resolved_profile else {},
         extra_enrichers=resolved_profile.invoice_enrichers if resolved_profile else {},
+        qichacha_provider=fetch_enterprise_base_info,
     )
     resolved_receipt_result_sink = _resolve_receipt_result_sink(
         receipt_result_sink=receipt_result_sink,
@@ -223,6 +225,7 @@ def _resolve_receipt_result_sink(
         "compliance_rule": profile.compliance_rule,
         "audit_travels_builder": profile.audit_travels_builder,
         "form_invoice_tax_views_builder": profile.form_invoice_tax_views_builder,
+        "audit_rule_catalog": profile.audit_rule_catalog,
     }
     sinks: list[ReceiptResultSink] = []
     if writeback_output_dir is not None:
@@ -268,6 +271,7 @@ def _build_dynamic_writeback_sink(
             "compliance_rule": profile.compliance_rule if profile else None,
             "audit_travels_builder": profile.audit_travels_builder if profile else None,
             "form_invoice_tax_views_builder": profile.form_invoice_tax_views_builder if profile else None,
+            "audit_rule_catalog": profile.audit_rule_catalog if profile else None,
         }
         payload = build_writeback_payload(receipt_result, **strategy_kwargs)
         # 先导出 payload 再回写：回写失败时也能拿到实际发送的 payload 供排查

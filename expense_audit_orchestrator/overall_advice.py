@@ -30,7 +30,6 @@ from .writeback import _extract_rule_results, _normalize_rule_distinguish_result
 # 网关地址必须从 .env 的 NODE_GATEWAY_URL 读取，不再提供硬编码 fallback。
 # 与图内 LLM 节点共用同一配置，避免多处硬编码 IP 导致环境切换困难。
 DEFAULT_OVERALL_ADVICE_TIMEOUT = 30.0
-DEFAULT_LLM_MODEL = "gpt-4o-mini"
 DEFAULT_OVERALL_ADVICE_MAX_RETRIES = 2
 DEFAULT_OVERALL_ADVICE_RETRY_BACKOFF_SECONDS = 0.5
 DEFAULT_PROMPT_DIR: Path = Path(__file__).resolve().parent / "prompts"
@@ -430,7 +429,9 @@ def create_overall_advice_provider_from_env() -> OverallAdviceProvider:
         return NoopOverallAdviceProvider()
 
     node_gateway_url = resolve_node_gateway_url()
-    model = (os.getenv("OVERALL_ADVICE_MODEL") or os.getenv("LLM_MODEL") or DEFAULT_LLM_MODEL).strip()
+    model = (os.getenv("LLM_MODEL") or "").strip()
+    if not model:
+        raise RuntimeError("LLM_MODEL is not configured in .env")
     prompt_dir = Path(os.getenv("OVERALL_ADVICE_PROMPT_DIR") or DEFAULT_PROMPT_DIR)
     timeout_raw = (os.getenv("OVERALL_ADVICE_TIMEOUT") or "").strip()
     try:

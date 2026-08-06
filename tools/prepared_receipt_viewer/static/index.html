@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>核销单 PreparedInput 查看器</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="page-header">
+        <p class="eyebrow">LOCAL DEBUG TOOL</p>
+        <h1>核销单输入查看器</h1>
+        <p class="intro">按核销单号读取每张发票的 <code>preparedInput</code>。</p>
+      </header>
+
+      <section class="query-panel" aria-label="查询核销单">
+        <label for="receipt-code">核销单号</label>
+        <div class="query-row">
+          <input id="receipt-code" name="receipt-code" type="text" placeholder="例如 rjw260705000001" autocomplete="off" />
+          <button id="query-button" type="button">查询</button>
+        </div>
+        <p id="status" class="status" role="status" aria-live="polite">请输入核销单号开始查询。</p>
+      </section>
+
+      <section class="result-panel" aria-label="查询结果">
+        <div class="result-toolbar">
+          <span id="result-count">尚未加载数据</span>
+          <button id="copy-button" class="secondary-button" type="button" disabled>复制 JSON</button>
+        </div>
+        <pre id="json-output" aria-label="preparedInput JSON">等待查询...</pre>
+      </section>
+    </main>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

@@ -1,0 +1,1 @@
+"""Prepared receipt viewer package."""
