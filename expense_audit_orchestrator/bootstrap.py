@@ -51,10 +51,15 @@ def _resolve_profile(
     profile: ExpenseProfile | str,
     *,
     telecom_asset_dir: Path | str | None = None,
+    audit_service_url: str | None = None,
 ) -> ExpenseProfile:
     if isinstance(profile, ExpenseProfile):
         return profile
-    return get_profile(profile, telecom_asset_dir=telecom_asset_dir)
+    return get_profile(
+        profile,
+        telecom_asset_dir=telecom_asset_dir,
+        service_url=audit_service_url,
+    )
 
 
 def create_receipt_audit_service(
@@ -87,7 +92,11 @@ def create_receipt_audit_service(
         resolved_profile = None
         resolved_graph_path = None
     else:
-        resolved_profile = _resolve_profile(profile, telecom_asset_dir=telecom_asset_dir)
+        resolved_profile = _resolve_profile(
+            profile,
+            telecom_asset_dir=telecom_asset_dir,
+            audit_service_url=audit_service_url,
+        )
         resolved_graph_path = None if graph_content is not None else (
             graph_path or resolved_profile.default_graph_path or DEFAULT_GRAPH_PATH
         )
@@ -137,6 +146,7 @@ def create_receipt_audit_service(
         invoice_result_sink=resolved_invoice_result_sink,
         receipt_result_sink=resolved_receipt_result_sink,
         overall_advice_provider=resolved_overall_advice_provider,
+        audit_service_url=audit_service_url,
     )
 
 
@@ -226,6 +236,7 @@ def _resolve_receipt_result_sink(
         "audit_travels_builder": profile.audit_travels_builder,
         "form_invoice_tax_views_builder": profile.form_invoice_tax_views_builder,
         "audit_rule_catalog": profile.audit_rule_catalog,
+        "expense_profile": profile.name,
     }
     sinks: list[ReceiptResultSink] = []
     if writeback_output_dir is not None:
@@ -272,6 +283,7 @@ def _build_dynamic_writeback_sink(
             "audit_travels_builder": profile.audit_travels_builder if profile else None,
             "form_invoice_tax_views_builder": profile.form_invoice_tax_views_builder if profile else None,
             "audit_rule_catalog": profile.audit_rule_catalog if profile else None,
+            "expense_profile": profile.name if profile else None,
         }
         payload = build_writeback_payload(receipt_result, **strategy_kwargs)
         # 先导出 payload 再回写：回写失败时也能拿到实际发送的 payload 供排查

@@ -11,14 +11,21 @@ FormBuilder = Callable[[list[tuple[dict[str, Any], dict[str, Any]]], Mapping[str
 AuditRuleCatalog = Mapping[str, Mapping[str, Any]]
 
 
-# E31 (发票合计金额不足) employeeSuggestionTips 文本 — CSV 第四列，两场景全文。
+# E31（表单发票金额不足）对应 docs/更新通讯费.csv 的最新回写内容。
 # 制度列 CSV 为 "/"（空），故 E31 policiesIndex 恒为空。
+E31_PROBLEM_CATEGORY = "金额不足"
+E31_OPTIMIZATION_ACTION_CATEGORY = "【补充发票】【调减金额】"
+# 个人交通费 E31 使用交通费流程图/CSV 的专属文案。回写层不能把通讯费
+# 的 E31 固定文案覆盖到个人交通费结果上。
+PERSONAL_TRANSPORT_E31_SUGGESTION = (
+    "请补充上传金额足够的有效交通费发票；若下方已有票据被标记异常，请先按提示修正。"
+    "也可将填报金额调减至有效发票金额以内。"
+)
+PERSONAL_TRANSPORT_E31_PROBLEM_CATEGORY = "金额不足"
+PERSONAL_TRANSPORT_E31_OPTIMIZATION_ACTION_CATEGORY = "【补充发票】【调减金额】"
 E31_SUGGESTION = (
-    "场景1：前面检查有未通过发票，导致有效金额不足\n"
-    "建议：【整改问题】整改下方标记问题的发票，整改后会重新计入有效金额；\n\n"
-    "场景2：漏传发票或发票识别不清晰，导致有效金额不足\n"
-    "建议：【检查上传】请补充上传电子发票，如为纸质发票，请拍照上传。"
-    "如均已上传发票，请确认纸质发票金额识别是否正确"
+    "请补充上传金额足够的有效发票。若下方已有发票被标记为异常，请先按提示修正这些发票；"
+    "修正通过后，系统会重新计算可用发票金额。"
 )
 
 
@@ -34,14 +41,25 @@ def assemble_result_audit_info(
     audit_travels_builder: AuditTravelsBuilder | None = None,
     form_invoice_tax_views_builder: FormBuilder | None = None,
     audit_rule_catalog: AuditRuleCatalog | None = None,
+    expense_profile: str | None = None,
 ) -> dict[str, Any]:
     receipt_code = str(processed_receipt.get("receiptCode") or prepared_receipt.get("receiptCode") or "")
+    expense_profile = expense_profile or _resolve_expense_profile_name(
+        processed_receipt, prepared_receipt
+    )
     service_data = dict(prepared_receipt.get("serviceData") or processed_receipt.get("serviceData") or {})
     audit_info = dict(service_data.get("auditInfo") or {})
     instance_code = _get_string_value(audit_info, "instanceCode") or receipt_code
 
     invoice_pairs = _pair_invoices(prepared_receipt, processed_receipt)
     is_amount_sufficient = processed_receipt.get("isAmountSufficient")
+    is_gift_count_reasonable = processed_receipt.get("isGiftCountReasonable")
+    gift_reception_count = _coerce_receipt_number(
+        processed_receipt.get("giftReceptionCount")
+    )
+    total_goods_count = _coerce_receipt_number(
+        processed_receipt.get("totalGoodsCount")
+    )
 
     # Receipt-level amount context used to build the final E31 message with real
     # totals (有效发票合计金额 / 报销金额 / 缺少金额). Sourced from the orchestrator's
@@ -64,9 +82,24 @@ def assemble_result_audit_info(
             is_amount_sufficient=is_amount_sufficient,
             apply_amount=apply_amount,
             valid_invoice_total=valid_invoice_total,
+            is_gift_count_reasonable=is_gift_count_reasonable,
+            gift_reception_count=gift_reception_count,
+            total_goods_count=total_goods_count,
             audit_rule_catalog=audit_rule_catalog,
+            expense_profile=expense_profile,
         ),
-        "auditInvoiceInfos": _build_audit_invoice_infos(instance_code, audit_info, invoice_pairs, is_amount_sufficient=is_amount_sufficient),
+        "auditInvoiceInfos": _build_audit_invoice_infos(
+            instance_code,
+            audit_info,
+            invoice_pairs,
+            is_amount_sufficient=is_amount_sufficient,
+            apply_amount=apply_amount,
+            valid_invoice_total=valid_invoice_total,
+            is_gift_count_reasonable=is_gift_count_reasonable,
+            gift_reception_count=gift_reception_count,
+            total_goods_count=total_goods_count,
+            expense_profile=expense_profile,
+        ),
         "auditInvoiceFiles": _build_audit_invoice_files(service_data),
         "auditRelationFiles": _build_audit_relation_files(invoice_pairs),
         "auditInvoiceInfoContents": _build_audit_invoice_info_contents(
@@ -144,27 +177,166 @@ def _sum_invoice_final_amounts(
     return total if found else None
 
 
-def _build_e31_message(apply_amount: float | None, valid_invoice_total: float | None) -> str:
-    """Build the receipt-level E31 message with real totals.
+def _build_e31_message(
+    apply_amount: float | None,
+    valid_invoice_total: float | None,
+    *,
+    expense_profile: str | None = None,
+) -> str:
+    """Build an E31 message from the profile's latest CSV template.
 
-    CSV 模板：当前核销单有效发票合计金额**元，低于报销单报销金额**元，
-    有效发票金额缺少**元。 当金额不可得时退回静态文案。
+    正常执行路径会从核销单结果拿到报销金额和可用发票金额。金额缺失时，
+    不再回退到旧版「当前核销单有效发票合计金额……」文案，而是返回新版的
+    无金额上下文提示，避免把旧规则文案重新写回回写结果。
     """
     if apply_amount is None or valid_invoice_total is None:
-        return "发票合计金额不足"
-    shortage = apply_amount - valid_invoice_total
-    if shortage < 0:
-        shortage = 0.0
+        return "可用发票金额不足，暂不能提交。"
+    shortage = max(apply_amount - valid_invoice_total, 0.0)
+    amount_label = "本次交通费报销金额为" if _is_personal_transport_profile(expense_profile) else "本次报销金额为"
     return (
-        f"当前核销单有效发票合计金额{_format_amount(valid_invoice_total)}元，"
-        f"低于报销单报销金额{_format_amount(apply_amount)}元，"
-        f"有效发票金额缺少{_format_amount(shortage)}元。"
+        f"{amount_label} {_format_amount(apply_amount)} 元，"
+        f"当前可用发票金额为 {_format_amount(valid_invoice_total)} 元， "
+        f"待补充{_format_amount(shortage)} 元。可用发票金额不足，暂不能提交。"
     )
+
+
+def _override_e31_rule_result(
+    rule_result: Mapping[str, Any],
+    *,
+    is_amount_sufficient: bool,
+    apply_amount: float | None = None,
+    valid_invoice_total: float | None = None,
+    expense_profile: str | None = None,
+) -> dict[str, Any]:
+    """Apply receipt-level E31 result without losing the graph rule metadata.
+
+    E31 is recalculated by the orchestrator after graph execution.  Keeping this
+    override in one helper is important: both auditLogs and auditInvoiceInfos
+    previously had separate hard-coded overrides, and the former was still using
+    the old CSV message/suggestion.
+    """
+    overridden = dict(rule_result)
+    if is_amount_sufficient:
+        overridden["distinguish_result"] = "PASS"
+        overridden["distinguishResult"] = "PASS"
+        overridden["message"] = "发票合计金额充足"
+        overridden["policiesIndex"] = ""
+        overridden["employeeSuggestionTips"] = ""
+        overridden["problem_category"] = ""
+        overridden["optimization_action_category"] = ""
+    else:
+        overridden["distinguish_result"] = "REJECT"
+        overridden["distinguishResult"] = "REJECT"
+        if _is_personal_transport_profile(expense_profile):
+            # 交通费图已经输出 CSV 中的动态文案和标签；仅在旧图/缺字段时
+            # 使用交通费兜底值，不能使用通讯费的固定 E31 文案。
+            overridden["message"] = _get_string_value(overridden, "message") or _build_e31_message(
+                apply_amount, valid_invoice_total, expense_profile=expense_profile
+            )
+            overridden["policiesIndex"] = overridden.get("policiesIndex") or ""
+            overridden["employeeSuggestionTips"] = (
+                _get_string_value(overridden, "employeeSuggestionTips")
+                or PERSONAL_TRANSPORT_E31_SUGGESTION
+            )
+            overridden["problem_category"] = (
+                _get_rule_tag(overridden, "problem_category", "problemCategory", "problemTags")
+                or PERSONAL_TRANSPORT_E31_PROBLEM_CATEGORY
+            )
+            overridden["optimization_action_category"] = (
+                _get_rule_tag(
+                    overridden,
+                    "optimization_action_category",
+                    "optimizationActionCategory",
+                    "suggestionTags",
+                )
+                or PERSONAL_TRANSPORT_E31_OPTIMIZATION_ACTION_CATEGORY
+            )
+        else:
+            overridden["message"] = _build_e31_message(
+                apply_amount, valid_invoice_total, expense_profile=expense_profile
+            )
+            overridden["policiesIndex"] = ""
+            overridden["employeeSuggestionTips"] = E31_SUGGESTION
+            overridden["problem_category"] = E31_PROBLEM_CATEGORY
+            overridden["optimization_action_category"] = E31_OPTIMIZATION_ACTION_CATEGORY
+    return overridden
 
 
 def _format_amount(value: float) -> str:
     # 保留两位小数，去掉无意义的尾零（10.00 -> 10，10.50 -> 10.5）
     return f"{value:.2f}".rstrip("0").rstrip(".")
+
+
+def _coerce_receipt_number(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(str(value).replace(",", "").strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _format_count(value: float | None) -> str:
+    if value is None:
+        return ""
+    return str(int(value)) if value.is_integer() else str(value)
+
+
+def _override_w33_rule_result(
+    rule_result: Mapping[str, Any],
+    *,
+    is_reasonable: bool,
+    gift_reception_count: float | None,
+    total_goods_count: float | None,
+) -> dict[str, Any]:
+    overridden = dict(rule_result)
+    if is_reasonable:
+        overridden["distinguish_result"] = "PASS"
+        overridden["distinguishResult"] = "PASS"
+        overridden["message"] = (
+            f"全部发票购买商品数量【{_format_count(total_goods_count)}】"
+            f"不少于赠送纪念品接待人数【{_format_count(gift_reception_count)}】，"
+            "礼品数量与接待人数匹配合理"
+        )
+        overridden["policiesIndex"] = ""
+        overridden["employeeSuggestionTips"] = ""
+    else:
+        overridden["distinguish_result"] = "WARNING"
+        overridden["distinguishResult"] = "WARNING"
+        overridden["message"] = (
+            f"全部发票购买商品数量【{_format_count(total_goods_count)}】"
+            f"少于赠送纪念品接待人数【{_format_count(gift_reception_count)}】，"
+            "存在礼品数量与接待人数不匹配的异常风险，"
+            "赠送纪念品的商品数量需≥接待人数，确保一人一份的合理配比"
+        )
+        overridden["policiesIndex"] = "《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范"
+        overridden["employeeSuggestionTips"] = (
+            "【业务确认】请确认礼品数量与接待人数是否匹配，如为实际业务发生的合理配比，"
+            "请在单据备注栏说明具体接待情况及礼品分配逻辑，财务将进行人工复核"
+        )
+    return overridden
+
+
+def _override_w33_decision_output(
+    decision_output: Mapping[str, Any],
+    *,
+    is_reasonable: bool,
+    gift_reception_count: float | None,
+    total_goods_count: float | None,
+) -> dict[str, Any]:
+    overridden_output = dict(decision_output)
+    for key, value in decision_output.items():
+        if not isinstance(value, Mapping):
+            continue
+        reason_code = value.get("reason_code") or value.get("reasonCode")
+        if reason_code == "W33":
+            overridden_output[key] = _override_w33_rule_result(
+                value,
+                is_reasonable=is_reasonable,
+                gift_reception_count=gift_reception_count,
+                total_goods_count=total_goods_count,
+            )
+    return overridden_output
 
 
 def _build_audit_logs(
@@ -175,7 +347,11 @@ def _build_audit_logs(
     is_amount_sufficient: bool | None = None,
     apply_amount: float | None = None,
     valid_invoice_total: float | None = None,
+    is_gift_count_reasonable: bool | None = None,
+    gift_reception_count: float | None = None,
+    total_goods_count: float | None = None,
     audit_rule_catalog: AuditRuleCatalog | None = None,
+    expense_profile: str | None = None,
 ) -> list[dict[str, Any]]:
     audit_logs: list[dict[str, Any]] = []
     for index, (preparation, result) in enumerate(invoice_pairs):
@@ -203,21 +379,25 @@ def _build_audit_logs(
                     if not is_last:
                         continue
                     if is_amount_sufficient is not None:
-                        rule_result = dict(rule_result)
-                        if is_amount_sufficient:
-                            rule_result["distinguish_result"] = "PASS"
-                            rule_result["distinguishResult"] = "PASS"
-                            rule_result["message"] = "发票合计金额充足"
-                            rule_result["policiesIndex"] = ""
-                            rule_result["employeeSuggestionTips"] = ""
-                        else:
-                            rule_result["distinguish_result"] = "REJECT"
-                            rule_result["distinguishResult"] = "REJECT"
-                            rule_result["message"] = _build_e31_message(
-                                apply_amount, valid_invoice_total
-                            )
-                            rule_result["policiesIndex"] = ""
-                            rule_result["employeeSuggestionTips"] = E31_SUGGESTION
+                        rule_result = _override_e31_rule_result(
+                            rule_result,
+                            is_amount_sufficient=bool(is_amount_sufficient),
+                            apply_amount=apply_amount,
+                            valid_invoice_total=valid_invoice_total,
+                            expense_profile=expense_profile,
+                        )
+
+                if reason_code == "W33":
+                    # W33 是核销单级规则，只在最后一张发票回写最终结果。
+                    if not is_last:
+                        continue
+                    if is_gift_count_reasonable is not None:
+                        rule_result = _override_w33_rule_result(
+                            rule_result,
+                            is_reasonable=bool(is_gift_count_reasonable),
+                            gift_reception_count=gift_reception_count,
+                            total_goods_count=total_goods_count,
+                        )
 
                 # createTime 取图内各稽核点输出的 create_time（来自 context.executionTime），
                 # 兼容 create_time / createTime 两种键名；回写层不另行生成时间戳。
@@ -244,31 +424,71 @@ def _build_audit_logs(
                         "specificProblemDes": rule_result.get("message") or result.get("errorMessage"),
                         "policiesIndex": rule_result.get("policiesIndex"),
                         "employeeSuggestionTips": rule_result.get("employeeSuggestionTips"),
+                        # 通讯费规则图新增的标签字段：
+                        # problem_category -> problemTags，优化动作分类 -> suggestionTags。
+                        "problemTags": _get_rule_tag(rule_result, "problem_category", "problemCategory", "problemTags"),
+                        "suggestionTags": _get_rule_tag(
+                            rule_result,
+                            "optimization_action_category",
+                            "optimizationActionCategory",
+                            "suggestionTags",
+                        ),
                         "createTime": rule_result.get("create_time") or rule_result.get("createTime"),
                     }
                 )
             if audit_rule_catalog:
                 actual_codes = {str(log.get("reasonCode") or "") for log in invoice_logs}
                 for reason_code, metadata in audit_rule_catalog.items():
+                    # E31/W33 是核销单级结果，只能由最后一张发票承载；
+                    # W33 在上面的运行结果中若已出现，会先被非最后发票过滤，
+                    # 因此这里也必须阻止 catalog 补齐逻辑把它重新写回前置发票。
+                    if reason_code == "W33" and not is_last:
+                        continue
                     if reason_code in actual_codes or reason_code in {"E31", "sys-001", "sys-003", "sys-004"}:
                         continue
-                    invoice_logs.append(
-                        {
-                            "instanceCode": prepared_instance_code or instance_code,
-                            "invoiceFileId": prepared_invoice_file_id,
-                            "invoiceInfoId": prepared_invoice_info_id,
-                            "reasonCode": reason_code,
-                            "auditType": metadata.get("auditType", "general-rules"),
-                            "auditContent": metadata.get("auditContent", ""),
-                            "distinguishContent": metadata.get("distinguishContent", ""),
-                            "distinguishResult": "pass",
-                            "message": "",
-                            "specificProblemDes": "",
-                            "policiesIndex": metadata.get("policiesIndex", ""),
-                            "employeeSuggestionTips": "",
-                            "createTime": None,
-                        }
-                    )
+                    catalog_rule_result = {
+                        "instanceCode": prepared_instance_code or instance_code,
+                        "invoiceFileId": prepared_invoice_file_id,
+                        "invoiceInfoId": prepared_invoice_info_id,
+                        "reasonCode": reason_code,
+                        "auditType": metadata.get("auditType", "general-rules"),
+                        "auditContent": metadata.get("auditContent", ""),
+                        "distinguishContent": metadata.get("distinguishContent", ""),
+                        "distinguishResult": "pass",
+                        "message": "",
+                        "specificProblemDes": "",
+                        "policiesIndex": metadata.get("policiesIndex", ""),
+                        "employeeSuggestionTips": "",
+                        "problemTags": _get_rule_tag(metadata, "problem_category", "problemCategory", "problemTags"),
+                        "suggestionTags": _get_rule_tag(
+                            metadata,
+                            "optimization_action_category",
+                            "optimizationActionCategory",
+                            "suggestionTags",
+                        ),
+                        "createTime": None,
+                    }
+                    if reason_code == "W33" and is_gift_count_reasonable is not None:
+                        overridden_w33 = _override_w33_rule_result(
+                            {"distinguish_result": "PASS"},
+                            is_reasonable=bool(is_gift_count_reasonable),
+                            gift_reception_count=gift_reception_count,
+                            total_goods_count=total_goods_count,
+                        )
+                        catalog_rule_result.update(
+                            {
+                                "distinguishResult": _normalize_rule_distinguish_result(
+                                    overridden_w33.get("distinguish_result")
+                                ),
+                                "message": overridden_w33.get("message", ""),
+                                "specificProblemDes": overridden_w33.get("message", ""),
+                                "policiesIndex": overridden_w33.get("policiesIndex", ""),
+                                "employeeSuggestionTips": overridden_w33.get(
+                                    "employeeSuggestionTips", ""
+                                ),
+                            }
+                        )
+                    invoice_logs.append(catalog_rule_result)
             audit_logs.extend(invoice_logs)
             continue
 
@@ -286,6 +506,18 @@ def _build_audit_logs(
                 "specificProblemDes": decision_output.get("message") or result.get("errorMessage"),
                 "policiesIndex": decision_output.get("policiesIndex"),
                 "employeeSuggestionTips": decision_output.get("employeeSuggestionTips"),
+                "problemTags": _get_rule_tag(
+                    decision_output,
+                    "problem_category",
+                    "problemCategory",
+                    "problemTags",
+                ),
+                "suggestionTags": _get_rule_tag(
+                    decision_output,
+                    "optimization_action_category",
+                    "optimizationActionCategory",
+                    "suggestionTags",
+                ),
                 "createTime": decision_output.get("create_time") or decision_output.get("createTime"),
             }
         )
@@ -359,6 +591,12 @@ def _build_audit_invoice_infos(
     invoice_pairs: list[tuple[dict[str, Any], dict[str, Any]]],
     *,
     is_amount_sufficient: bool | None = None,
+    apply_amount: float | None = None,
+    valid_invoice_total: float | None = None,
+    is_gift_count_reasonable: bool | None = None,
+    gift_reception_count: float | None = None,
+    total_goods_count: float | None = None,
+    expense_profile: str | None = None,
 ) -> list[dict[str, Any]]:
     invoice_infos: list[dict[str, Any]] = []
     for index, (preparation, result) in enumerate(invoice_pairs):
@@ -370,22 +608,24 @@ def _build_audit_invoice_infos(
         decision_output = dict(result.get("decisionOutput") or {})
 
         if is_last and is_amount_sufficient is not None and "amount_result" in decision_output:
-            overridden_amount_result = dict(decision_output["amount_result"])
-            if is_amount_sufficient:
-                overridden_amount_result["distinguish_result"] = "PASS"
-                overridden_amount_result["distinguishResult"] = "PASS"
-                overridden_amount_result["message"] = "发票合计金额充足"
-                overridden_amount_result["policiesIndex"] = ""
-                overridden_amount_result["employeeSuggestionTips"] = ""
-            else:
-                overridden_amount_result["distinguish_result"] = "REJECT"
-                overridden_amount_result["distinguishResult"] = "REJECT"
-                overridden_amount_result["message"] = "发票合计金额不足"
-                overridden_amount_result["policiesIndex"] = ""
-                overridden_amount_result["employeeSuggestionTips"] = E31_SUGGESTION
+            overridden_amount_result = _override_e31_rule_result(
+                decision_output["amount_result"],
+                is_amount_sufficient=bool(is_amount_sufficient),
+                apply_amount=apply_amount,
+                valid_invoice_total=valid_invoice_total,
+                expense_profile=expense_profile,
+            )
             decision_output = {**decision_output, "amount_result": overridden_amount_result}
 
-        ignore_codes = [] if is_last else ["E31"]
+        if is_last and is_gift_count_reasonable is not None:
+            decision_output = _override_w33_decision_output(
+                decision_output,
+                is_reasonable=bool(is_gift_count_reasonable),
+                gift_reception_count=gift_reception_count,
+                total_goods_count=total_goods_count,
+            )
+
+        ignore_codes = [] if is_last else ["E31", "W33"]
         primary_rule_result = _select_primary_rule_result(decision_output, ignore_reason_codes=ignore_codes)
         invoice_infos.append(
             {
@@ -718,6 +958,35 @@ def _resolve_first_item_value(items: Any, key: str) -> Any:
             if isinstance(item, Mapping) and key in item:
                 return item.get(key)
     return None
+
+
+def _is_personal_transport_profile(expense_profile: str | None) -> bool:
+    return (expense_profile or "").strip().lower() in {
+        "personal_transport",
+        "personal-transport",
+        "交通费",
+        "个人交通费",
+    }
+
+
+def _resolve_expense_profile_name(*sources: Mapping[str, Any]) -> str | None:
+    for source in sources:
+        profile = source.get("resolvedProfile")
+        if isinstance(profile, Mapping):
+            value = profile.get("name")
+        else:
+            value = getattr(profile, "name", None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _get_rule_tag(rule_result: Mapping[str, Any], *keys: str) -> Any:
+    """读取稽核结果标签，兼容通讯费图的 snake_case 字段及历史命名。"""
+    for key in keys:
+        if key in rule_result:
+            return rule_result[key]
+    return ""
 
 
 def _get_string_value(data: Mapping[str, Any], *keys: str) -> str | None:

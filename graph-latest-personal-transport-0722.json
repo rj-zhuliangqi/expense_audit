@@ -16,7 +16,7 @@
     {
       "type": "outputNode",
       "content": {
-        "schema": "{\"type\":\"object\",\"properties\":{\"invoice_finalAmount\":{\"type\":\"number\"},\"invoice_content_valid_result\":{\"type\":\"object\",\"properties\":{\"invoice_finalAmount\":{\"type\":\"number\"}}},\"instance_code\":{\"type\":\"string\"},\"reason_code\":{\"type\":\"string\"},\"distinguish_result\":{\"type\":\"string\"},\"audit_content\":{\"type\":\"string\"},\"audit_type\":{\"type\":\"string\"},\"distinguish_content\":{\"type\":\"string\"},\"invoice_file_id\":{\"type\":\"string\"},\"invoice_info_id\":{\"type\":\"string\"},\"message\":{\"type\":\"string\"},\"policiesIndex\":{\"type\":\"string\"},\"employeeSuggestionTips\":{\"type\":\"string\"},\"create_time\":{\"type\":\"string\"}}}"
+        "schema": "{\"type\":\"object\",\"properties\":{\"invoice_finalAmount\":{\"type\":\"number\"},\"invoice_content_valid_result\":{\"type\":\"object\",\"properties\":{\"invoice_finalAmount\":{\"type\":\"number\"}}},\"instance_code\":{\"type\":\"string\"},\"reason_code\":{\"type\":\"string\"},\"distinguish_result\":{\"type\":\"string\"},\"audit_content\":{\"type\":\"string\"},\"audit_type\":{\"type\":\"string\"},\"distinguish_content\":{\"type\":\"string\"},\"invoice_file_id\":{\"type\":\"string\"},\"invoice_info_id\":{\"type\":\"string\"},\"message\":{\"type\":\"string\"},\"policiesIndex\":{\"type\":\"string\"},\"employeeSuggestionTips\":{\"type\":\"string\"},\"create_time\":{\"type\":\"string\"},\"problem_category\":{\"type\":\"string\"},\"optimization_action_category\":{\"type\":\"string\"}}}"
       },
       "id": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
       "name": "response",
@@ -45,7 +45,9 @@
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -59,10 +61,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据种类为“\"+(invoiceType??\"\")+\"”不在国内合规票据范围，不符合“税法政策要求”\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 {发票号} 的票据类型为“{当前票据类型}”，不属于交通费允许票种范围。交通费仅支持数电普票、电子普票、过路过桥费发票、火车票、客运车票、出租车票、财政收据、数电铁路等票据。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【删除发票】删除本票据，并提供真实业务开具的发票\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请删除当前发票，并上传真实业务对应的交通费合规票据。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"票种不符\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【更换票据】\""
           }
         ],
         "inputs": [
@@ -132,6 +136,16 @@
             "id": "a1b2c3d4-0000-0000-0000-createtime0",
             "name": "创建时间",
             "field": "create_time"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
+            "name": "问题分类",
+            "field": "problem_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
+            "name": "优化动作分类",
+            "field": "optimization_action_category"
           }
         ],
         "passThrough": false,
@@ -158,12 +172,12 @@
           {
             "id": "af675bce-5b08-46e4-b516-e39222576c0d",
             "key": "isCompanyExists",
-            "value": "(orgName ?? buyerName ?? \"\") in map(serviceData.companyList as c, c.cName ?? c.cname ?? c.companyName)"
+            "value": "(orgName ?? buyerName ?? \"\") != \"\" and (orgName ?? buyerName ?? \"\") == (filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].companyName ?? filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].cName ?? filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].cname ?? \"\")"
           },
           {
             "id": "e9aa2ade-0afc-4964-94dc-2d223a7dbb88",
             "key": "isTaxExists",
-            "value": "buyerTaxNo in map(serviceData.companyList as c, c.companyTax)"
+            "value": "(buyerTaxNo ?? \"\") != \"\" and (buyerTaxNo ?? \"\") == (filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].companyTax ?? \"\")"
           },
           {
             "id": "f86cf5db-4ebb-4ae1-9a21-2166e5b50098",
@@ -248,7 +262,9 @@
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -262,10 +278,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据购货方名称为“\"+(buyerName??\"\")+\"”，正确购货方名称为“\"+(filter((serviceData.companyList??[]) as c,(c.ccode??c.accountingCode)==(instanceComCode??serviceData.auditInfo.instanceComCode??\"\"))[0].companyName??filter((serviceData.companyList??[]) as c,(c.ccode??c.accountingCode)==(instanceComCode??serviceData.auditInfo.instanceComCode??\"\"))[0].cName??filter((serviceData.companyList??[]) as c,(c.ccode??c.accountingCode)==(instanceComCode??serviceData.auditInfo.instanceComCode??\"\"))[0].cname??\"\")+\"”，不符合“税法政策要求”\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 {发票号} 的购货方信息为“{发票购买方}”，与核销单所属公司“{员工所属公司}”不一致。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2.1.1员工需要确保票据中公司信息的准确性。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票重开】联系销货方或在手机APP重新开具发票\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请联系销货方按正确公司抬头和纳税人识别号重新开票，重新上传后系统会再次校验。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"抬头不符\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【重新开票】\""
           }
         ],
         "inputs": [
@@ -335,6 +353,16 @@
             "id": "a1b2c3d4-0000-0000-0000-createtime0",
             "name": "创建时间",
             "field": "create_time"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
+            "name": "问题分类",
+            "field": "problem_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
+            "name": "优化动作分类",
+            "field": "optimization_action_category"
           }
         ],
         "passThrough": false,
@@ -369,7 +397,9 @@
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -383,10 +413,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据购货方税号为“\"+(buyerTaxNo??\"\")+\"”，正确购货方统一信用代码为“\"+(filter((serviceData.companyList??[]) as c,(c.ccode??c.accountingCode)==(accountingCode??\"\"))[0].companyTax??\"\")+\"”，不符合“税法政策要求”\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 {发票号} 的购货方纳税人识别号为“{发票购货方税号}”，与所属公司正确纳税人识别号“{正确纳税人识别号}”不一致。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2.1.1员工需要确保票据中公司信息的准确性。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票重开】联系销货方或在手机APP重新开具发票\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请联系开票方按正确公司抬头和纳税人识别号重新开票，重新上传后系统会再次校验。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"税号不符\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【重新开票】\""
           }
         ],
         "inputs": [
@@ -456,6 +488,16 @@
             "id": "a1b2c3d4-0000-0000-0000-createtime0",
             "name": "创建时间",
             "field": "create_time"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
+            "name": "问题分类",
+            "field": "problem_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
+            "name": "优化动作分类",
+            "field": "optimization_action_category"
           }
         ],
         "passThrough": false,
@@ -490,7 +532,9 @@
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -504,10 +548,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票合计金额不足\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"本次交通费报销金额为 {报销金额} 元，当前有效发票金额为 {可用发票金额} 元，待补充 {缺少金额} 元。可用发票金额不足，暂不能提交。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"场景1：前面检查有未通过发票，导致有效金额不足\n建议：【整改问题】整改下方标记问题的发票，整改后会重新计入有效金额；\n\n场景2：漏传发票或发票识别不清晰，导致有效金额不足\n建议：【检查上传】请补充上传电子发票，如为纸质发票，请拍照上传。如均已上传发票，请确认纸质发票金额识别是否正确\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请补充上传金额足够的有效交通费发票；若下方已有票据被标记异常，请先按提示修正。也可将填报金额调减至有效发票金额以内。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"金额不足\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【补充发票】【调减金额】\""
           }
         ],
         "inputs": [
@@ -577,6 +623,16 @@
             "id": "a1b2c3d4-0000-0000-0000-createtime0",
             "name": "创建时间",
             "field": "create_time"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
+            "name": "问题分类",
+            "field": "problem_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
+            "name": "优化动作分类",
+            "field": "optimization_action_category"
           }
         ],
         "passThrough": false,
@@ -611,7 +667,9 @@
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -625,10 +683,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，发票销货方为“\"+(salerName??\"\")+\"”在税务局黑名单中，不符合“税法政策要求”\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 {发票号} 的销货方“{销货方名称}”命中公司或税务高风险/黑名单企业。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票作废】联系销货方作废本发票，并提供真实业务开具的发票\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请联系销货方作废当前发票，并提供真实业务对应的合规发票。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"高风险销方\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【发票作废】【更换发票】\""
           }
         ],
         "inputs": [
@@ -698,6 +758,16 @@
             "id": "a1b2c3d4-0000-0000-0000-createtime0",
             "name": "创建时间",
             "field": "create_time"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
+            "name": "问题分类",
+            "field": "problem_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
+            "name": "优化动作分类",
+            "field": "optimization_action_category"
           }
         ],
         "passThrough": false,
@@ -732,7 +802,9 @@
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -746,10 +818,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，发票已被核销单“\"+(filter((serviceData.invoiceUsageHistory??[]) as c,c.chequeNo==(invoiceNo??\"\"))[0].miInstanceCode??\"\")+\"”使用，不符合“税法政策要求”\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 {发票号} 已在核销单 {重复核销单号} 中使用，不能重复报销。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【删除发票】删除本票据并提供未使用报销的票据\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请删除该票据，并上传未被使用过的真实交通费票据。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"重复报销\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【删除票据】\""
           }
         ],
         "inputs": [
@@ -819,6 +893,16 @@
             "id": "a1b2c3d4-0000-0000-0000-createtime0",
             "name": "创建时间",
             "field": "create_time"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
+            "name": "问题分类",
+            "field": "problem_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
+            "name": "优化动作分类",
+            "field": "optimization_action_category"
           }
         ],
         "passThrough": false,
@@ -853,7 +937,9 @@
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -867,10 +953,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据开具日期“\"+(invoiceDate??\"\")+\"”不在本年度，不符合“企业内控要求”\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 {发票号} 的开票日期为 {开票日期}，与本次报销提交年度 {提交年度} 不一致。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2.2.3除跨年差旅外,票据不允许跨年核销使用\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【业务确认】报销的发票周期不在本年度\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请确认该票据是否属于本次报销周期。若不属于，请删除并更换本年度票据；确属业务合理跨期的，请补充说明后提交财务复核。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"跨期发票\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【确认账期】【删除票据】\""
           }
         ],
         "inputs": [
@@ -940,6 +1028,16 @@
             "id": "a1b2c3d4-0000-0000-0000-createtime0",
             "name": "创建时间",
             "field": "create_time"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
+            "name": "问题分类",
+            "field": "problem_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
+            "name": "优化动作分类",
+            "field": "optimization_action_category"
           }
         ],
         "passThrough": false,
@@ -1001,7 +1099,9 @@
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
           },
           {
             "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
@@ -1015,10 +1115,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据真伪查验不通过，不符合“税法政策要求”\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 {发票号} 的发票真伪查验未通过，暂不符合真实、合法、合规票据要求。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【稍后报销】发票未上传到税局，请在发票开具24H后再上传使用发票\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"若为新开票据，请在开票 24 小时后重新上传或发起查验；若仍无法验真，请联系开票方处理或更换合规发票。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"发票验真异常\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【稍后重试】【更换发票】\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -1032,10 +1134,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据已被销货方作废，不符合“税法政策要求”\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 {发票号} 已被销货方作废，不能作为本次报销凭证。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票重开】联系销货方或在手机APP重新开具发票\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请联系销货方或在对应开票渠道重新开具有效发票后再提交。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"发票作废\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【发票重开】\""
           },
           {
             "_id": "75f486cf-bdf6-49cc-8c72-1ae0f6f40f50",
@@ -1049,10 +1153,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，票据已被销售方红冲，不符合“税法政策要求”\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 {发票号} 已被销售方红冲，不能作为本次报销凭证。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【发票重开】联系销货方或在手机APP重新开具发票\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请联系销货方重新开具有效发票，并删除当前红冲票据。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"发票红冲\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【发票重开】\""
           }
         ],
         "inputs": [
@@ -1122,6 +1228,16 @@
             "id": "a1b2c3d4-0000-0000-0000-createtime0",
             "name": "创建时间",
             "field": "create_time"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
+            "name": "问题分类",
+            "field": "problem_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
+            "name": "优化动作分类",
+            "field": "optimization_action_category"
           }
         ],
         "passThrough": false,
@@ -1158,7 +1274,7 @@
           {
             "id": "99145f04-7d00-4d80-bcc8-4c1ce810915a",
             "key": "header_check",
-            "value": "$.is_company ? $.is_in_company_list : $.is_same_peple"
+            "value": "$.is_company ? $.is_in_company_list : false"
           }
         ],
         "passThrough": true,
@@ -1275,7 +1391,9 @@
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"LLM服务调用失败，充值卡检查无法执行\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
           },
           {
             "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
@@ -1292,7 +1410,9 @@
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -1306,10 +1426,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据“\"+(invoiceNo??\"\")+\"”，发票明细内容包含“\"+(contents??\"\")+\"”部分为公司禁止报销项，不符合“企业内控要求”\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 {发票号} 的明细中包含“{命中内容}”，属于预付、充值、预存类内容，不符合交通费报销要求。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n4.2.2报销范围\\n4.2.2.2 禁止报销：\\n预付卡销售、充值卡、成品油(卡)；\\n上述允许报销范围以外的费用，如机票、保险费、车辆维修费等。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【删除发票】删除本票据，并提供非充值内容的发票\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请删除当前票据，并提供实际交通服务发生后开具的合规发票。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"充值消费\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【删除发票】【重新开票】\""
           }
         ],
         "inputs": [
@@ -1379,6 +1501,16 @@
             "id": "a1b2c3d4-0000-0000-0000-createtime0",
             "name": "创建时间",
             "field": "create_time"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
+            "name": "问题分类",
+            "field": "problem_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
+            "name": "优化动作分类",
+            "field": "optimization_action_category"
           }
         ],
         "passThrough": false,
@@ -1413,7 +1545,9 @@
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
           },
           {
             "_id": "219b5a37-3f96-4def-96a4-c9664a058ec1",
@@ -1427,10 +1561,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据\"+(invoiceNo??\"\")+\"，票面旅客姓名\"+(passengerName??\"\")+\"与核销单核销人姓名\"+(serviceData.auditInfo.verifiUserName??\"\")+\"不一致，不符合“企业内控要求”\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 {发票号} 的旅客姓名为“{旅客姓名}”，与核销人“{核销人姓名}”不一致。火车票、客运汽车票、数电铁路等实名交通票据应为本人票据。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n5.1.1.2 员工仅能填报本人产生的费用。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【删除发票】删除本票据，并提供本人真实业务开具的发票\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请删除该票据，并上传本人真实出行对应的交通票据。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"非本人票据\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【换开发票】\""
           }
         ],
         "inputs": [
@@ -1500,6 +1636,16 @@
             "id": "a1b2c3d4-0000-0000-0000-createtime0",
             "name": "创建时间",
             "field": "create_time"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
+            "name": "问题分类",
+            "field": "problem_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
+            "name": "优化动作分类",
+            "field": "optimization_action_category"
           }
         ],
         "passThrough": false,
@@ -1534,7 +1680,9 @@
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
           },
           {
             "_id": "fabd88a1-3743-44c7-8d72-fc3d0d078eb8",
@@ -1548,10 +1696,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据\"+(invoiceNo??\"\")+\"，数电普通发票未填写出行人信息\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 {发票号} 未填写出行人信息，或出行人“{出行人姓名}”与核销人“{核销人姓名}”不一致。旅客运输数电普票应开具出行人姓名及有效身份证件号。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n5.1.1.2 员工仅能填报本人产生的费用。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【无需操作】请在下次报销时发票开具出行人信息\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"若发票未填写出行人信息，本次可按弱控提示处理；下次请要求开票方补充出行人信息。若出行人与本人不一致，请删除票据并重新开具本人票据。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"出行人信息异常\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【换开发票】\""
           }
         ],
         "inputs": [
@@ -1621,6 +1771,16 @@
             "id": "a1b2c3d4-0000-0000-0000-createtime0",
             "name": "创建时间",
             "field": "create_time"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
+            "name": "问题分类",
+            "field": "problem_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
+            "name": "优化动作分类",
+            "field": "optimization_action_category"
           }
         ],
         "passThrough": false,
@@ -1655,7 +1815,9 @@
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
           },
           {
             "_id": "ea4de6b8-1d08-4d2b-b9c4-98f4bc46bd10",
@@ -1669,10 +1831,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据\"+(invoiceNo??\"\")+\"，数电普通发票出行人姓名与核销人姓名不一致\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 {发票号} 未填写出行人信息，或出行人“{出行人姓名}”与核销人“{核销人姓名}”不一致。旅客运输数电普票应开具出行人姓名及有效身份证件号。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n5.1.1.2 员工仅能填报本人产生的费用。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【删除发票】删除本票据，并提供本人真实业务开具的发票\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"若发票未填写出行人信息，本次可按弱控提示处理；下次请要求开票方补充出行人信息。若出行人与本人不一致，请删除票据并重新开具本人票据。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"出行人信息异常\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【换开发票】\""
           }
         ],
         "inputs": [
@@ -1742,6 +1906,16 @@
             "id": "a1b2c3d4-0000-0000-0000-createtime0",
             "name": "创建时间",
             "field": "create_time"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
+            "name": "问题分类",
+            "field": "problem_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
+            "name": "优化动作分类",
+            "field": "optimization_action_category"
           }
         ],
         "passThrough": false,
@@ -1776,7 +1950,9 @@
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
           },
           {
             "_id": "80f698e1-333b-4a5a-be82-88402c4ef8df",
@@ -1790,10 +1966,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据\"+(invoiceNo??\"\")+\"，发票号码与同批次上传的其他出租车发票号码连续，存在异常重复报销风险\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"本次报销中存在出租车发票号码连续或近似的票据，发票号 {发票号} 与同批次其他票据号码相近，存在异常报销风险。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范\\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【删除发票】删除本票据，并提供真实业务开具的、合规合法发票\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请确认票据是否真实对应本次业务出行。无法说明合理业务原因的，请删除相关票据；保留提交的，系统将记录并转财务复核。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"连号票据\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【删除票据】\""
           }
         ],
         "inputs": [
@@ -1863,6 +2041,16 @@
             "id": "a1b2c3d4-0000-0000-0000-createtime0",
             "name": "创建时间",
             "field": "create_time"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
+            "name": "问题分类",
+            "field": "problem_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
+            "name": "优化动作分类",
+            "field": "optimization_action_category"
           }
         ],
         "passThrough": false,
@@ -1897,7 +2085,9 @@
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"LLM服务调用失败，发票内容项目检查无法执行\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
           },
           {
             "_id": "baff5691-3495-4d68-b677-cf805844b6c5",
@@ -1914,7 +2104,9 @@
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
           },
           {
             "_id": "daee0651-a65a-456c-a67d-4cc3e45cf618",
@@ -1928,10 +2120,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据\"+(invoiceNo??\"\")+\"，发票内容\"+(contents??\"\")+\"不属于“交通费报销允许的项目范围”\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 {发票号} 的发票内容为“{发票内容}”，不属于交通费允许报销项目范围。交通费发票内容应与代驾、停车、充电、客运、通行、运输服务、车辆停放等交通场景相关。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n4.2.2.1允许报销：\\n乘坐地铁、公交、轻轨、网约车、火车产生的运输服务费、乘车费、客运服务费、通行费；\\n驾车产生的汽油费、充电服务费、供电服务费、代驾费、停车费、通行费。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【删除发票】删除本票据，并提供符合交通费内容的发票\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请删除当前发票，并提供符合交通费报销内容的发票。若发票内容为新增交通业务场景，请通过核销锐小财提交人工问询。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"项目内容不符\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【换开发票】\""
           }
         ],
         "inputs": [
@@ -2001,6 +2195,16 @@
             "id": "a1b2c3d4-0000-0000-0000-createtime0",
             "name": "创建时间",
             "field": "create_time"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
+            "name": "问题分类",
+            "field": "problem_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
+            "name": "优化动作分类",
+            "field": "optimization_action_category"
           }
         ],
         "passThrough": false,

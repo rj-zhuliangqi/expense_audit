@@ -247,13 +247,17 @@ class WritebackAssemblerTests(unittest.TestCase):
         # E31 message is overridden with receipt-level real totals
         self.assertEqual(
             payload["auditLogs"][0]["message"],
-            "当前核销单有效发票合计金额40元，低于报销单报销金额100元，有效发票金额缺少60元。",
+            "本次报销金额为 100 元，当前可用发票金额为 40 元， 待补充60 元。可用发票金额不足，暂不能提交。",
         )
         self.assertEqual(payload["auditLogs"][0]["policiesIndex"], "")
         self.assertEqual(payload["auditLogs"][0]["specificProblemDes"], payload["auditLogs"][0]["message"])
-        # REJECT override carries the two-scenario E31 suggestion
-        self.assertIn("场景1", payload["auditLogs"][0]["employeeSuggestionTips"])
-        self.assertIn("场景2", payload["auditLogs"][0]["employeeSuggestionTips"])
+        self.assertEqual(
+            payload["auditLogs"][0]["employeeSuggestionTips"],
+            "请补充上传金额足够的有效发票。若下方已有发票被标记为异常，请先按提示修正这些发票；"
+            "修正通过后，系统会重新计算可用发票金额。",
+        )
+        self.assertEqual(payload["auditLogs"][0]["problemTags"], "金额不足")
+        self.assertEqual(payload["auditLogs"][0]["suggestionTags"], "【补充发票】【调减金额】")
         self.assertEqual(payload["auditLogs"][1]["reasonCode"], "E01")
         self.assertEqual(payload["auditLogs"][1]["distinguishResult"], "pass")
         self.assertEqual(payload["auditLogs"][1]["specificProblemDes"], payload["auditLogs"][1]["message"])
@@ -999,12 +1003,17 @@ class WritebackAssemblerTests(unittest.TestCase):
         self.assertEqual(payload["auditLogs"][0]["invoiceFileId"], "AFID-002")
         self.assertEqual(payload["auditLogs"][0]["reasonCode"], "E31")
         self.assertEqual(payload["auditLogs"][0]["distinguishResult"], "reject")
-        # No applyAmount/validInvoiceTotal in processed_receipt -> static fallback message
-        self.assertEqual(payload["auditLogs"][0]["message"], "发票合计金额不足")
-        # REJECT override carries the E31 suggestion (two-scenario text) and empty policiesIndex
+        # No applyAmount/validInvoiceTotal in processed_receipt -> new-template fallback message
+        self.assertEqual(payload["auditLogs"][0]["message"], "可用发票金额不足，暂不能提交。")
+        # REJECT override carries the latest CSV suggestion and categories
         self.assertEqual(payload["auditLogs"][0]["policiesIndex"], "")
-        self.assertIn("场景1", payload["auditLogs"][0]["employeeSuggestionTips"])
-        self.assertIn("场景2", payload["auditLogs"][0]["employeeSuggestionTips"])
+        self.assertEqual(
+            payload["auditLogs"][0]["employeeSuggestionTips"],
+            "请补充上传金额足够的有效发票。若下方已有发票被标记为异常，请先按提示修正这些发票；"
+            "修正通过后，系统会重新计算可用发票金额。",
+        )
+        self.assertEqual(payload["auditLogs"][0]["problemTags"], "金额不足")
+        self.assertEqual(payload["auditLogs"][0]["suggestionTags"], "【补充发票】【调减金额】")
 
         # 2. auditInvoiceInfos validation
         self.assertEqual(len(payload["auditInvoiceInfos"]), 2)
@@ -1019,17 +1028,77 @@ class WritebackAssemblerTests(unittest.TestCase):
         # 有真实金额时按 CSV 模板填充
         self.assertEqual(
             _build_e31_message(100.0, 40.0),
-            "当前核销单有效发票合计金额40元，低于报销单报销金额100元，有效发票金额缺少60元。",
+            "本次报销金额为 100 元，当前可用发票金额为 40 元， 待补充60 元。可用发票金额不足，暂不能提交。",
         )
         # shortage 不会出现负数
-        self.assertIn("缺少0元", _build_e31_message(10.0, 187.15))
-        # 金额缺失时退回静态文案
-        self.assertEqual(_build_e31_message(None, None), "发票合计金额不足")
-        self.assertEqual(_build_e31_message(100.0, None), "发票合计金额不足")
+        self.assertIn("待补充0 元", _build_e31_message(10.0, 187.15))
+        # 金额缺失时仍返回新版的不可提交提示
+        self.assertEqual(_build_e31_message(None, None), "可用发票金额不足，暂不能提交。")
+        self.assertEqual(_build_e31_message(100.0, None), "可用发票金额不足，暂不能提交。")
         # 金额格式化去掉无意义尾零
         self.assertEqual(_format_amount(10.0), "10")
         self.assertEqual(_format_amount(10.5), "10.5")
         self.assertEqual(_format_amount(382.2), "382.2")
+
+    def test_personal_transport_e31_preserves_graph_message_and_maps_tags(self) -> None:
+        """交通费 E31 不应被通讯费回写覆盖，并应把图字段映射到 auditLogs 标签。"""
+        prepared_receipt = {
+            "receiptCode": "REC-TRANSPORT-E31-001",
+            "serviceData": {"auditInfo": {"instanceCode": "REC-TRANSPORT-E31-001"}},
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "invoiceFile": {"fid": "FID-001"},
+                    "preparedInput": {
+                        "serviceData": {
+                            "currentInvoiceInfo": {"aiiid": "AIIID-001"},
+                            "currentAuditInvoiceFile": {"afiid": "AFID-001", "fid": "FID-001"},
+                        }
+                    },
+                }
+            ],
+        }
+        traffic_message = (
+            "本次交通费报销金额为 100 元，当前有效发票金额为 40 元，待补充 60 元。"
+            "可用发票金额不足，暂不能提交。"
+        )
+        processed_receipt = {
+            "receiptCode": "REC-TRANSPORT-E31-001",
+            "serviceData": prepared_receipt["serviceData"],
+            "invoiceResults": [
+                {
+                    "invoiceKey": "FID-001",
+                    "preparedInput": prepared_receipt["invoicePreparations"][0]["preparedInput"],
+                    "decisionOutput": {
+                        "amount_result": {
+                            "reason_code": "E31",
+                            "distinguish_result": "REJECT",
+                            "audit_content": "检查使用发票合计金额是否充足",
+                            "message": traffic_message,
+                            "policiesIndex": "",
+                            "employeeSuggestionTips": "交通费 CSV 建议",
+                            "problem_category": "金额不足",
+                            "optimization_action_category": "【补充发票】【调减金额】",
+                        }
+                    },
+                    "decisionStatus": "reject",
+                }
+            ],
+            "applyAmount": 100.0,
+            "validInvoiceTotal": 40.0,
+            "isAmountSufficient": False,
+        }
+
+        payload = assemble_result_audit_info(
+            prepared_receipt,
+            processed_receipt,
+            expense_profile="personal_transport",
+        )
+        log = payload["auditLogs"][0]
+        self.assertEqual(log["message"], traffic_message)
+        self.assertEqual(log["employeeSuggestionTips"], "交通费 CSV 建议")
+        self.assertEqual(log["problemTags"], "金额不足")
+        self.assertEqual(log["suggestionTags"], "【补充发票】【调减金额】")
 
     def test_assemble_e31_message_uses_receipt_real_totals(self) -> None:
         """端到端：processed_receipt 带真实 applyAmount/validInvoiceTotal 时，E31 message
@@ -1093,8 +1162,13 @@ class WritebackAssemblerTests(unittest.TestCase):
         self.assertEqual(log["distinguishResult"], "reject")
         self.assertEqual(
             log["message"],
-            "当前核销单有效发票合计金额476元，低于报销单报销金额500元，有效发票金额缺少24元。",
+            "本次报销金额为 500 元，当前可用发票金额为 476 元， 待补充24 元。可用发票金额不足，暂不能提交。",
         )
+        self.assertEqual(log["employeeSuggestionTips"],
+                         "请补充上传金额足够的有效发票。若下方已有发票被标记为异常，请先按提示修正这些发票；"
+                         "修正通过后，系统会重新计算可用发票金额。")
+        self.assertEqual(log["problemTags"], "金额不足")
+        self.assertEqual(log["suggestionTags"], "【补充发票】【调减金额】")
 
     def test_assemble_propagates_graph_regulation_and_suggestion(self) -> None:
         # 图节点产出的 regulation/suggestion 应原样透传到 auditLogs（非 E31 节点）
@@ -1134,6 +1208,8 @@ class WritebackAssemblerTests(unittest.TestCase):
                             "message": "票据发票销货方在黑名单中",
                             "policiesIndex": "《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范",
                             "employeeSuggestionTips": "【发票作废】联系销货方作废本发票",
+                            "problem_category": "虚开发票",
+                            "optimization_action_category": "【重新开票】",
                         },
                     },
                     "decisionStatus": "reject",
@@ -1147,6 +1223,8 @@ class WritebackAssemblerTests(unittest.TestCase):
         self.assertEqual(log["reasonCode"], "E09")
         self.assertEqual(log["policiesIndex"], "《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范")
         self.assertEqual(log["employeeSuggestionTips"], "【发票作废】联系销货方作废本发票")
+        self.assertEqual(log["problemTags"], "虚开发票")
+        self.assertEqual(log["suggestionTags"], "【重新开票】")
 
     def test_assemble_propagates_create_time_from_rule_result(self) -> None:
         """图内各稽核点输出的 create_time（取自 context.executionTime）应原样透传到
