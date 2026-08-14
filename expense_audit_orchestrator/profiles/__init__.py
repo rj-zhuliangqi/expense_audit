@@ -144,19 +144,30 @@ def _build_travel_profile(asset_dir: Path | str | None = None) -> ExpenseProfile
     )
 
 
-def _build_personal_transport_profile(asset_dir: Path | str | None = None) -> ExpenseProfile:
+def _build_personal_transport_profile(
+    asset_dir: Path | str | None = None,
+    service_url: str | None = None,
+) -> ExpenseProfile:
     """个人交通费（personal_transport）profile。
 
     对应执行图 graph-latest-personal-transport-0722.json（可通过 .env 的
     PERSONAL_TRANSPORT_GRAPH_PATH 覆盖）。合规规则在图内节点完成，回写使用默认放行策略。
     """
-    from .personal_transport.data import personal_transport_receipt_enricher
+    from .personal_transport.data import (
+        build_taxi_invoice_serial_enricher,
+        personal_transport_invoice_type_enricher,
+        personal_transport_receipt_enricher,
+    )
     from .personal_transport.writeback import personal_transport_compliance_rule
 
     return ExpenseProfile(
         name="personal_transport",
         default_graph_path=PERSONAL_TRANSPORT_GRAPH_PATH,
         receipt_enrichers={"personal_transport_data": personal_transport_receipt_enricher},
+        invoice_enrichers={
+            "personalTransportInvoiceType": personal_transport_invoice_type_enricher,
+            "taxiInvoiceSerial": build_taxi_invoice_serial_enricher(service_url=service_url),
+        },
         compliance_rule=personal_transport_compliance_rule,
         writeback_save_path=AUDIT_INFO_SAVE_PATH,
     )
@@ -189,6 +200,7 @@ def get_profile(
     *,
     telecom_asset_dir: Path | str | None = None,
     asset_dir: Path | str | None = None,
+    service_url: str | None = None,
 ) -> ExpenseProfile:
     """按名称获取已注册的 expense profile（懒加载 + 缓存）。
 
@@ -204,7 +216,14 @@ def get_profile(
     resolved_asset_dir = asset_dir or telecom_asset_dir
     if resolved_asset_dir is not None:
         # 显式指定资产目录时，不使用缓存，每次重新构建（确保资产变更生效）
-        return builder(asset_dir=resolved_asset_dir)
+        kwargs: dict[str, Any] = {"asset_dir": resolved_asset_dir}
+        if normalized == "personal_transport":
+            kwargs["service_url"] = service_url
+        return builder(**kwargs)
+
+    # 显式服务地址只用于当前实例，不能污染默认 profile 缓存。
+    if service_url is not None and normalized == "personal_transport":
+        return builder(service_url=service_url)
 
     if normalized not in _PROFILE_CACHE:
         _PROFILE_CACHE[normalized] = builder()
@@ -230,7 +249,12 @@ class ProfileResolver:
 
     ei_code_map: Mapping[str, str]
 
-    def resolve(self, ei_code: str | None) -> ExpenseProfile:
+    def resolve(
+        self,
+        ei_code: str | None,
+        *,
+        service_url: str | None = None,
+    ) -> ExpenseProfile:
         if not ei_code:
             raise UnknownExpenseTypeError("eiCode is empty or None, cannot route to expense profile")
         normalized = ei_code.strip()
@@ -240,7 +264,7 @@ class ProfileResolver:
                 f"eiCode {normalized!r} is not mapped to any expense profile; "
                 f"add it to ei_code_map.json to enable routing"
             )
-        return get_profile(profile_name)
+        return get_profile(profile_name, service_url=service_url)
 
     @classmethod
     def from_map_file(cls, path: Path | str | None = None) -> "ProfileResolver":

@@ -142,6 +142,46 @@ def fetch_invoice_info(
     return _expect_list_payload(data, "invoice info")
 
 
+def fetch_invoice_serial_numbers(
+    cheque_no: str,
+    instance_code: str,
+    accounting_code: str | None = None,
+    service_url: str = DEFAULT_AUDIT_SERVICE_URL,
+    timeout: float | None = None,
+) -> list[str]:
+    """查询发票在历史库中的连票号码。
+
+    服务端 ``data`` 当前只明确约定为列表；为兼容不同网关版本，列表项
+    同时支持直接发票号字符串和包含 chequeNo/invoiceNo/serialNo 的对象。
+    """
+    data = _fetch_service_data(
+        "/api/audit-service/audit/invoice-serial-number",
+        service_url=service_url,
+        timeout=timeout,
+        description="发票历史连票信息",
+        query_params={
+            "chequeNo": cheque_no,
+            "instanceCode": instance_code,
+            "accountingCode": accounting_code,
+        },
+        headers=_build_auth_headers(),
+    )
+    if not isinstance(data, list):
+        raise ValueError("invoice serial number service returned invalid payload")
+
+    result: list[str] = []
+    for item in data:
+        value: Any = item
+        if isinstance(item, Mapping):
+            value = item.get("chequeNo") or item.get("invoiceNo") or item.get("serialNo")
+        if value is None or isinstance(value, (Mapping, list, tuple, set)):
+            continue
+        normalized = str(value).strip()
+        if normalized:
+            result.append(normalized)
+    return result
+
+
 def fetch_audit_invoice_files(
     instance_code: str,
     a_type: int = 0,
@@ -627,5 +667,6 @@ __all__ = [
     "fetch_expense_invoice_types",
     "fetch_field_mappings",
     "fetch_invoice_info",
+    "fetch_invoice_serial_numbers",
     "update_audit_task_status",
 ]

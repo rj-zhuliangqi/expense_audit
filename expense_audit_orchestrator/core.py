@@ -491,6 +491,7 @@ class ReceiptDataPreparer:
         ocr_sample_path: Path | str = DEFAULT_OCR_PATH,
         *,
         include_current_invoice_metadata: bool = True,
+        extra_enrichers_override: Mapping[str, DataEnricher] | None = None,
     ) -> dict[str, Any]:
         normalized_receipt_context = dict(receipt_context or self.prepare_receipt_context(receipt_code))
         receipt_service_data = dict(normalized_receipt_context.get("serviceData") or {})
@@ -565,7 +566,12 @@ class ReceiptDataPreparer:
             service_data["currentAuditInvoiceFileInfo"] = current_audit_invoice_file_info
         if ocr_envelope is not None:
             service_data["ocrEnvelope"] = ocr_envelope
-        for service_name, enricher in self.extra_enrichers.items():
+        active_extra_enrichers = (
+            extra_enrichers_override
+            if extra_enrichers_override is not None
+            else self.extra_enrichers
+        )
+        for service_name, enricher in active_extra_enrichers.items():
             service_data[service_name] = enricher(receipt_code, file_path, ocr_data, dict(service_data))
 
         # 企查查企业信息查询：OCR 完成后按当前发票的销方公司名称查询企业工商信息，

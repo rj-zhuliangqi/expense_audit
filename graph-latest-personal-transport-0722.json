@@ -227,7 +227,7 @@
           {
             "id": "466d9389-b4a7-4f98-81ad-2e10a6ae993d",
             "key": "isTaxiConsecutive",
-            "value": "not(some((previousInvoiceNumbers ?? []) as prev, abs(number(invoiceNo) - number(prev)) == 1))"
+            "value": "not((serviceData.taxiInvoiceSerial.isTaxiInvoice ?? false) and ((serviceData.taxiInvoiceSerial.historyHit ?? false) or (serviceData.taxiInvoiceSerial.batchHit ?? false)))"
           }
         ],
         "passThrough": true,
@@ -1966,7 +1966,7 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"本次报销中存在出租车发票号码连续或近似的票据，发票号 {发票号} 与同批次其他票据号码相近，存在异常报销风险。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"本次报销中存在出租车发票连票，发票号 \" + (invoiceNo ?? \"\") + \" 与历史库或本次报销中的其他出租车发票存在连票关系，存在异常报销风险。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范\\n所有费用报销须提供真实、合法、合规的票据。\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"请确认票据是否真实对应本次业务出行。无法说明合理业务原因的，请删除相关票据；保留提交的，系统将记录并转财务复核。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",

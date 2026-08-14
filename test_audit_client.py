@@ -141,6 +141,99 @@ class AuditClientHeaderTests(unittest.TestCase):
         request_url = request.full_url if isinstance(request, Request) else request
         self.assertTrue(request_url.endswith("/api/audit-service/audit/expense-item-relation-invoice-type/EI001"))
 
+    @patch("expense_audit_orchestrator.audit_client.urlopen")
+    def test_fetch_invoice_serial_numbers_accepts_string_and_mapping_items(self, mock_urlopen) -> None:
+        mock_urlopen.return_value = FakeHttpResponse(
+            {
+                "status": "200",
+                "err": "操作成功",
+                "data": [
+                    "  SERIAL-001 ",
+                    {"chequeNo": "SERIAL-002"},
+                    {"invoiceNo": "SERIAL-003"},
+                    {"serialNo": "SERIAL-004"},
+                    {},
+                    None,
+                ],
+            }
+        )
+
+        result = audit_client.fetch_invoice_serial_numbers(
+            "SERIAL-001",
+            "REC-SERIAL-001",
+            "111",
+            service_url="https://service.example",
+        )
+
+        self.assertEqual(result, ["SERIAL-001", "SERIAL-002", "SERIAL-003", "SERIAL-004"])
+        request = mock_urlopen.call_args.args[0]
+        self.assertIsInstance(request, Request)
+        self.assertIn(
+            "/api/audit-service/audit/invoice-serial-number?",
+            request.full_url,
+        )
+        self.assertIn("chequeNo=SERIAL-001", request.full_url)
+        self.assertIn("instanceCode=REC-SERIAL-001", request.full_url)
+        self.assertIn("accountingCode=111", request.full_url)
+
+    @patch("expense_audit_orchestrator.audit_client.urlopen")
+    def test_fetch_invoice_serial_numbers_raises_for_failure_response(self, mock_urlopen) -> None:
+        mock_urlopen.return_value = FakeHttpResponse(
+            {"status": "500", "err": "查询失败", "data": []}
+        )
+
+        with self.assertRaisesRegex(ValueError, "查询失败"):
+            audit_client.fetch_invoice_serial_numbers(
+                "SERIAL-FAILED",
+                "REC-SERIAL-FAILED",
+                service_url="https://service.example",
+            )
+
+    @patch("expense_audit_orchestrator.audit_client.urlopen")
+    def test_fetch_invoice_serial_numbers_uses_dynamic_auth_headers(self, mock_urlopen) -> None:
+        mock_urlopen.return_value = FakeHttpResponse(
+            {"status": "200", "err": "操作成功", "data": []}
+        )
+        timestamp = 1781234033849
+        sysid = "test-sysid"
+        secret = "test-secret"
+        expected_digest = md5(f"{sysid}{timestamp}{secret}".encode("utf-8")).hexdigest().upper()
+
+        with patch.dict(
+            os.environ,
+            {"SYS_ID": sysid, "accessKeySecret": secret},
+            clear=True,
+        ):
+            with patch.object(audit_client, "_PROJECT_ENV_LOADED", True):
+                with patch.object(audit_client, "_current_timestamp_millis", return_value=timestamp):
+                    audit_client.fetch_invoice_serial_numbers(
+                        "SERIAL-AUTH",
+                        "REC-SERIAL-AUTH",
+                        service_url="https://service.example",
+                    )
+
+        request = mock_urlopen.call_args.args[0]
+        self.assertIsInstance(request, Request)
+        self.assertEqual(request.headers["Sysid"], sysid)
+        self.assertEqual(
+            request.headers["Sign-server-auth"],
+            f"{sysid}|{timestamp}|{expected_digest}",
+        )
+
+    @patch("expense_audit_orchestrator.audit_client.urlopen")
+    def test_fetch_invoice_serial_numbers_returns_empty_data(self, mock_urlopen) -> None:
+        mock_urlopen.return_value = FakeHttpResponse(
+            {"status": "200", "err": "操作成功", "data": []}
+        )
+
+        result = audit_client.fetch_invoice_serial_numbers(
+            "SERIAL-EMPTY",
+            "REC-SERIAL-EMPTY",
+            service_url="https://service.example",
+        )
+
+        self.assertEqual(result, [])
+
     def test_repo_env_uses_current_invoice_secret_key_name(self) -> None:
         env_path = audit_client.PROJECT_ROOT / ".env"
         if not env_path.exists():

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Callable, Mapping
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -33,6 +34,7 @@ class ReceiptAuditService:
         receipt_result_sink: ReceiptResultSink | None = None,
         run_id_factory: Callable[[], str] = new_run_id,
         overall_advice_provider: OverallAdviceProvider | None = None,
+        audit_service_url: str | None = None,
     ) -> None:
         # 动态路由模式（profile_resolver）与静态模式（graph_path/graph_content）互斥：
         # - 动态模式：每单据按 eiCode 路由到不同 profile，图路径由 profile.default_graph_path 决定
@@ -58,6 +60,7 @@ class ReceiptAuditService:
         self._receipt_result_sink = receipt_result_sink or _noop_receipt_result_sink
         self._run_id_factory = run_id_factory
         self._overall_advice_provider = overall_advice_provider
+        self._audit_service_url = audit_service_url
         # LLM 网关端点：统一从 .env 的 NODE_GATEWAY_URL 解析，注入到图节点 context.llmGatewayUrl，
         # 让所有费用流程图共用同一配置，避免图 JSON 内硬编码 IP 地址。
         self._llm_evaluate_endpoint = resolve_llm_evaluate_endpoint()
@@ -78,9 +81,11 @@ class ReceiptAuditService:
         # 动态路由模式：先 fetch audit_info 拿 eiCode → resolve profile → 用 profile enricher 准备数据
         resolved_profile: ExpenseProfile | None = None
         enrichers_override: Mapping | None = None
+        invoice_enrichers_override: Mapping | None = None
         if self._profile_resolver is not None:
             resolved_profile = self._resolve_profile_for_receipt(receipt_code)
             enrichers_override = resolved_profile.receipt_enrichers
+            invoice_enrichers_override = resolved_profile.invoice_enrichers
 
         receipt_context = self._data_preparer.prepare_receipt_context(
             receipt_code,
@@ -89,12 +94,27 @@ class ReceiptAuditService:
         invoice_preparations: list[dict[str, Any]] = []
 
         for invoice_file in receipt_context["invoiceFiles"]:
-            prepared_input = self._data_preparer.prepare_invoice_input(
-                receipt_code,
-                invoice_file,
-                receipt_context,
-                resolved_ocr_sample_path,
-            )
+            invoice_prepare_kwargs: dict[str, Any] = {}
+            if invoice_enrichers_override:
+                invoice_prepare_kwargs["extra_enrichers_override"] = invoice_enrichers_override
+            try:
+                prepared_input = self._data_preparer.prepare_invoice_input(
+                    receipt_code,
+                    invoice_file,
+                    receipt_context,
+                    resolved_ocr_sample_path,
+                    **invoice_prepare_kwargs,
+                )
+            except TypeError as exc:
+                # 兼容旧版/测试替身 DataPreparer：老接口没有发票级 enricher 参数。
+                if "extra_enrichers_override" not in str(exc) or not invoice_prepare_kwargs:
+                    raise
+                prepared_input = self._data_preparer.prepare_invoice_input(
+                    receipt_code,
+                    invoice_file,
+                    receipt_context,
+                    resolved_ocr_sample_path,
+                )
             invoice_preparations.append(
                 {
                     "invoiceKey": _resolve_invoice_key(invoice_file),
@@ -103,7 +123,7 @@ class ReceiptAuditService:
                 }
             )
 
-        return {
+        prepared_receipt = {
             "receiptCode": receipt_code,
             "serviceData": dict(receipt_context.get("serviceData") or {}),
             "receiptContext": receipt_context,
@@ -116,6 +136,10 @@ class ReceiptAuditService:
             # 动态路由模式下记录选中的 profile，供 process_prepared_receipt 选图
             "resolvedProfile": resolved_profile,
         }
+        # 所有发票完成数据准备后一次性计算本单出租车连票关系，供执行前读取；
+        # process_prepared_receipt() 会幂等重算，兼容从队列/磁盘加载的 prepared receipt。
+        _inject_taxi_invoice_batch_context(prepared_receipt)
+        return prepared_receipt
 
     def _resolve_profile_for_receipt(self, receipt_code: str) -> ExpenseProfile:
         """动态路由：fetch audit_info 拿 eiCode → resolver.resolve → ExpenseProfile。
@@ -126,7 +150,10 @@ class ReceiptAuditService:
         """
         audit_info = self._data_preparer.audit_info_provider(receipt_code)
         ei_code = _get_audit_info_ei_code(audit_info)
-        profile = self._profile_resolver.resolve(ei_code)
+        profile = self._profile_resolver.resolve(
+            ei_code,
+            service_url=self._audit_service_url,
+        )
         get_logger("profile_routing").info(
             "resolved expense profile by eiCode",
             extra={
@@ -153,6 +180,9 @@ class ReceiptAuditService:
         invoice_results: list[dict[str, Any]] = []
 
         receipt_code = str(prepared_receipt.get("receiptCode") or "")
+        # 所有发票已完成数据准备后一次性计算本单出租车连票关系，确保连票组中的
+        # 第一张发票也能命中 W19，不受发票执行顺序影响；兼容队列/磁盘加载数据。
+        _inject_taxi_invoice_batch_context(prepared_receipt)
         remaining_apply_amount = _resolve_initial_apply_amount(prepared_receipt)
 
         # 动态路由模式：从 prepared_receipt 取出选中的 profile，用其 graph_path 执行
@@ -463,15 +493,64 @@ def _utc_now_isoformat() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _inject_taxi_invoice_batch_context(prepared_receipt: Mapping[str, Any]) -> None:
+    """为每张已准备发票注入本核销单出租车连票结果。"""
+    invoice_preparations = prepared_receipt.get("invoicePreparations")
+    if not isinstance(invoice_preparations, list):
+        return
+
+    grouped: dict[str, list[tuple[dict[str, Any], str]]] = defaultdict(list)
+    candidates: list[tuple[dict[str, Any], dict[str, Any], str | None, bool]] = []
+
+    for item in invoice_preparations:
+        if not isinstance(item, dict):
+            continue
+        prepared_input = item.get("preparedInput")
+        if not isinstance(prepared_input, dict):
+            continue
+        service_data = prepared_input.get("serviceData")
+        if not isinstance(service_data, dict):
+            continue
+        serial_data = service_data.get("taxiInvoiceSerial")
+        if not isinstance(serial_data, dict):
+            continue
+
+        invoice_no = str(serial_data.get("invoiceNo") or "").strip()
+        current_prefix = str(serial_data.get("currentPrefix") or "").strip() or None
+        is_taxi_invoice = bool(serial_data.get("isTaxiInvoice"))
+        candidates.append((prepared_input, serial_data, current_prefix, is_taxi_invoice))
+        if is_taxi_invoice and current_prefix and invoice_no:
+            grouped[current_prefix].append((prepared_input, invoice_no))
+
+    for prepared_input, serial_data, current_prefix, is_taxi_invoice in candidates:
+        peer_invoice_numbers: list[str] = []
+        if is_taxi_invoice and current_prefix:
+            peer_invoice_numbers = [
+                invoice_no
+                for other_prepared_input, invoice_no in grouped[current_prefix]
+                if other_prepared_input is not prepared_input and invoice_no
+            ]
+
+        serial_data["batchPeerInvoiceNumbers"] = peer_invoice_numbers
+        serial_data["batchHit"] = bool(peer_invoice_numbers)
+
+        service_data = prepared_input.get("serviceData")
+        if not isinstance(service_data, dict):
+            continue
+        service_data["taxiInvoiceSerial"] = serial_data
+        prepared_input["serviceData"] = service_data
+        context = prepared_input.get("context")
+        if not isinstance(context, dict):
+            context = {}
+            prepared_input["context"] = context
+        context["serviceData"] = service_data
+
+
 def _inject_previous_invoice_numbers(
     invoice_preparation: Mapping[str, Any],
     previous_invoice_numbers: list[str],
 ) -> None:
-    """将前序发票号列表注入 preparedInput，供图中 W19 出租车连号检测使用。
-
-    图中 isTaxiConsecutive 表达式读取 previousInvoiceNumbers 来判断当前
-    invoiceNo 是否与之前任一张发票号相差 ±1（连号风险）。
-    """
+    """兼容保留旧的前序发票号上下文；W19 已不再读取该字段。"""
     prepared_input = invoice_preparation.get("preparedInput")
     if not isinstance(prepared_input, dict):
         return
