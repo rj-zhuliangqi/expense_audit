@@ -38,8 +38,10 @@ def _resolve_graph_path(env_key: str, default: Path | None) -> Path | None:
 PERSONAL_TRANSPORT_GRAPH_PATH = _resolve_graph_path(
     PERSONAL_TRANSPORT_GRAPH_PATH_ENV, ROOT / "graph-latest-personal-transport-0722.json"
 )
-# 差旅（travel）执行图暂未独立，default_graph_path 留空占位，待差旅图就绪后通过 .env 绑定。
-TRAVEL_GRAPH_PATH: Path | None = _resolve_graph_path(TRAVEL_GRAPH_PATH_ENV, None)
+# 差旅执行图默认使用差旅专属图，仍可通过 .env 的 TRAVEL_GRAPH_PATH 覆盖。
+TRAVEL_GRAPH_PATH: Path | None = _resolve_graph_path(
+    TRAVEL_GRAPH_PATH_ENV, ROOT / "graph-latest-travel-0807.json"
+)
 ENTERTAINMENT_GRAPH_PATH = _resolve_graph_path(
     ENTERTAINMENT_GRAPH_PATH_ENV, ROOT / "graph-latest-entertainment-0722.json"
 )
@@ -105,7 +107,10 @@ def register_profile(
     _PROFILE_CACHE.pop(normalized, None)
 
 
-def _build_telecom_profile(asset_dir: Path | str | None = None) -> ExpenseProfile:
+def _build_telecom_profile(
+    asset_dir: Path | str | None = None,
+    service_url: str | None = None,
+) -> ExpenseProfile:
     from .telecom.data import (
         load_telecom_list,
         resolve_telecom_csv_path,
@@ -123,21 +128,30 @@ def _build_telecom_profile(asset_dir: Path | str | None = None) -> ExpenseProfil
     )
 
 
-def _build_travel_profile(asset_dir: Path | str | None = None) -> ExpenseProfile:
+def _build_travel_profile(
+    asset_dir: Path | str | None = None,
+    service_url: str | None = None,
+) -> ExpenseProfile:
     """差旅（travel）profile。
 
     差旅与个人交通费是两个独立费用类型：差旅涉及行程预订/里程标准等业务数据，
     个人交通费（personal_transport）走 graph-latest-personal-transport-0722.json。
-    差旅图与 enricher/writeback 均未就绪，保留 NotImplementedError 占位；
-    差旅图就绪后通过 .env 的 TRAVEL_GRAPH_PATH 绑定。
+    差旅数据准备使用 travel profile 内的专属接口聚合器，
+    差旅图路径仍可通过 .env 的 TRAVEL_GRAPH_PATH 覆盖。
     """
-    from .travel.data import travel_receipt_enricher
+    from .travel.data import (
+        build_travel_receipt_enricher,
+        travel_invoice_enricher,
+    )
     from .travel.writeback import travel_audit_travels_builder, travel_compliance_rule
 
     return ExpenseProfile(
         name="travel",
         default_graph_path=TRAVEL_GRAPH_PATH,
-        receipt_enrichers={"travel_data": travel_receipt_enricher},
+        receipt_enrichers={
+            "travelAudit": build_travel_receipt_enricher(service_url=service_url),
+        },
+        invoice_enrichers={"travelAudit": travel_invoice_enricher},
         compliance_rule=travel_compliance_rule,
         audit_travels_builder=travel_audit_travels_builder,
         writeback_save_path=AUDIT_INFO_SAVE_PATH,
@@ -173,15 +187,26 @@ def _build_personal_transport_profile(
     )
 
 
-def _build_entertainment_profile(asset_dir: Path | str | None = None) -> ExpenseProfile:
-    from .entertainment.data import entertainment_receipt_enricher
+def _build_entertainment_profile(
+    asset_dir: Path | str | None = None,
+    service_url: str | None = None,
+) -> ExpenseProfile:
+    from .entertainment.data import (
+        build_e15_invoice_type_enricher,
+        build_entertainment_receipt_enricher,
+    )
     from .entertainment.writeback import entertainment_compliance_rule
     from .entertainment.writeback import entertainment_audit_rule_catalog
 
     return ExpenseProfile(
         name="entertainment",
         default_graph_path=ENTERTAINMENT_GRAPH_PATH,
-        receipt_enrichers={"entertainment_data": entertainment_receipt_enricher},
+        receipt_enrichers={
+            "entertainment_data": build_entertainment_receipt_enricher(service_url=service_url),
+        },
+        invoice_enrichers={
+            "e15InvoiceType": build_e15_invoice_type_enricher(),
+        },
         compliance_rule=entertainment_compliance_rule,
         audit_rule_catalog=entertainment_audit_rule_catalog,
         writeback_save_path=AUDIT_INFO_SAVE_PATH,
@@ -217,12 +242,12 @@ def get_profile(
     if resolved_asset_dir is not None:
         # 显式指定资产目录时，不使用缓存，每次重新构建（确保资产变更生效）
         kwargs: dict[str, Any] = {"asset_dir": resolved_asset_dir}
-        if normalized == "personal_transport":
+        if normalized in {"travel", "personal_transport", "entertainment"}:
             kwargs["service_url"] = service_url
         return builder(**kwargs)
 
     # 显式服务地址只用于当前实例，不能污染默认 profile 缓存。
-    if service_url is not None and normalized == "personal_transport":
+    if service_url is not None and normalized in {"travel", "personal_transport", "entertainment"}:
         return builder(service_url=service_url)
 
     if normalized not in _PROFILE_CACHE:

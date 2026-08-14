@@ -2,8 +2,8 @@
 构建业务招待费稽核工作流 graph JSON。
 
 基于通讯费 graph-latest-0722-1100.json 的结构，为业务招待费生成新的 graph：
-- 复用 8 个通用稽核节点（E35/E31/E33/sys-001-004/E09/E05/E17）
-- 删除 5 个通讯费特有节点（E01/E02/E19/E32/W32/E34）
+- 复用通用稽核节点（E35/E31/E33/sys-001-004/E09/E05/E17）
+- 删除通讯费旧版节点，并重建业务招待费所需的 E01 抬头检查
 - 新增 4 个业务招待费特有节点（E36 禁止内容、E15 员工本人费用、W33 礼品数量、W31 虚开发票预警）
 - 泛化判断用 LLM+prompt 解决，不用规则
 
@@ -37,6 +37,7 @@ NODE_IDS_TO_DELETE = {
     "c442459e-4762-485c-b4bf-deae05a2b896",  # 发票合规prompt (通讯费特有)
     "514e15db-3657-4fa3-9228-88b750ea08f8",  # 调用llm (发票合规)
     "e0603963-d6e9-47da-adbc-a23c0841d087",  # 发票内容金额检查 E34
+    "06969d8b-16b9-4784-8883-a872f3667838",  # 发票内容预处理（内容已在数据准备阶段生成）
 }
 
 # 决策表标准输出字段定义（复用通讯费的 field id，保证一致性）
@@ -152,7 +153,23 @@ ENTERTAINMENT_PREPROCESS_EXPRESSIONS = [
     {
         "id": _new_uuid(),
         "key": "isCompanyExists",
-        "value": '(orgName ?? buyerName ?? "") in map(serviceData.companyList as c, c.cName ?? c.cname ?? c.companyName)',
+        # 先用发票 orgNumber 匹配财务体系公司编码 ccode，再比较发票抬头公司名称。
+        # 必须同时满足组织编码和公司名称一致，避免仅因公司名称存在于全量 companyList 而误通过。
+        "value": '(orgNumber ?? "") != "" and some((serviceData.companyList ?? []) as c, (c.ccode ?? c.cCode ?? c.accountingCode ?? "") != "" and (c.ccode ?? c.cCode ?? c.accountingCode ?? "") == (orgNumber ?? "") and (orgName ?? buyerName ?? "") != "" and (orgName ?? buyerName ?? "") == (c.companyName ?? c.cName ?? c.cname ?? ""))',
+    },
+    {
+        "id": _new_uuid(),
+        "key": "isBuyerCompany",
+        # 购买方名称带公司/企业类后缀时，按公司抬头处理；否则按员工号/个人抬头处理。
+        # 个人抬头不做公司税号比对，避免员工号被误判为税号不一致。
+        "value": '(endsWith((buyerName ?? orgName ?? ""), "公司") or endsWith((buyerName ?? orgName ?? ""), "企业") or endsWith((buyerName ?? orgName ?? ""), "集团") or endsWith((buyerName ?? orgName ?? ""), "事务所") or endsWith((buyerName ?? orgName ?? ""), "商行") or endsWith((buyerName ?? orgName ?? ""), "合作社"))',
+    },
+    {
+        "id": _new_uuid(),
+        "key": "isTaxExists",
+        # 公司抬头必须有税号且与 orgNumber 对应的财务体系公司税号一致；
+        # 非公司抬头按员工号处理，直接通过 E02。
+        "value": '((endsWith((buyerName ?? orgName ?? ""), "公司") or endsWith((buyerName ?? orgName ?? ""), "企业") or endsWith((buyerName ?? orgName ?? ""), "集团") or endsWith((buyerName ?? orgName ?? ""), "事务所") or endsWith((buyerName ?? orgName ?? ""), "商行") or endsWith((buyerName ?? orgName ?? ""), "合作社")) == false) or ((buyerTaxNo ?? buyerTaxNO ?? "") != "" and (orgNumber ?? "") != "" and some((serviceData.companyList ?? []) as c, (c.ccode ?? c.cCode ?? c.accountingCode ?? "") == (orgNumber ?? "") and (buyerTaxNo ?? buyerTaxNO ?? "") == (c.companyTax ?? c.taxNo ?? c.taxpayerIdentificationNumber ?? "")))',
     },
     {
         "id": _new_uuid(),
@@ -177,18 +194,21 @@ ENTERTAINMENT_PREPROCESS_EXPRESSIONS = [
     {
         # 规则3：员工本人费用检查 - 旅客姓名不允许与核销人姓名一致
         # isNotSelfExpense = True 表示不是员工本人费用（通过）
-        # 适用于飞机行程单、火车票、客运车、数电铁路、数电航空、数电普票的出行人/旅客姓名
+        # 仅对 E15 配置的六类票据进行姓名比对；未知/非适用票种按通过处理。
+        # 适用票据：飞机行程单、火车票、客运票、数电铁路、数电航空、数电普票。
+        # isNotSelfExpense = True 表示不是员工本人费用（通过）。
         "id": _new_uuid(),
         "key": "isNotSelfExpense",
-        "value": '(passengerName ?? "") == "" or (passengerName ?? "") != (serviceData.auditInfo.verifiUserName ?? "")',
+        "value": '(serviceData.e15InvoiceType.isApplicable ?? false) == false or (passengerName ?? "") == "" or (passengerName ?? "") != (serviceData.auditInfo.verifiUserName ?? "")',
     },
     {
-        # 规则4：礼品数量合理性 - 接待人数量≤全部发票中购买商品数量总和则合理
-        # isGiftCountReasonable = True 表示合理（通过）
-        # receptionCount 来自核销单信息接口（接待人数），totalGoodsCount 来自发票明细商品数量总和
+        # 规则4：礼品数量合理性 - 接待人数≤全部发票中购买商品数量总和则合理
+        # isGiftCountReasonable = True 表示合理（通过）。执行时由核销单循环注入
+        # 当前累计商品数量；最后一张发票上的累计值即全部发票商品数量总和。
+        # 接待人数来自核销单业务费用明细接口，项目类别由 hasGiftItem 标识。
         "id": _new_uuid(),
         "key": "isGiftCountReasonable",
-        "value": '(serviceData.auditInfo.receptionCount ?? 0) == 0 or number(serviceData.auditInfo.receptionCount ?? 0) <= number(totalGoodsCount ?? sum(map((items ?? []) as i, number(i.detailAmount ?? i.quantity ?? 1))))',
+        "value": '((isLastInvoice ?? true) == false) or (serviceData.entertainment_data.hasGiftItem ?? false) == false or number(serviceData.entertainment_data.giftReceptionCount ?? 0) <= number(totalGoodsCount ?? sum(map((items ?? []) as i, number(i.num ?? i.quantity ?? 0))))',
     },
     {
         # 规则：同一核销单内发票号应连续。预处理层可提供完整发票号序列；
@@ -203,6 +223,80 @@ ENTERTAINMENT_PREPROCESS_EXPRESSIONS = [
 # ---------------------------------------------------------------------------
 # Phase 2: 新增业务招待费特有规则节点
 # ---------------------------------------------------------------------------
+
+def _build_company_header_check_node() -> dict:
+    """规则：发票购买方公司与核销单财务体系公司检查 E01。"""
+    node_id = "d3046965-dbaf-41cd-ba93-0d957fe67ec8"
+    rules = [
+        _std_rule_row(
+            input_value="true",
+            reason_code="E01",
+            distinguish_result="PASS",
+            audit_content="检查发票购买方公司名称与核销单财务体系映射公司名称是否一致",
+            audit_type="general-rules",
+            message='""',
+            policies_index='""',
+            suggestion='""',
+        ),
+        _std_rule_row(
+            input_value="false",
+            reason_code="E01",
+            distinguish_result="REJECT",
+            audit_content="检查发票购买方公司名称与核销单财务体系映射公司名称是否一致",
+            audit_type="general-rules",
+            message='"发票号【"+(invoiceNo??"")+"】✗ 发票抬头公司【"+(orgName??buyerName??"")+"】未与核销单财务体系公司匹配（组织编码【"+(orgNumber??"")+"】），✓ 发票购买方公司名称必须与核销单财务体系映射公司一致"',
+            policies_index='"《锐捷网络员工费用管理与报销制度》\n5.2.1.1 员工需要确保票据中公司信息的准确性。"',
+            suggestion='"【重新开票】请按核销单财务体系映射的公司名称和组织编码重新开具发票，并重新上传"',
+        ),
+    ]
+    return _make_decision_table(
+        node_id=node_id,
+        name="发票购买方公司检查",
+        input_field="isCompanyExists",
+        input_name="发票购买方公司是否与核销单财务体系公司一致",
+        rules=rules,
+        output_path="header_result",
+        position={"x": 660, "y": 900},
+    )
+
+
+def _build_tax_number_check_node() -> dict:
+    """规则：公司抬头的发票购买方税号与财务体系公司税号检查 E02。"""
+    node_id = "d13f7062-96e4-4d74-a552-dfcc60d98ff4"
+    audit_content = "检查发票购买方纳税人识别号与核销单财务体系映射纳税人识别号是否一致"
+    rules = [
+        _std_rule_row(
+            input_value="true",
+            reason_code="E02",
+            distinguish_result="PASS",
+            audit_content=audit_content,
+            audit_type="general-rules",
+            message='""',
+            policies_index='""',
+            suggestion='""',
+        ),
+        _std_rule_row(
+            input_value="false",
+            reason_code="E02",
+            distinguish_result="REJECT",
+            audit_content=audit_content,
+            audit_type="general-rules",
+            message='"发票号【"+(invoiceNo??"")+"】✗ 发票购买方【"+(buyerName??orgName??"")+"】按公司抬头处理，但纳税人识别号【"+(buyerTaxNo??buyerTaxNO??"")+"】未与组织编码【"+(orgNumber??"")+"】对应的财务体系公司纳税人识别号一致，✓ 公司抬头发票必须使用核销单财务体系映射公司的纳税人识别号"',
+            policies_index='"《锐捷网络员工费用管理与报销制度》\n5.2.1.1 员工需要确保票据中公司信息的准确性。"',
+            suggestion='"【重新开票】请按核销单财务体系映射公司的正确抬头和纳税人识别号重新开具发票，并重新上传"',
+        ),
+    ]
+    return _make_decision_table(
+        node_id=node_id,
+        name="发票购买方税号检查",
+        input_field="isTaxExists",
+        input_name="公司抬头发票购买方纳税人识别号是否与财务体系公司一致",
+        rules=rules,
+        output_path="tax_result",
+        position={"x": 660, "y": 940},
+    )
+
+
 
 def _build_self_expense_check_node() -> dict:
     """规则3：员工本人费用检查 E15。"""
@@ -260,7 +354,7 @@ def _build_gift_count_check_node() -> dict:
             distinguish_result="WARNING",
             audit_content="检查【项目类别】为赠送纪念品中接待人数量与发票中购买商品数量的合理性",
             audit_type="staff-behavior",
-            message='"发票号【"+(invoiceNo??"")+"】✗ 购买商品数量【"+(totalGoodsCount??sum(map((items??[]) as i, number(i.detailAmount??i.quantity??1))))+"】少于接待人数【"+(serviceData.auditInfo.receptionCount??"")+"】，存在礼品数量与接待人数不匹配的异常风险，✓ 赠送纪念品的商品数量需≥接待人数，确保一人一份的合理配比"',
+            message='"发票号【"+(invoiceNo??"")+"】✗ 全部发票购买商品数量【"+string(totalGoodsCount??sum(map((items??[]) as i, number(i.num??i.quantity??0))))+"】少于赠送纪念品接待人数【"+string(serviceData.entertainment_data.giftReceptionCount??"")+"】，存在礼品数量与接待人数不匹配的异常风险，✓ 赠送纪念品的商品数量需≥接待人数，确保一人一份的合理配比"',
             policies_index='"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范"',
             suggestion='"【业务确认】请确认礼品数量与接待人数是否匹配，如为实际业务发生的合理配比，请在单据备注栏说明具体接待情况及礼品分配逻辑，财务将进行人工复核"',
         ),
@@ -317,69 +411,50 @@ def _build_invoice_number_check_node() -> dict:
 # ---------------------------------------------------------------------------
 
 ENTERTAINMENT_CONTENT_PROMPT_SOURCE = r"""export const handler = async (input) => {
-  const context = input.context || {};
-  const contents = input.contents ?? context.contents ?? '无';
+  // 发票内容唯一使用数据准备阶段由 items[*].goodsName 汇总出的单据级 goodsName。
+  const goodsName = String(input.goodsName ?? '');
+  // 用 JSON.stringify 注入，避免商品名称中的反引号或 ${...} 破坏模板字符串。
+  const goodsNameForPrompt = JSON.stringify(goodsName);
 
-  const optimizedPrompt = `# Role
-你是一位极其严谨的企业财税合规审计专家，负责审查业务招待费发票商品内容（发票内容）中是否包含公司明令禁止报销的项目。
+  const optimizedPrompt = `# 角色
+你是企业费用制度合规审核专家，负责判断业务招待费发票【项目名称】是否命中公司制度的禁止报销清单。
 
-# 核心审查规则
-请仔细阅读给出的【发票内容】。你需要判断发票内容是否属于以下两类禁止报销项目之一：
+# 审核范围
+只根据下面给出的发票项目名称判断，不要根据金额、销货方、发票类型或关键词的单独出现做推断。
+公司制度明确禁止报销的项目为：
+1. 黄金（作为贵金属、金条、金币、黄金制品等）；
+2. 珠宝；
+3. 首饰；
+4. 茅台；
+5. 五粮液；
+6. 礼品卡；
+7. 充值卡（包括明确属于预付/储值/充值卡的项目）。
 
-## 禁止类别一：高档消费品及现金等价物（violationType = "prohibited_item"）
-根据《锐捷网络员工费用管理与报销制度》4.4.2.2 禁止报销条款，以下内容属于禁止报销：
-- 高档烟酒：茅台、五粮液、洋河蓝色经典、剑南春、汾酒、泸州老窖等高档白酒
-- 贵重物品：黄金、珠宝、首饰、玉石、翡翠、钻石等
-- 现金及等价物：礼品卡、充值卡、预付卡、购物卡、超市卡、加油卡、京东卡、天猫卡等
-- 其他违规内容：奢侈品、名牌包表等
+# 语义判断要求（非常重要）
+这是语义审核，不是字符串包含判断：
+- “黄金针菇”是蔬菜，不是黄金，必须通过；
+- “黄金饰品”“黄金手链”“黄金摆件”属于黄金/首饰，必须不通过；
+- “珠宝首饰”“钻石珠宝”等明确属于珠宝或首饰，必须不通过；
+- “茅台酒”“五粮液白酒”明确属于对应品牌，必须不通过；
+- 仅因出现“黄金”二字但实际是食品、植物、地名或其他普通商品（例如黄金针菇、黄金果），不能判为不通过；
+- 仅有“礼品”二字不等于礼品卡；只有明确是礼品卡、充值卡或预付/储值卡等卡类/资金预存项目时才不通过；
+- 项目名称含义不清、无法确认命中禁止清单时，默认通过；
+- 多个项目名称中只要有一个明确命中禁止清单，就判定不通过。
 
-## 禁止类别二：充值卡/预付卡/预存类（violationType = "recharge_card"）
-根据《锐捷网络员工费用管理与报销制度》4.2.2.2 禁止报销条款，以下内容属于禁止报销：
-- 预付卡销售、单用途卡、充值、充值卡、预存、储值、面值、卡券
-- 话费充值、流量预存等资金前置占用的非即期消费行为
-
-# 核心判定原则（必须严格执行）
-
-## 原则1：泛化语义判断，不依赖关键词硬匹配
-你必须理解发票内容的真实语义，而非简单匹配关键词。
-- "黄金针菇" → 不是黄金，是蔬菜，passed=true
-- "黄金饰品" → 是黄金，passed=false, violationType="prohibited_item"
-- "茅台镇酒" → 需判断是否为茅台品牌，若为茅台镇其他酒厂产品则可能不是茅台，需谨慎
-- "苹果手机" → 不是水果苹果，是电子产品，但属于贵重物品，passed=false, violationType="prohibited_item"
-
-## 原则2：正常业务招待内容应通过
-以下内容属于正常业务招待费，应判定为合规（passed=true）：
-- 餐饮费、餐费、宴请费、招待餐
-- 茶水费、茶叶（普通饮用茶，非收藏级名贵茶）
-- 水果、食品、零食、饮料
-- 会议费、会务费
-- 普通办公用品（非奢侈品）
-
-## 原则3：存在歧义时默认可报销
-当无法确定某内容是否属于禁止报销范围时，默认判定为合规（passed=true）。
-
-# 示例参考 (Few-Shot)
-- 输入：餐饮费 ➡️ 返回：{"passed": true, "violationType": "none"}
-- 输入：*餐饮服务*宴请餐费 ➡️ 返回：{"passed": true, "violationType": "none"}
-- 输入：茅台酒 ➡️ 返回：{"passed": false, "violationType": "prohibited_item"}
-- 输入：黄金饰品 ➡️ 返回：{"passed": false, "violationType": "prohibited_item"}
-- 输入：礼品卡 ➡️ 返回：{"passed": false, "violationType": "prohibited_item"}
-- 输入：预付卡销售 ➡️ 返回：{"passed": false, "violationType": "recharge_card"}
-- 输入：话费充值 ➡️ 返回：{"passed": false, "violationType": "recharge_card"}
-- 输入：黄金针菇 ➡️ 返回：{"passed": true, "violationType": "none"}
-- 输入：茶叶 ➡️ 返回：{"passed": true, "violationType": "none"}
-
-# 极其严格的输出格式要求
-你必须【仅仅且直接】返回一个标准的 JSON 对象，严禁包含任何前言、后记、Markdown 标记（如 json 块标签）或多余的文字解释。
-
-JSON 结构必须严格如下：
+# 输出要求
+必须只返回一个标准 JSON 对象，不得返回 Markdown、解释、推理过程或其他文字：
 {
-  "passed": 判定结果（布尔类型 true 或 false，不要带引号）,
-  "violationType": 违规类型（字符串，仅当 passed=false 时有效，值为 "prohibited_item" 或 "recharge_card"；passed=true 时为 "none"）
+  "passed": true 或 false,
+  "violationType": "none"、"prohibited_item" 或 "recharge_card"
 }
 
-# 待审查的真实数据
-发票内容是：${contents}`;
+字段约束：
+- passed=true 时，violationType 必须为 "none"；
+- 命中黄金、珠宝、首饰、茅台、五粮液时，violationType 返回 "prohibited_item"；
+- 命中礼品卡、充值卡或明确的预付/储值卡时，violationType 返回 "recharge_card"。
+
+# 待审核的发票项目名称（JSON 字符串）
+${goodsNameForPrompt}`;
 
   return {
     prompt: optimizedPrompt,
@@ -479,7 +554,7 @@ def _build_content_compliance_postprocess_node() -> dict:
                 {
                     "id": _new_uuid(),
                     "key": "contentCheckResult",
-                    "value": 'llm_status == "success" ? (llm_result.passed == true ? "pass" : (llm_result.violationType ?? "prohibited_item")) : "error"',
+                    "value": '(llm_status ?? "error") == "success" ? (((llm_result ?? {}).passed == true) ? "pass" : (((llm_result ?? {}).violationType == "recharge_card") ? "recharge_card" : "prohibited_item")) : "error"',
                 },
             ],
             "passThrough": True,
@@ -533,9 +608,20 @@ def _build_content_compliance_check_node() -> dict:
             distinguish_result="REJECT",
             audit_content="检查发票内容是否含禁止核销内容或充值卡信息",
             audit_type="general-rules",
-            message='"发票号【"+(invoiceNo??"")+"】✗ 发票内容【"+(contents??"")+"】属于公司制度禁止报销的范围，✓ 业务招待费应遵循\"厉行节约，合理开支\"的原则，不得报销黄金、珠宝、首饰、茅台、五粮液、礼品卡、充值卡等违规内容"',
+            message='"发票号【"+(invoiceNo??"")+"】✗ 发票内容【"+(goodsName??"")+"】属于公司制度禁止报销的范围，✓ 业务招待费应遵循\"厉行节约，合理开支\"的原则，不得报销黄金、珠宝、首饰、茅台、五粮液、礼品卡、充值卡等违规内容"',
             policies_index='"《锐捷网络员工费用管理与报销制度》\\n4.4.2.2 禁止报销（高档烟酒如茅台、五粮液；现金及其等价物如黄金、珠宝首饰、预付卡、礼品卡等）；4.4.3.1 业务招待要遵循\"厉行节约，合理开支\"原则"',
             suggestion='"【删除发票】删除本票据，不得上传禁止报销范围内的发票"',
+        ),
+        # 礼品卡/充值卡单独保留匹配项，确保 E36 对清单中的卡类项目也有结果。
+        _std_rule_row(
+            input_value='"recharge_card"',
+            reason_code="E36",
+            distinguish_result="REJECT",
+            audit_content="检查发票内容是否含禁止核销内容或充值卡信息",
+            audit_type="general-rules",
+            message='"发票号【"+(invoiceNo??"")+"】✗ 发票内容【"+(goodsName??"")+"】属于公司制度禁止报销的礼品卡/充值卡等卡类项目"',
+            policies_index='"《锐捷网络员工费用管理与报销制度》\\n4.4.2.2 禁止报销：礼品卡、充值卡等现金及其等价物"',
+            suggestion='"【删除发票】删除本票据，不得上传礼品卡、充值卡或其他预付/储值卡类发票"',
         ),
     ]
     return _make_decision_table(
@@ -578,7 +664,7 @@ def _build_recharge_card_check_node() -> dict:
             distinguish_result="REJECT",
             audit_content="检查发票内容是否包含充值卡、预付卡或预存类项目",
             audit_type="general-rules",
-            message='"发票号【"+(invoiceNo??"")+"】✗ 发票内容【"+(contents??"")+"】包含充值卡/预付卡/预存等公司禁止报销项"',
+            message='"发票号【"+(invoiceNo??"")+"】✗ 发票内容【"+(goodsName??"")+"】包含充值卡/预付卡/预存等公司禁止报销项"',
             policies_index='"《锐捷网络员工费用管理与报销制度》\\n4.2.2.2 禁止报销：预付卡销售、充值卡、成品油(卡)"',
             suggestion='"【删除发票】删除本票据，并提供非充值内容的发票"',
         ),
@@ -607,7 +693,7 @@ FRAUD_PREPROCESS_EXPRESSIONS = [
         "value": (
             'contains((serviceData.auditInfo.expenseItemName ?? ""), "营销活动") '
             'and (contains((serviceData.auditInfo.deptName ?? ""), "EBG") or contains((serviceData.auditInfo.deptName ?? ""), "TBU")) '
-            'and contains((contents ?? ""), "餐饮") '
+            'and contains((goodsName ?? ""), "餐饮") '
             'and number(serviceData.auditInfo.submitTime ?? "") - number(invoiceDate ?? "") <= 2 '
             'and (invoiceTaxRate == "0%" or invoiceTaxRate == "1%" or invoiceTaxRate == "3%") '
             'and number(invoiceAmount ?? 0) >= 900'
@@ -866,7 +952,16 @@ def _build_fraud_check_node() -> dict:
 
 def build_entertainment_graph() -> dict:
     """构建业务招待费稽核工作流 graph。"""
-    with open(SRC_GRAPH, "r", encoding="utf-8") as f:
+    # 旧版通讯费源图在部分部署包中未随仓库分发，使用同结构的最新源图兜底。
+    source_graph = SRC_GRAPH
+    if not source_graph.exists():
+        fallback_graph = REPO_ROOT / "graph-latest-0727-1900.json"
+        if not fallback_graph.exists():
+            raise FileNotFoundError(
+                f"source graph not found: {SRC_GRAPH}; fallback also missing: {fallback_graph}"
+            )
+        source_graph = fallback_graph
+    with open(source_graph, "r", encoding="utf-8") as f:
         src = json.load(f)
 
     nodes = src["nodes"]
@@ -909,6 +1004,8 @@ def build_entertainment_graph() -> dict:
             break
 
     # --- Phase 2: 新增业务招待费特有规则节点 ---
+    nodes.append(_build_company_header_check_node())   # E01
+    nodes.append(_build_tax_number_check_node())      # E02
     nodes.append(_build_self_expense_check_node())      # E15
     nodes.append(_build_gift_count_check_node())        # W33
     nodes.append(_build_invoice_number_check_node())    # W34
@@ -946,9 +1043,10 @@ def build_entertainment_graph() -> dict:
     RESPONSE_ID = "e109e75a-d107-4fd0-a8b3-e3dae7fad15b"
     DATA_PREPROCESS_ID = "c67dcb33-2750-4a43-8af7-8346612c04a9"
     INVOICE_PREPROCESS_ID = "f10e41a3-a2b4-479f-8fdb-4d3da38d777d"
-    CONTENT_PREPROCESS_ID = "06969d8b-16b9-4784-8883-a872f3667838"  # 发票内容预处理
 
-    # 新增节点 ID
+    # 新增/恢复节点 ID
+    COMPANY_HEADER_CHECK = "d3046965-dbaf-41cd-ba93-0d957fe67ec8"
+    TAX_NUMBER_CHECK = "d13f7062-96e4-4d74-a552-dfcc60d98ff4"
     SELF_EXPENSE_CHECK = "ent-self-expense-check"
     GIFT_COUNT_CHECK = "ent-gift-count-check"
     INVOICE_NUMBER_CHECK = "ent-invoice-number-check"
@@ -980,6 +1078,8 @@ def build_entertainment_graph() -> dict:
     # 分支1: request → 数据校验预处理 → 7个决策表 → response
     new_edges.append(_edge(REQUEST_ID, DATA_PREPROCESS_ID))
     for check_id in [
+        COMPANY_HEADER_CHECK,
+        TAX_NUMBER_CHECK,
         INVOICE_TYPE_CHECK,
         AMOUNT_CHECK,
         BLACKLIST_CHECK,
@@ -997,16 +1097,16 @@ def build_entertainment_graph() -> dict:
     new_edges.append(_edge(INVOICE_PREPROCESS_ID, INVOICE_PROBLEM_CHECK))
     new_edges.append(_edge(INVOICE_PROBLEM_CHECK, RESPONSE_ID))
 
-    # 分支3: request → 发票内容预处理 → 招待费内容合规prompt → 调用llm → 后处理 → 招待费内容合规检查 → response
-    new_edges.append(_edge(REQUEST_ID, CONTENT_PREPROCESS_ID))
-    new_edges.append(_edge(CONTENT_PREPROCESS_ID, CONTENT_PROMPT))
+    # 分支3: request → 招待费内容合规prompt → 调用llm → 后处理 → 招待费内容合规检查 → response。
+    # 发票内容 goodsName 已在数据准备阶段生成，流程图不再保留拼接预处理节点。
+    new_edges.append(_edge(REQUEST_ID, CONTENT_PROMPT))
     new_edges.append(_edge(CONTENT_PROMPT, CONTENT_LLM))
     new_edges.append(_edge(CONTENT_LLM, CONTENT_POSTPROCESS))
-    # request 也需要连到后处理（提供原始数据如 invoiceNo, contents）
+    # request 也需要连到后处理（提供原始数据如 invoiceNo, goodsName）
     new_edges.append(_edge(REQUEST_ID, CONTENT_POSTPROCESS))
     new_edges.append(_edge(CONTENT_POSTPROCESS, CONTENT_CHECK))
-    # 发票内容预处理也连到决策表（提供 contents 字段）
-    new_edges.append(_edge(CONTENT_PREPROCESS_ID, CONTENT_CHECK))
+    # 决策表直接读取 request 中的数据准备结果 goodsName。
+    new_edges.append(_edge(REQUEST_ID, CONTENT_CHECK))
     new_edges.append(_edge(CONTENT_CHECK, RESPONSE_ID))
     new_edges.append(_edge(CONTENT_POSTPROCESS, RECHARGE_CARD_CHECK))
     new_edges.append(_edge(REQUEST_ID, RECHARGE_CARD_CHECK))

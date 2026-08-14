@@ -25,20 +25,20 @@
 
 ---
 
-### 2. 旅客姓名字段（passengerName）— E15 本人姓名检查 / W29 出行人信息检查
+### 2. 旅客姓名字段（passengerName）— E15 / W29 / E37 出行人检查
 
 | 项目 | 说明 |
 |---|---|
-| **用途** | E15 校验旅客姓名==核销人姓名；W29 校验数电普票是否开具出行人信息 |
+| **用途** | E15 校验实名火车/客运票旅客姓名；W29 校验旅客运输发票是否填写出行人；E37 校验已填写的出行人是否为核销人本人 |
 | **来源** | OCR 识别结果 |
 | **字段名** | `passengerName`（**需与 OCR 团队确认实际输出字段名**） |
 | **比对对象** | `serviceData.auditInfo.verifiUserName`（核销人姓名） |
-| **适用票种** | 火车票、客运汽车票、数电铁路、数电普通发票 |
+| **适用票种** | E15：火车票、客运汽车票、数电铁路；W29/E37：票据类型 26（数电普票）或 72（电子普票），且发票内容命中旅客运输内容 |
 
 **⚠️ 待确认事项：**
 - OCR 是否能识别上述票种的旅客姓名字段
 - 字段名是否为 `passengerName`，还是在 `invoiceData` 顶层或 `items` 内
-- 数电普通发票的出行人姓名+有效身份证件号是否都能识别
+- 数电普通发票/电子普通发票的出行人姓名+有效身份证件号是否都能识别（当前规则仅使用 `passengerName`）
 
 ---
 
@@ -49,7 +49,7 @@
 | **用途** | W29 数电普通发票出行人信息检查（WARNING 级别） |
 | **来源** | OCR 识别 |
 | **字段名** | 待确认（可能为 `passengerIdNo` 或在 `remark` 中） |
-| **说明** | 当前 W29 仅校验 `passengerName` 是否非空，证件号字段为后续增强项 |
+| **说明** | 当前 W29 仅校验 `passengerName` 是否非空；未填写不阻断（WARNING），证件号字段为后续增强项。填写后由 E37 校验是否与核销人一致 |
 
 ---
 
@@ -83,7 +83,8 @@
 | 节点 | 规则代码 | 控制级别 | 输入字段 | 数据依赖 |
 |---|---|---|---|---|
 | 本人姓名检查 | E15 | 阻断(REJECT) | `isPassengerNameMatch` | `passengerName` + `verifiUserName` |
-| 出行人信息检查 | W29 | 标记(WARNING) | `hasPassengerInfo` | `passengerName` + `invoiceType` |
+| 出行人信息检查 | W29 | 标记(WARNING) | `hasPassengerInfo` | `passengerName` + 票据类型 + 发票内容 |
+| 出行人本人检查 | E37 | 阻断(REJECT) | `isDigitalPassengerNameMatch` | `passengerName` + 核销人姓名 + 票据类型 + 发票内容 |
 | 出租车连号检查 | W19 | 阻断(REJECT) | `isTaxiConsecutiveMock` | **占位 mock**，后期代码实现跨发票状态 |
 | 发票内容项目检查 | E36 | 阻断(REJECT) | `isTravelContent` | `contents`（硬编码关键词） |
 
@@ -107,5 +108,7 @@
 |---|---|---|---|
 | 火车票-姓名一致 | passengerName=刘雪涛, verifiUserName=刘雪涛 | 全部 PASS | ✅ 全部 PASS |
 | 火车票-姓名不一致 | passengerName=李四, verifiUserName=刘雪涛 | E15 REJECT | ✅ E15 REJECT |
-| 数电普票-无出行人信息 | invoiceType=数电普通发票, passengerName="" | W29 WARNING | ✅ W29 WARNING |
+| 26/旅客运输内容-无出行人信息 | invoiceType=26, passengerName="" | W29 WARNING、E37 PASS | ✅ W29 WARNING、E37 PASS |
+| 72/旅客运输内容-出行人非本人 | invoiceType=72, passengerName=李四, verifiUserName=张三 | W29 PASS、E37 REJECT | ✅ W29 PASS、E37 REJECT |
+| 非旅客运输内容-出行人非本人 | invoiceType=72, contents=住宿服务 | W29 PASS、E37 PASS | ✅ W29 PASS、E37 PASS |
 | 非交通费内容 | contents=餐饮服务 | E36 REJECT | ✅ E36 REJECT |

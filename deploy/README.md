@@ -17,7 +17,7 @@
 
 ```bash
 # 1. 拉代码
-git clone https://gitlab.ruijie.com.cn/rjai/expense_audit.git
+git clone https://github.com/rj-zhuliangqi/expense_audit.git
 cd expense_audit
 git checkout main   # 生产/集成分支，部署已合并到 main 的代码
 
@@ -62,7 +62,7 @@ git pull && bash deploy/install.sh && sudo systemctl restart expense-graph-runti
 
 ## 关于 graph JSON
 
-worker 的 `--graph-path` 在 unit 模板里指向仓库根的 `graph-latest-0707-2301.json`。换图时改 `deploy/expense-rabbitmq-worker.service` 里的路径，或换掉根目录的图文件后重启 worker。
+worker 的 `--graph-path` 在 unit 模板里指向仓库根的正式流程图。当前默认图为 `graph-latest-0727-1900.json`；换图时改 `deploy/expense-rabbitmq-worker.service` 里的路径，或换掉根目录的图文件后重启 worker。
 
 ## 关于进程守护
 

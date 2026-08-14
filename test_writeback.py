@@ -45,6 +45,7 @@ class WritebackAssemblerTests(unittest.TestCase):
                     "preparedInput": {
                         "invoiceType": "26",
                         "invoiceNo": "INV-001",
+                        "goodsName": "*电信服务*通信服务费",
                         "invoiceDate": "2026-06-16",
                         "buyerTaxNo": "913500007549617646",
                         "buyerName": "锐捷网络股份有限公司",
@@ -145,7 +146,15 @@ class WritebackAssemblerTests(unittest.TestCase):
             "INV-001",
         )
         self.assertTrue(payload["auditTruthCheckLogs"][0]["atclid"])
-        self.assertEqual(payload["auditTruthCheckResultBills"], [])
+        self.assertEqual(len(payload["auditTruthCheckResultBills"]), 1)
+        self.assertEqual(
+            payload["auditTruthCheckResultBills"][0]["code"],
+            "goodsName",
+        )
+        self.assertEqual(
+            payload["auditTruthCheckResultBills"][0]["value"],
+            "*电信服务*通信服务费",
+        )
         self.assertEqual(payload["auditTruthCheckResultItems"], [])
         self.assertEqual(payload["auditTruthCheckResultItemCols"], [])
         self.assertEqual(payload["auditInvoiceInfos"][0]["aiiid"], "AIIID-001")
@@ -486,6 +495,7 @@ class WritebackAssemblerTests(unittest.TestCase):
                     },
                     "preparedInput": {
                         "invoiceNo": "INV-001",
+                        "goodsName": "*电信服务*通信服务费、*电信服务*违约金",
                         "items": [
                             {
                                 "goodsName": "*电信服务*通信服务费",
@@ -496,6 +506,10 @@ class WritebackAssemblerTests(unittest.TestCase):
                                 "num": "1",
                                 "unitPrice": "476.1",
                                 "specModel": "",
+                            },
+                            {
+                                "goodsName": "*电信服务*违约金",
+                                "detailAmount": "1.2",
                             }
                         ],
                         "serviceData": {
@@ -610,22 +624,22 @@ class WritebackAssemblerTests(unittest.TestCase):
 
         self.assertEqual(payload["auditInvoiceInfos"][0]["atcrid"], "ATCRID-001")
         self.assertEqual(payload["auditInvoiceInfoContents"][0]["atcrId"], "ATCRID-001")
-        self.assertEqual(len(payload["auditTruthCheckResultBills"]), 2)
+        self.assertEqual(len(payload["auditTruthCheckResultBills"]), 3)
         self.assertEqual(
             [item["name"] for item in payload["auditTruthCheckResultBills"]],
-            ["发票号码", "发票号码-重复"],
+            ["发票号码", "发票号码-重复", "商品名称"],
         )
         self.assertEqual(
             [item["code"] for item in payload["auditTruthCheckResultBills"]],
-            ["invoiceNo", "invoiceNo"],
+            ["invoiceNo", "invoiceNo", "goodsName"],
         )
         self.assertEqual(
             [item["value"] for item in payload["auditTruthCheckResultBills"]],
-            ["INV-001", "INV-001"],
+            ["INV-001", "INV-001", "*电信服务*通信服务费、*电信服务*违约金"],
         )
         self.assertEqual(
             len({item["atcrbid"] for item in payload["auditTruthCheckResultBills"]}),
-            2,
+            3,
         )
         self.assertEqual(len(payload["auditTruthCheckResultItems"]), 2)
         self.assertEqual(
@@ -1040,8 +1054,8 @@ class WritebackAssemblerTests(unittest.TestCase):
         self.assertEqual(_format_amount(10.5), "10.5")
         self.assertEqual(_format_amount(382.2), "382.2")
 
-    def test_personal_transport_e31_preserves_graph_message_and_maps_tags(self) -> None:
-        """交通费 E31 不应被通讯费回写覆盖，并应把图字段映射到 auditLogs 标签。"""
+    def test_personal_transport_e31_uses_receipt_totals_and_maps_tags(self) -> None:
+        """交通费 E31 应使用整单金额，并把图字段映射到 auditLogs 标签。"""
         prepared_receipt = {
             "receiptCode": "REC-TRANSPORT-E31-001",
             "serviceData": {"auditInfo": {"instanceCode": "REC-TRANSPORT-E31-001"}},
@@ -1058,6 +1072,10 @@ class WritebackAssemblerTests(unittest.TestCase):
                 }
             ],
         }
+        graph_message = (
+            "本次交通费报销金额为 {报销金额} 元，当前有效发票金额为 "
+            "{可用发票金额} 元，待补充 {缺少金额} 元。可用发票金额不足，暂不能提交。"
+        )
         traffic_message = (
             "本次交通费报销金额为 100 元，当前有效发票金额为 40 元，待补充 60 元。"
             "可用发票金额不足，暂不能提交。"
@@ -1074,7 +1092,7 @@ class WritebackAssemblerTests(unittest.TestCase):
                             "reason_code": "E31",
                             "distinguish_result": "REJECT",
                             "audit_content": "检查使用发票合计金额是否充足",
-                            "message": traffic_message,
+                            "message": graph_message,
                             "policiesIndex": "",
                             "employeeSuggestionTips": "交通费 CSV 建议",
                             "problem_category": "金额不足",
@@ -1404,6 +1422,7 @@ class WritebackAssemblerTests(unittest.TestCase):
                     "invoiceKey": "FID-001",
                     "invoiceFile": {"fid": "FID-001"},
                     "preparedInput": {
+                        "goodsName": "*电信服务*违约金、*电信服务*代收费、*电信服务*通信服务费、普通商品",
                         "items": [
                             {"goodsName": "*电信服务*违约金", "detailAmount": "10", "taxAmount": "0", "taxRate": "0"},
                             {"goodsName": "*电信服务*代收费", "detailAmount": "20", "taxAmount": "0", "taxRate": "0"},

@@ -12,6 +12,12 @@ from expense_audit_orchestrator.runtime_client import DEFAULT_GRAPH_PATH, GraphR
 from .core import DEFAULT_OCR_PATH, ReceiptDataPreparer
 from .observability import get_logger, new_run_id, run_context
 from .overall_advice import OverallAdviceProvider, resolve_llm_evaluate_endpoint
+from .receipt_summary import (
+    build_ai_audit_advice,
+    build_ai_audit_summary,
+    extract_valid_invoice_final_amount,
+    invoice_contributes_valid_amount,
+)
 
 if TYPE_CHECKING:
     from .profiles import ExpenseProfile, ProfileResolver
@@ -107,6 +113,7 @@ class ReceiptAuditService:
                 )
             except TypeError as exc:
                 # 兼容旧版/测试替身 DataPreparer：老接口没有发票级 enricher 参数。
+                # 正式 DataPreparer 支持该参数时，E15 票种判断仍由 invoice enricher 注入。
                 if "extra_enrichers_override" not in str(exc) or not invoice_prepare_kwargs:
                     raise
                 prepared_input = self._data_preparer.prepare_invoice_input(
@@ -136,8 +143,12 @@ class ReceiptAuditService:
             # 动态路由模式下记录选中的 profile，供 process_prepared_receipt 选图
             "resolvedProfile": resolved_profile,
         }
-        # 所有发票完成数据准备后一次性计算本单出租车连票关系，供执行前读取；
-        # process_prepared_receipt() 会幂等重算，兼容从队列/磁盘加载的 prepared receipt。
+        # 先为兼容未进入核销单循环的调用方注入整单总量；正式核销单执行时，
+        # process_prepared_receipt() 会按发票顺序改写为当前累计商品数量，最后一张即整单总量。
+        _inject_total_goods_count(prepared_receipt)
+        # 所有发票完成数据准备后一次性计算本单出租车连票关系，供需要在执行前
+        # 读取 prepared receipt 的调用方使用；process_prepared_receipt() 会幂等重算一次，
+        # 兼容从队列/磁盘加载的既有 prepared receipt。
         _inject_taxi_invoice_batch_context(prepared_receipt)
         return prepared_receipt
 
@@ -180,8 +191,10 @@ class ReceiptAuditService:
         invoice_results: list[dict[str, Any]] = []
 
         receipt_code = str(prepared_receipt.get("receiptCode") or "")
+        # 兼容从磁盘/队列加载、尚未经过 prepare_receipt 聚合的 prepared receipt。
+        _inject_total_goods_count(prepared_receipt)
         # 所有发票已完成数据准备后一次性计算本单出租车连票关系，确保连票组中的
-        # 第一张发票也能命中 W19，不受发票执行顺序影响；兼容队列/磁盘加载数据。
+        # 第一张发票也能命中 W19，不受发票执行顺序影响。
         _inject_taxi_invoice_batch_context(prepared_receipt)
         remaining_apply_amount = _resolve_initial_apply_amount(prepared_receipt)
 
@@ -192,8 +205,21 @@ class ReceiptAuditService:
             effective_graph_path = resolved_profile.default_graph_path
 
         previous_invoice_numbers: list[str] = []
+        gift_count_context = _resolve_gift_count_context(prepared_receipt)
+        cumulative_goods_count = 0.0
 
-        for invoice_preparation in prepared_receipt["invoicePreparations"]:
+        invoice_preparations = prepared_receipt["invoicePreparations"]
+        for index, invoice_preparation in enumerate(invoice_preparations):
+            if gift_count_context is not None:
+                current_prepared_input = _resolve_prepared_input(invoice_preparation)
+                cumulative_goods_count += _goods_quantity_total(current_prepared_input)
+                _update_gift_count_state(
+                    invoice_preparation,
+                    cumulative_goods_count=cumulative_goods_count,
+                    gift_reception_count=gift_count_context[1],
+                    is_last_invoice=(index == len(invoice_preparations) - 1),
+                )
+
             if remaining_apply_amount is not None:
                 _update_preparation_apply_amount(invoice_preparation, remaining_apply_amount)
 
@@ -229,8 +255,31 @@ class ReceiptAuditService:
             "validInvoiceTotal": _resolve_valid_invoice_total(invoice_results, _resolve_initial_apply_amount(prepared_receipt), remaining_apply_amount),
             "resolvedProfile": resolved_profile,
         }
-        # 核销单级整体建议：所有发票跑完后、回写 sink 前生成。
-        self._augment_with_overall_advice(receipt_result)
+        if gift_count_context is not None:
+            has_gift_item, gift_reception_count = gift_count_context
+            normalized_goods_count = (
+                int(cumulative_goods_count)
+                if cumulative_goods_count.is_integer()
+                else cumulative_goods_count
+            )
+            receipt_result.update(
+                {
+                    "hasGiftItem": has_gift_item,
+                    "giftReceptionCount": gift_reception_count,
+                    "totalGoodsCount": normalized_goods_count,
+                    "isGiftCountReasonable": (
+                        not has_gift_item
+                        or gift_reception_count <= cumulative_goods_count
+                    ),
+                }
+            )
+        # 核销单级金额汇总：所有发票跑完后生成，避免依赖最后一张发票。
+        ai_audit_summary = build_ai_audit_summary(prepared_receipt, receipt_result)
+        if ai_audit_summary:
+            receipt_result["aiAuditSummary"] = ai_audit_summary
+
+        # 核销单级确定性建议：所有发票跑完后、回写 sink 前生成。
+        self._augment_with_overall_advice(prepared_receipt, receipt_result)
         self._receipt_result_sink(receipt_result)
         return receipt_result
 
@@ -306,34 +355,21 @@ class ReceiptAuditService:
             graph_content=self._graph_content,
         )
 
-    def _augment_with_overall_advice(self, receipt_result: dict[str, Any]) -> None:
-        """调用整体建议 provider，把结果挂到 receipt_result['aiAuditAdvice']。
+    def _augment_with_overall_advice(
+        self,
+        prepared_receipt: Mapping[str, Any],
+        receipt_result: dict[str, Any],
+    ) -> None:
+        """Attach the deterministic receipt-level ``aiAuditAdvice``.
 
-        任何异常都吞掉并记日志——整体建议是增强项，绝不能打断审计主链路。
+        ``overall_advice_provider`` remains accepted by the constructor for
+        compatibility, but the normal audit path deliberately does not call
+        it.  Advice is now calculated from the completed invoice results
+        locally, so this step cannot trigger an LLM or another network call.
         """
-        provider = self._overall_advice_provider
-        if provider is None:
-            return
-        receipt_code = str(receipt_result.get("receiptCode") or "")
-        invoice_results = receipt_result.get("invoiceResults") or []
-        try:
-            with run_context(receipt_code=receipt_code, run_id=None, invoice_key=None):
-                advice = provider(
-                    receipt_code,
-                    invoice_results,
-                    receipt_context=receipt_result.get("receiptContext"),
-                )
-        except Exception:
-            get_logger("overall_advice").exception(
-                "overall advice provider raised",
-                extra={
-                    "receipt_code": receipt_code,
-                    "event": "overall_advice.invocation_failed",
-                },
-            )
-            return
-        if isinstance(advice, str) and advice.strip():
-            receipt_result["aiAuditAdvice"] = advice.strip()
+        advice = build_ai_audit_advice(prepared_receipt, receipt_result)
+        if advice:
+            receipt_result["aiAuditAdvice"] = advice
 
 
 def _get_audit_info_ei_code(audit_info: Any) -> str:
@@ -493,8 +529,113 @@ def _utc_now_isoformat() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _coerce_number(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(str(value).replace(",", "").strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _goods_quantity_total(prepared_input: Mapping[str, Any]) -> float:
+    items = prepared_input.get("items")
+    if not isinstance(items, list):
+        return 0.0
+    total = 0.0
+    for item in items:
+        if not isinstance(item, Mapping):
+            continue
+        # OCR 标准明细的商品数量字段是 num；quantity 作为兼容别名。
+        quantity = _coerce_number(item.get("num", item.get("quantity")))
+        if quantity is not None:
+            total += quantity
+    return total
+
+
+def _resolve_gift_count_context(
+    prepared_receipt: Mapping[str, Any],
+) -> tuple[bool, float] | None:
+    """读取招待费核销单级 W33 上下文。
+
+    W33 的接待人数来自核销单业务费用明细接口，不属于单张发票字段。
+    非招待费单据或未注入该 profile 数据时返回 None，避免影响其他费用类型。
+    """
+    service_data = prepared_receipt.get("serviceData")
+    if not isinstance(service_data, Mapping):
+        return None
+    entertainment_data = service_data.get("entertainment_data")
+    if not isinstance(entertainment_data, Mapping):
+        return None
+    if "hasGiftItem" not in entertainment_data and "giftReceptionCount" not in entertainment_data:
+        return None
+
+    has_gift_item = bool(entertainment_data.get("hasGiftItem"))
+    gift_reception_count = _coerce_number(entertainment_data.get("giftReceptionCount")) or 0.0
+    return has_gift_item, gift_reception_count
+
+
+def _update_gift_count_state(
+    invoice_preparation: Mapping[str, Any],
+    *,
+    cumulative_goods_count: float,
+    gift_reception_count: float,
+    is_last_invoice: bool,
+) -> None:
+    """把 W33 的核销单级累计状态注入当前发票输入。
+
+    图运行粒度仍是一张发票，但 W33 的比较口径是核销单累计值。
+    非最后一张发票只推进状态；最后一张发票的累计值代表核销单最终值，
+    回写层会进一步只保留最后一张发票的 W33 结果。
+    """
+    prepared_input = invoice_preparation.get("preparedInput")
+    if not isinstance(prepared_input, dict):
+        return
+
+    normalized_goods_count: int | float = (
+        int(cumulative_goods_count)
+        if cumulative_goods_count.is_integer()
+        else cumulative_goods_count
+    )
+    remaining_reception_count = gift_reception_count - cumulative_goods_count
+    normalized_remaining: int | float = (
+        int(remaining_reception_count)
+        if remaining_reception_count.is_integer()
+        else remaining_reception_count
+    )
+
+    # W33 图表达式读取 totalGoodsCount；这里将其改为当前循环的累计值。
+    prepared_input["totalGoodsCount"] = normalized_goods_count
+    prepared_input["cumulativeGoodsCount"] = normalized_goods_count
+    prepared_input["giftRemainingReceptionCount"] = normalized_remaining
+    prepared_input["isLastInvoice"] = is_last_invoice
+
+
+def _inject_total_goods_count(prepared_receipt: Mapping[str, Any]) -> None:
+    invoice_preparations = prepared_receipt.get("invoicePreparations")
+    if not isinstance(invoice_preparations, list):
+        return
+    total = sum(
+        _goods_quantity_total(item.get("preparedInput"))
+        for item in invoice_preparations
+        if isinstance(item, Mapping) and isinstance(item.get("preparedInput"), Mapping)
+    )
+    normalized_total: int | float = int(total) if total.is_integer() else total
+    for item in invoice_preparations:
+        if not isinstance(item, Mapping):
+            continue
+        prepared_input = item.get("preparedInput")
+        if isinstance(prepared_input, dict):
+            prepared_input["totalGoodsCount"] = normalized_total
+
+
 def _inject_taxi_invoice_batch_context(prepared_receipt: Mapping[str, Any]) -> None:
-    """为每张已准备发票注入本核销单出租车连票结果。"""
+    """为每张已准备发票注入本核销单出租车连票结果。
+
+    ``taxiInvoiceSerial.currentPrefix`` 已在个人交通费数据准备阶段生成。本函数
+    只比较同一核销单内的出租车发票，且将结果回写到 preparedInput.serviceData 和
+    context.serviceData，兼容在线准备和从队列/磁盘加载后直接执行两种路径。
+    """
     invoice_preparations = prepared_receipt.get("invoicePreparations")
     if not isinstance(invoice_preparations, list):
         return
@@ -546,11 +687,16 @@ def _inject_taxi_invoice_batch_context(prepared_receipt: Mapping[str, Any]) -> N
         context["serviceData"] = service_data
 
 
+
 def _inject_previous_invoice_numbers(
     invoice_preparation: Mapping[str, Any],
     previous_invoice_numbers: list[str],
 ) -> None:
-    """兼容保留旧的前序发票号上下文；W19 已不再读取该字段。"""
+    """兼容保留旧的前序发票号上下文。
+
+    W19 已改为读取 ``serviceData.taxiInvoiceSerial``，不再依赖该字段；保留注入
+    仅用于兼容历史 preparedInput 消费方。
+    """
     prepared_input = invoice_preparation.get("preparedInput")
     if not isinstance(prepared_input, dict):
         return
@@ -624,64 +770,14 @@ def _iter_decision_rule_results(decision_output: Mapping[str, Any]) -> list[dict
 
 
 def _invoice_contributes_valid_amount(invoice_result: Mapping[str, Any]) -> bool:
-    """该发票的扣减后 finalAmount 是否计入 E31 有效合计。
-
-    - 执行失败（executionStatus != SUCCEEDED）→ 不计入。
-    - 整体 reject/failed 时，若存在豁免集之外的 reject/failed 规则 → 整张无效，不计入。
-    - 仅 E31（金额充足度）或 E34（内容扣减）reject/failed 时仍计入：
-      E31 不否定内容；E34 按 LLM 返回的扣减后 finalAmount 计入（取不到时计 0）。
-    - 无结构化子规则结果时，保守视为不计入（与历史行为一致）。
-    """
-    if invoice_result.get("executionStatus") != "SUCCEEDED":
-        return False
-
-    decision_status = str(invoice_result.get("decisionStatus") or "").lower()
-    if decision_status not in ("failed", "reject"):
-        return True
-
-    decision_output = invoice_result.get("decisionOutput") or {}
-    rule_results = _iter_decision_rule_results(decision_output)
-    # 无结构化子规则结果时，保守视为不可计入（与历史行为一致）。
-    if not rule_results:
-        return False
-
-    for rule_result in rule_results:
-        reason_code = rule_result.get("reason_code") or rule_result.get("reasonCode")
-        distinguish_result = str(
-            rule_result.get("distinguish_result") or rule_result.get("distinguishResult") or ""
-        ).lower()
-        if (
-            reason_code not in _INVOICE_FINAL_AMOUNT_EXEMPT_RULE_CODES
-            and distinguish_result in ("reject", "failed")
-        ):
-            return False
-    return True
+    """兼容保留的内部入口，实际规则由整单汇总模块统一实现。"""
+    return invoice_contributes_valid_amount(invoice_result)
 
 
 def _extract_invoice_final_amount(invoice_result: Mapping[str, Any]) -> float | None:
-    if not _invoice_contributes_valid_amount(invoice_result):
-        return None
-
-    # decisionOutput 既在 invoice_result 顶层、也在 runtimeResult 下（两处等价）。
-    # 真实图里 E34 节点 outputPath=invoice_content_valid_result，引擎把它的输出嵌套在
-    # decisionOutput["invoice_content_valid_result"] 下；扁平 mock 则把 finalAmount 放在
-    # decisionOutput 顶层。两处形状都兼容，与 writeback._sum_invoice_final_amounts 对齐。
-    decision_output = invoice_result.get("decisionOutput")
-    if not isinstance(decision_output, Mapping):
-        decision_output = (invoice_result.get("runtimeResult") or {}).get("decisionOutput") or {}
-
-    candidates = [
-        decision_output.get("invoice_finalAmount"),
-        (decision_output.get("invoice_content_valid_result") or {}).get("invoice_finalAmount"),
-    ]
-    for final_amount in candidates:
-        if final_amount is None:
-            continue
-        try:
-            return float(final_amount)
-        except (ValueError, TypeError):
-            continue
-    return None
+    """提取 E31/E34 感知的发票扣减后金额，保持历史 float 返回类型。"""
+    final_amount = extract_valid_invoice_final_amount(invoice_result)
+    return float(final_amount) if final_amount is not None else None
 
 
 def _resolve_valid_invoice_total(

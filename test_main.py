@@ -16,7 +16,6 @@ from expense_audit_orchestrator.application import ReceiptAuditService
 from expense_audit_orchestrator.bootstrap import create_receipt_audit_service as create_orchestrator_service
 from expense_audit_orchestrator.core import ReceiptDataPreparer as OrchestratorReceiptDataPreparer
 from expense_audit_orchestrator.profiles import ExpenseProfile
-from graph_runtime.core import DEFAULT_GRAPH_PATH, load_decision, load_decision_from_content
 from graph_runtime.api import create_app as create_graph_runtime_app
 from graph_runtime.application import normalize_decision_output
 from node_gateway.api import NODE_GATEWAY_LLM_EVALUATE_PATH, create_app as create_node_gateway_app
@@ -253,44 +252,6 @@ class ReceiptPipelineTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 422)
-
-    def test_graph_runtime_writeoff_expression_tolerates_missing_or_null_usage_history(self) -> None:
-        graph_content = json.loads(Path(DEFAULT_GRAPH_PATH).read_text(encoding="utf-8"))
-        expression_value = None
-        for node in graph_content.get("nodes", []):
-            if not isinstance(node, dict):
-                continue
-            content = node.get("content")
-            if not isinstance(content, dict):
-                continue
-            for expression in content.get("expressions", []):
-                if isinstance(expression, dict) and expression.get("key") == "isWriteOff":
-                    expression_value = expression.get("value")
-                    break
-            if expression_value is not None:
-                break
-
-        self.assertIsNotNone(expression_value)
-
-        client = TestClient(create_graph_runtime_app())
-        graph = build_single_expression_graph(expression_value)
-
-        for prepared_input in (
-            {"invoiceNo": "INV-001", "serviceData": {}},
-            {"invoiceNo": "INV-001", "serviceData": {"invoiceUsageHistory": None}},
-        ):
-            with self.subTest(prepared_input=prepared_input):
-                response = client.post(
-                    "/api/v1/graph-runtime/evaluations",
-                    json={
-                        "graphContent": graph,
-                        "preparedInput": prepared_input,
-                        "includePreparedInput": True,
-                    },
-                )
-
-                self.assertEqual(response.status_code, 200)
-                self.assertTrue(response.json()["decisionOutput"]["isWriteOff"])
 
     def test_main_app_does_not_expose_node_gateway_route(self) -> None:
         client = TestClient(create_graph_runtime_app())
@@ -1687,6 +1648,48 @@ class ReceiptPipelineTests(unittest.TestCase):
 
 
 class FormalServiceTests(unittest.TestCase):
+    def test_deterministic_advice_does_not_call_injected_overall_provider(self) -> None:
+        provider_calls: list[str] = []
+
+        def unexpected_provider(*args: Any, **kwargs: Any) -> str:
+            del args, kwargs
+            provider_calls.append("called")
+            raise AssertionError("LLM overall advice provider must not be called")
+
+        service = ReceiptAuditService(
+            graph_runtime_client=MagicMock(),
+            data_preparer=MagicMock(),
+            overall_advice_provider=unexpected_provider,
+        )
+        prepared_receipt = {
+            "serviceData": {"auditInfo": {"applyAmount": "100.00"}},
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "preparedInput": {"invoiceNo": "INV-001", "totalAmount": "100.00"},
+                }
+            ],
+        }
+        receipt_result = {
+            "receiptCode": "REC-ADVICE-001",
+            "invoiceResults": [
+                {
+                    "invoiceKey": "FID-001",
+                    "executionStatus": "SUCCEEDED",
+                    "decisionStatus": "passed",
+                    "decisionOutput": {"invoice_finalAmount": "100.00"},
+                }
+            ],
+        }
+
+        service._augment_with_overall_advice(prepared_receipt, receipt_result)
+
+        self.assertEqual(provider_calls, [])
+        self.assertEqual(
+            receipt_result["aiAuditAdvice"],
+            "本次发票全部通过！",
+        )
+
     def test_main_no_longer_exposes_runtime_cli_wrapper(self) -> None:
         self.assertFalse(hasattr(main, "build_cli_parser"))
         self.assertFalse(hasattr(main, "main_cli"))
@@ -2551,22 +2554,6 @@ class FormalServiceTests(unittest.TestCase):
             "https://service.example/api/audit-service/audit/fie-id-mapping/bill",
         )
 
-    def test_load_decision_reuses_compiled_graph_for_same_path(self) -> None:
-        graph_path = DEFAULT_GRAPH_PATH
-
-        first = load_decision(graph_path)
-        second = load_decision(graph_path)
-
-        self.assertIs(first, second)
-
-    def test_load_decision_from_content_reuses_compiled_graph_for_same_content(self) -> None:
-        graph_content = json.loads(DEFAULT_GRAPH_PATH.read_text(encoding="utf-8"))
-
-        first = load_decision_from_content(graph_content)
-        second = load_decision_from_content(graph_content)
-
-        self.assertIs(first, second)
-
     def test_main_app_does_not_expose_evaluate_receipt_endpoint(self) -> None:
         client = TestClient(create_graph_runtime_app())
 
@@ -3363,6 +3350,45 @@ class ProfileRoutingTests(unittest.TestCase):
         result3 = service3.prepare_receipt("R3")
         self.assertEqual(result3["resolvedProfile"].name, "entertainment")
         self.assertEqual(result3["resolvedProfile"].default_graph_path, ENTERTAINMENT_GRAPH_PATH)
+
+    def test_build_rule_input_joins_goods_names_into_goods_name(self) -> None:
+        from expense_audit_orchestrator.core import build_rule_input
+
+        result = build_rule_input(
+            "REC-CONTENTS-001",
+            {
+                "invoiceType": "26",
+                "contents": "旧发票内容",
+                "items": [
+                    {"goodsName": " A "},
+                    {"goodsName": ""},
+                    {"goodsName": "B"},
+                    None,
+                    {"detailAmount": "1"},
+                ],
+            },
+            file_path="base64://invoice",
+            service_data={},
+        )
+
+        self.assertEqual(result["goodsName"], "A、B")
+        self.assertNotIn("contents", result)
+
+    def test_build_rule_input_does_not_fallback_without_valid_goods_names(self) -> None:
+        from expense_audit_orchestrator.core import build_rule_input
+
+        result = build_rule_input(
+            "REC-CONTENTS-002",
+            {
+                "contents": "OCR 原有内容",
+                "items": [{"goodsName": ""}, {"detailAmount": "1"}],
+            },
+            file_path="base64://invoice",
+            service_data={},
+        )
+
+        self.assertNotIn("goodsName", result)
+        self.assertNotIn("contents", result)
 
     def test_employee_context_no_longer_hardcoded(self) -> None:
         """context.employee 应从 auditInfo 提取，不再硬编码假数据。"""

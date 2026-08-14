@@ -17,8 +17,10 @@ def entertainment_compliance_rule(goods_name: str, item: Mapping[str, Any]) -> b
 
 
 entertainment_audit_rule_catalog: dict[str, dict[str, str]] = {
+    "E01": {"auditContent": "检查发票购买方公司名称与核销单财务体系映射公司名称是否一致"},
+    "E02": {"auditContent": "检查发票购买方纳税人识别号与核销单财务体系映射纳税人识别号是否一致"},
     "E35": {"auditContent": "检查发票票种是否符合业务招待费报销范围"},
-    "E33": {"auditContent": "检查发票购买方信息是否符合报销要求"},
+    "E33": {"auditContent": "检查使用发票是否为当年发票"},
     "E09": {"auditContent": "检查发票是否已被核销"},
     "E05": {"auditContent": "检查发票开具日期是否为当前报销年度"},
     "E15": {"auditContent": "检查是否有员工本人费用"},

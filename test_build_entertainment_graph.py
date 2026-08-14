@@ -1,3 +1,4 @@
+import json
 import unittest
 from pathlib import Path
 
@@ -5,9 +6,14 @@ import zen
 
 from build_entertainment_graph import (
     DST_GRAPH,
+    ENTERTAINMENT_CONTENT_PROMPT_SOURCE,
     ENTERTAINMENT_PREPROCESS_EXPRESSIONS,
     FRAUD_PREPROCESS_EXPRESSIONS,
+    _build_content_compliance_check_node,
     _build_content_compliance_llm_node,
+    _build_content_compliance_postprocess_node,
+    _build_company_header_check_node,
+    _build_tax_number_check_node,
     _build_fraud_address_llm_node,
     build_entertainment_graph,
 )
@@ -22,12 +28,308 @@ def _is_recently_registered_expression() -> str:
     )
 
 
+def _is_company_exists_expression() -> str:
+    return next(
+        expression["value"]
+        for expression in ENTERTAINMENT_PREPROCESS_EXPRESSIONS
+        if expression["key"] == "isCompanyExists"
+    )
+
+
+def _is_buyer_company_expression() -> str:
+    return next(
+        expression["value"]
+        for expression in ENTERTAINMENT_PREPROCESS_EXPRESSIONS
+        if expression["key"] == "isBuyerCompany"
+    )
+
+
+def _is_tax_exists_expression() -> str:
+    return next(
+        expression["value"]
+        for expression in ENTERTAINMENT_PREPROCESS_EXPRESSIONS
+        if expression["key"] == "isTaxExists"
+    )
+
+
 def _is_not_self_expense_expression() -> str:
     return next(
         expression["value"]
         for expression in ENTERTAINMENT_PREPROCESS_EXPRESSIONS
         if expression["key"] == "isNotSelfExpense"
     )
+
+
+def _is_gift_count_reasonable_expression() -> str:
+    return next(
+        expression["value"]
+        for expression in ENTERTAINMENT_PREPROCESS_EXPRESSIONS
+        if expression["key"] == "isGiftCountReasonable"
+    )
+
+
+class CompanyHeaderExpressionTests(unittest.TestCase):
+    def test_requires_org_number_and_matching_company_name(self) -> None:
+        expression = _is_company_exists_expression()
+        company_list = [
+            {"ccode": "111", "companyName": "福建公司"},
+            {"ccode": "112", "companyName": "北京公司"},
+        ]
+
+        self.assertTrue(
+            zen.evaluate_expression(
+                expression,
+                {
+                    "orgNumber": "112",
+                    "orgName": "北京公司",
+                    "serviceData": {"companyList": company_list},
+                },
+            )
+        )
+        self.assertFalse(
+            zen.evaluate_expression(
+                expression,
+                {
+                    "orgNumber": "112",
+                    "orgName": "福建公司",
+                    "serviceData": {"companyList": company_list},
+                },
+            )
+        )
+
+    def test_does_not_match_company_name_from_another_org(self) -> None:
+        expression = _is_company_exists_expression()
+        self.assertFalse(
+            zen.evaluate_expression(
+                expression,
+                {
+                    "orgNumber": "112",
+                    "orgName": "福建公司",
+                    "serviceData": {
+                        "companyList": [
+                            {"ccode": "111", "companyName": "福建公司"},
+                            {"ccode": "112", "companyName": "北京公司"},
+                        ]
+                    },
+                },
+            )
+        )
+
+    def test_supports_actual_company_list_name_fields(self) -> None:
+        expression = _is_company_exists_expression()
+        self.assertTrue(
+            zen.evaluate_expression(
+                expression,
+                {
+                    "orgNumber": "112",
+                    "buyerName": "北京公司",
+                    "serviceData": {
+                        "companyList": [{"ccode": "112", "cname": "北京公司"}]
+                    },
+                },
+            )
+        )
+
+    def test_graph_maps_e01_to_pass_and_reject(self) -> None:
+        node = _build_company_header_check_node()
+        self.assertEqual(node["content"]["inputs"][0]["field"], "isCompanyExists")
+        self.assertEqual(node["content"]["outputPath"], "header_result")
+
+        results_by_input = {
+            rule["dea9a1bc-66ae-47b3-885f-9e9a1bb07571"]: rule[
+                "f35ede49-0eae-4dda-b39e-11a11383697a"
+            ]
+            for rule in node["content"]["rules"]
+        }
+        self.assertEqual(results_by_input["true"], '"PASS"')
+        self.assertEqual(results_by_input["false"], '"REJECT"')
+        self.assertTrue(
+            all(
+                rule["48a29115-f542-44d3-8c02-3ff71e19ee38"] == '"E01"'
+                for rule in node["content"]["rules"]
+            )
+        )
+
+    def test_generated_graph_contains_single_e01_node_connected_to_response(self) -> None:
+        graph = build_entertainment_graph()
+        e01_nodes = [
+            node for node in graph["nodes"]
+            if node.get("id") == "d3046965-dbaf-41cd-ba93-0d957fe67ec8"
+        ]
+        self.assertEqual(len(e01_nodes), 1)
+        e01_edges = [
+            edge for edge in graph["edges"]
+            if edge.get("targetId") == "d3046965-dbaf-41cd-ba93-0d957fe67ec8"
+        ]
+        self.assertTrue(
+            any(edge.get("sourceId") == "c67dcb33-2750-4a43-8af7-8346612c04a9" for edge in e01_edges)
+        )
+        self.assertTrue(
+            any(
+                edge.get("sourceId") == "d3046965-dbaf-41cd-ba93-0d957fe67ec8"
+                and edge.get("targetId") == "e109e75a-d107-4fd0-a8b3-e3dae7fad15b"
+                for edge in graph["edges"]
+            )
+        )
+
+
+class TaxNumberExpressionTests(unittest.TestCase):
+    def test_classifies_company_suffix_and_employee_name(self) -> None:
+        expression = _is_buyer_company_expression()
+        self.assertTrue(zen.evaluate_expression(expression, {"buyerName": "北京星网锐捷网络技术有限公司"}))
+        self.assertTrue(zen.evaluate_expression(expression, {"buyerName": "某某事务所"}))
+        self.assertFalse(zen.evaluate_expression(expression, {"buyerName": "张三"}))
+
+    def test_company_buyer_tax_number_must_match_org_number_company(self) -> None:
+        expression = _is_tax_exists_expression()
+        base = {
+            "buyerName": "北京星网锐捷网络技术有限公司",
+            "orgNumber": "112",
+            "serviceData": {
+                "companyList": [
+                    {"ccode": "111", "companyTax": "TAX-FJ"},
+                    {"ccode": "112", "companyTax": "TAX-BJ"},
+                ]
+            },
+        }
+
+        self.assertTrue(zen.evaluate_expression(expression, {**base, "buyerTaxNo": "TAX-BJ"}))
+        self.assertFalse(zen.evaluate_expression(expression, {**base, "buyerTaxNo": "TAX-FJ"}))
+        self.assertFalse(zen.evaluate_expression(expression, {**base, "buyerTaxNo": ""}))
+
+    def test_employee_buyer_name_skips_tax_number_comparison(self) -> None:
+        expression = _is_tax_exists_expression()
+        context = {
+            "buyerName": "张三",
+            "buyerTaxNo": "WRONG-TAX",
+            "orgNumber": "112",
+            "serviceData": {"companyList": [{"ccode": "112", "companyTax": "TAX-BJ"}]},
+        }
+        self.assertTrue(zen.evaluate_expression(expression, context))
+
+    def test_graph_maps_e02_to_pass_and_reject(self) -> None:
+        node = _build_tax_number_check_node()
+        self.assertEqual(node["content"]["inputs"][0]["field"], "isTaxExists")
+        self.assertEqual(node["content"]["outputPath"], "tax_result")
+        results_by_input = {
+            rule["dea9a1bc-66ae-47b3-885f-9e9a1bb07571"]: rule[
+                "f35ede49-0eae-4dda-b39e-11a11383697a"
+            ]
+            for rule in node["content"]["rules"]
+        }
+        self.assertEqual(results_by_input["true"], '"PASS"')
+        self.assertEqual(results_by_input["false"], '"REJECT"')
+        self.assertTrue(
+            all(
+                rule["48a29115-f542-44d3-8c02-3ff71e19ee38"] == '"E02"'
+                for rule in node["content"]["rules"]
+            )
+        )
+
+    def test_generated_graph_connects_e02_to_response(self) -> None:
+        graph = build_entertainment_graph()
+        e02_id = "d13f7062-96e4-4d74-a552-dfcc60d98ff4"
+        response_id = "e109e75a-d107-4fd0-a8b3-e3dae7fad15b"
+        self.assertEqual(sum(node.get("id") == e02_id for node in graph["nodes"]), 1)
+        self.assertTrue(
+            any(
+                edge.get("sourceId") == e02_id and edge.get("targetId") == response_id
+                for edge in graph["edges"]
+            )
+        )
+
+
+class GiftCountExpressionTests(unittest.TestCase):
+    def test_compares_gift_reception_count_with_total_goods_count(self) -> None:
+        expression = _is_gift_count_reasonable_expression()
+        base = {"serviceData": {"entertainment_data": {"hasGiftItem": True, "giftReceptionCount": 10}}}
+
+        self.assertFalse(zen.evaluate_expression(expression, {**base, "totalGoodsCount": 1}))
+        self.assertTrue(zen.evaluate_expression(expression, {**base, "totalGoodsCount": 10}))
+        self.assertTrue(
+            zen.evaluate_expression(
+                expression,
+                {**base, "totalGoodsCount": 1, "isLastInvoice": False},
+            )
+        )
+        self.assertFalse(
+            zen.evaluate_expression(
+                expression,
+                {**base, "totalGoodsCount": 1, "isLastInvoice": True},
+            )
+        )
+
+    def test_non_gift_project_is_not_checked(self) -> None:
+        expression = _is_gift_count_reasonable_expression()
+        self.assertTrue(
+            zen.evaluate_expression(
+                expression,
+                {
+                    "serviceData": {
+                        "entertainment_data": {
+                            "hasGiftItem": False,
+                            "giftReceptionCount": 10,
+                        }
+                    },
+                    "totalGoodsCount": 1,
+                },
+            )
+        )
+
+    def test_warning_rule_message_is_evaluable(self) -> None:
+        graph = json.loads(DST_GRAPH.read_text(encoding="utf-8"))
+        node = next(node for node in graph["nodes"] if node.get("id") == "ent-gift-count-check")
+        warning_rule = next(
+            rule
+            for rule in node["content"]["rules"]
+            if rule["dea9a1bc-66ae-47b3-885f-9e9a1bb07571"] == "false"
+        )
+        message_expression = warning_rule["509fd9ba-3996-4e4a-9021-df6513ed6807"]
+        self.assertIn("全部发票购买商品数量", zen.evaluate_expression(
+            message_expression,
+            {
+                "invoiceNo": "INV-1",
+                "totalGoodsCount": 1,
+                "items": [],
+                "serviceData": {"entertainment_data": {"giftReceptionCount": 10}},
+            },
+        ))
+
+
+class ContentComplianceLlmTests(unittest.TestCase):
+    def test_prompt_uses_project_name_semantics_not_keyword_matching(self) -> None:
+        self.assertIn("JSON.stringify(goodsName)", ENTERTAINMENT_CONTENT_PROMPT_SOURCE)
+        self.assertIn("黄金针菇", ENTERTAINMENT_CONTENT_PROMPT_SOURCE)
+        self.assertIn("默认通过", ENTERTAINMENT_CONTENT_PROMPT_SOURCE)
+        for prohibited_item in ("黄金", "珠宝", "首饰", "茅台", "五粮液", "礼品卡", "充值卡"):
+            self.assertIn(prohibited_item, ENTERTAINMENT_CONTENT_PROMPT_SOURCE)
+
+    def test_postprocess_maps_both_blacklist_categories_to_e36_results(self) -> None:
+        node = _build_content_compliance_postprocess_node()
+        expression = node["content"]["expressions"][0]["value"]
+
+        self.assertEqual(zen.evaluate_expression(expression, {
+            "llm_status": "success",
+            "llm_result": {"passed": True, "violationType": "none"},
+        }), "pass")
+        self.assertEqual(zen.evaluate_expression(expression, {
+            "llm_status": "success",
+            "llm_result": {"passed": False, "violationType": "prohibited_item"},
+        }), "prohibited_item")
+        self.assertEqual(zen.evaluate_expression(expression, {
+            "llm_status": "success",
+            "llm_result": {"passed": False, "violationType": "recharge_card"},
+        }), "recharge_card")
+
+    def test_e36_contains_recharge_card_result_row(self) -> None:
+        node = _build_content_compliance_check_node()
+        rules = node["content"]["rules"]
+        recharge_rule = next(
+            rule for rule in rules
+            if rule["dea9a1bc-66ae-47b3-885f-9e9a1bb07571"] == '"recharge_card"'
+        )
+        self.assertEqual(recharge_rule["48a29115-f542-44d3-8c02-3ff71e19ee38"], '"E36"')
+        self.assertEqual(recharge_rule["f35ede49-0eae-4dda-b39e-11a11383697a"], '"REJECT"')
 
 
 class SelfExpenseExpressionTests(unittest.TestCase):
@@ -46,12 +348,21 @@ class SelfExpenseExpressionTests(unittest.TestCase):
     def test_passes_when_passenger_name_is_missing_or_empty(self) -> None:
         expression = _is_not_self_expense_expression()
         audit_info = {"verifiUserName": "刘雪涛"}
+        e15_type = {"isApplicable": True}
 
-        self.assertTrue(zen.evaluate_expression(expression, {"serviceData": {"auditInfo": audit_info}}))
         self.assertTrue(
             zen.evaluate_expression(
                 expression,
-                {"passengerName": "", "serviceData": {"auditInfo": audit_info}},
+                {"serviceData": {"auditInfo": audit_info, "e15InvoiceType": e15_type}},
+            )
+        )
+        self.assertTrue(
+            zen.evaluate_expression(
+                expression,
+                {
+                    "passengerName": "",
+                    "serviceData": {"auditInfo": audit_info, "e15InvoiceType": e15_type},
+                },
             )
         )
 
@@ -63,7 +374,10 @@ class SelfExpenseExpressionTests(unittest.TestCase):
                 expression,
                 {
                     "passengerName": "张三",
-                    "serviceData": {"auditInfo": {"verifiUserName": "刘雪涛"}},
+                    "serviceData": {
+                        "auditInfo": {"verifiUserName": "刘雪涛"},
+                        "e15InvoiceType": {"isApplicable": True},
+                    },
                 },
             )
         )
@@ -76,7 +390,26 @@ class SelfExpenseExpressionTests(unittest.TestCase):
                 expression,
                 {
                     "passengerName": "刘雪涛",
-                    "serviceData": {"auditInfo": {"verifiUserName": "刘雪涛"}},
+                    "serviceData": {
+                        "auditInfo": {"verifiUserName": "刘雪涛"},
+                        "e15InvoiceType": {"isApplicable": True},
+                    },
+                },
+            )
+        )
+
+    def test_skips_name_comparison_for_non_applicable_invoice_type(self) -> None:
+        expression = _is_not_self_expense_expression()
+
+        self.assertTrue(
+            zen.evaluate_expression(
+                expression,
+                {
+                    "passengerName": "刘雪涛",
+                    "serviceData": {
+                        "auditInfo": {"verifiUserName": "刘雪涛"},
+                        "e15InvoiceType": {"isApplicable": False},
+                    },
                 },
             )
         )
