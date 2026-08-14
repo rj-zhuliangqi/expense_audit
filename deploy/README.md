@@ -19,7 +19,7 @@
 # 1. 拉代码
 git clone https://gitlab.ruijie.com.cn/rjai/expense_audit.git
 cd expense_audit
-git checkout feature/cumulative-expense-amount-optimization   # 当前最新开发分支
+git checkout main   # 生产/集成分支，部署已合并到 main 的代码
 
 # 2. 配置环境变量（.env 不在仓库里，需手动建）
 cp .env.example .env
