@@ -45,3 +45,6 @@ deploy/
 # OS
 .DS_Store
 Thumbs.db
+
+# Ignore local graph backup snapshots; official graph files are explicitly unignored above.
+*.json.before-*

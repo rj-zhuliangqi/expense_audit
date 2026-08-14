@@ -1,0 +1,312 @@
+import unittest
+
+from expense_audit_orchestrator.receipt_summary import (
+    build_ai_audit_advice,
+    build_ai_audit_summary,
+)
+from expense_audit_orchestrator.writeback import assemble_result_audit_info
+
+
+class ReceiptSummaryTests(unittest.TestCase):
+    def test_advice_uses_blocking_invoice_numbers_and_exact_shortage(self) -> None:
+        prepared_receipt = {
+            "serviceData": {"auditInfo": {"applyAmount": "1,180.00"}},
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "preparedInput": {"invoiceNo": "24000122", "totalAmount": "100.00"},
+                },
+                {
+                    "invoiceKey": "FID-002",
+                    "preparedInput": {"invoiceNo": "240000118", "totalAmount": "100.00"},
+                },
+                {
+                    "invoiceKey": "FID-003",
+                    "preparedInput": {"invoiceNo": "24000115", "totalAmount": "100.00"},
+                },
+                {
+                    "invoiceKey": "FID-004",
+                    "preparedInput": {"invoiceNo": "24000116", "totalAmount": "3,560.00"},
+                },
+            ],
+        }
+        processed_receipt = {
+            "invoiceResults": [
+                {
+                    "invoiceKey": "FID-001",
+                    "executionStatus": "SUCCEEDED",
+                    "decisionStatus": "reject",
+                    "decisionOutput": {
+                        "header_result": {
+                            "reason_code": "E01",
+                            "distinguish_result": "REJECT",
+                        }
+                    },
+                },
+                {
+                    "invoiceKey": "FID-002",
+                    "executionStatus": "SUCCEEDED",
+                    "decisionStatus": "failed",
+                    "decisionOutput": {
+                        "header_result": {
+                            "reason_code": "E02",
+                            "distinguish_result": "FAILED",
+                        }
+                    },
+                },
+                {
+                    "invoiceKey": "FID-003",
+                    "executionStatus": "SUCCEEDED",
+                    "decisionStatus": "reject",
+                    "decisionOutput": {
+                        "header_result": {
+                            "reason_code": "E05",
+                            "distinguish_result": "REJECT",
+                        }
+                    },
+                },
+                {
+                    "invoiceKey": "FID-004",
+                    "executionStatus": "SUCCEEDED",
+                    "decisionStatus": "passed",
+                    "decisionOutput": {"invoice_finalAmount": "1,143.19"},
+                },
+            ],
+        }
+
+        self.assertEqual(
+            build_ai_audit_advice(prepared_receipt, processed_receipt),
+            "本次报销捕捉3张问题发票,需要删除/重开发票24000122、240000118、24000115,"
+            "待补充发票金额36.81元,期待下一次满分",
+        )
+
+    def test_advice_keeps_warning_and_e34_valid_without_listing_them(self) -> None:
+        prepared_receipt = {
+            "serviceData": {"auditInfo": {"applyAmount": "200.00"}},
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "WARNING",
+                    "preparedInput": {"invoiceNo": "WARN-001", "totalAmount": "100.00"},
+                },
+                {
+                    "invoiceKey": "E34",
+                    "preparedInput": {"invoiceNo": "E34-001", "totalAmount": "100.00"},
+                },
+            ],
+        }
+        processed_receipt = {
+            "invoiceResults": [
+                {
+                    "invoiceKey": "WARNING",
+                    "executionStatus": "SUCCEEDED",
+                    "decisionStatus": "warning",
+                    "decisionOutput": {"invoice_finalAmount": "100.00"},
+                },
+                {
+                    "invoiceKey": "E34",
+                    "executionStatus": "SUCCEEDED",
+                    "decisionStatus": "reject",
+                    "decisionOutput": {
+                        "invoice_content_valid_result": {
+                            "reason_code": "E34",
+                            "distinguish_result": "REJECT",
+                            "invoice_finalAmount": "63.19",
+                        }
+                    },
+                },
+            ],
+        }
+
+        self.assertEqual(
+            build_ai_audit_advice(prepared_receipt, processed_receipt),
+            "本次发票全部通过！",
+        )
+
+    def test_advice_uses_invoice_number_fallback_priority(self) -> None:
+        prepared_receipt = {
+            "serviceData": {"auditInfo": {"applyAmount": "100.00"}},
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "invoiceFile": {"invoiceNo": "FILE-INVOICE-001"},
+                    "preparedInput": {"chequeNo": "CHEQUE-001", "totalAmount": "10.00"},
+                },
+            ],
+        }
+        processed_receipt = {
+            "invoiceResults": [
+                {
+                    "invoiceKey": "FID-001",
+                    "executionStatus": "SUCCEEDED",
+                    "decisionStatus": "reject",
+                    "preparedInput": {"serialNo": "SERIAL-001", "totalAmount": "10.00"},
+                    "decisionOutput": {
+                        "header_result": {
+                            "reason_code": "E01",
+                            "distinguish_result": "REJECT",
+                        }
+                    },
+                }
+            ],
+        }
+
+        advice = build_ai_audit_advice(prepared_receipt, processed_receipt)
+        self.assertIn("需要删除/重开发票SERIAL-001", advice or "")
+
+    def test_advice_returns_none_without_application_amount(self) -> None:
+        self.assertIsNone(
+            build_ai_audit_advice(
+                {"invoicePreparations": []},
+                {"invoiceResults": []},
+            )
+        )
+
+    def test_summary_uses_exact_decimal_formula_and_keeps_e34_deduction(self) -> None:
+        prepared_receipt = {
+            "receiptCode": "REC-SUMMARY-001",
+            "serviceData": {"auditInfo": {"applyAmount": "1,180.00"}},
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "preparedInput": {"totalAmount": "1,000.00"},
+                },
+                {
+                    "invoiceKey": "FID-002",
+                    "preparedInput": {"totalAmount": "2,860.00"},
+                },
+            ],
+        }
+        processed_receipt = {
+            "invoiceResults": [
+                {
+                    "invoiceKey": "FID-001",
+                    "executionStatus": "SUCCEEDED",
+                    "decisionStatus": "passed",
+                    "preparedInput": {"totalAmount": "1,000.00"},
+                    "decisionOutput": {"invoice_finalAmount": "1,000.00"},
+                },
+                {
+                    "invoiceKey": "FID-002",
+                    "executionStatus": "SUCCEEDED",
+                    "decisionStatus": "reject",
+                    "preparedInput": {"totalAmount": "2,860.00"},
+                    "decisionOutput": {
+                        "invoice_content_valid_result": {
+                            "reason_code": "E34",
+                            "distinguish_result": "REJECT",
+                            "invoice_finalAmount": "143.19",
+                        }
+                    },
+                },
+            ],
+        }
+
+        self.assertEqual(
+            build_ai_audit_summary(prepared_receipt, processed_receipt),
+            "本次报销申请总金额1,180.00元|提交发票总金额3,860.00元|"
+            "发票有效可报销金额1,143.19元|发票待补充金额36.81元",
+        )
+
+    def test_rejected_invoice_is_included_in_submitted_total_but_not_valid_total(self) -> None:
+        prepared_receipt = {
+            "serviceData": {"auditInfo": {"applyAmount": 100}},
+            "invoicePreparations": [
+                {"invoiceKey": "VALID", "preparedInput": {"totalAmount": 150}},
+                {"invoiceKey": "REJECTED", "preparedInput": {"totalAmount": 200}},
+            ],
+        }
+        processed_receipt = {
+            "invoiceResults": [
+                {
+                    "invoiceKey": "VALID",
+                    "executionStatus": "SUCCEEDED",
+                    "decisionStatus": "warning",
+                    "decisionOutput": {"invoice_finalAmount": 80},
+                },
+                {
+                    "invoiceKey": "REJECTED",
+                    "executionStatus": "SUCCEEDED",
+                    "decisionStatus": "reject",
+                    "decisionOutput": {
+                        "header_result": {
+                            "reason_code": "E01",
+                            "distinguish_result": "REJECT",
+                        },
+                        "invoice_finalAmount": 200,
+                    },
+                },
+            ],
+        }
+
+        self.assertEqual(
+            build_ai_audit_summary(prepared_receipt, processed_receipt),
+            "本次报销申请总金额100.00元|提交发票总金额350.00元|"
+            "发票有效可报销金额80.00元|发票待补充金额20.00元",
+        )
+
+    def test_submitted_total_only_uses_total_amount_without_alias_fallback(self) -> None:
+        prepared_receipt = {
+            "serviceData": {"auditInfo": {"applyAmount": "100.00"}},
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "preparedInput": {"amount": "88.00", "invoiceAmount": "99.00"},
+                },
+            ],
+        }
+        processed_receipt = {
+            "invoiceResults": [
+                {
+                    "invoiceKey": "FID-001",
+                    "executionStatus": "SUCCEEDED",
+                    "decisionStatus": "passed",
+                    "decisionOutput": {"invoice_finalAmount": "88.00"},
+                }
+            ],
+        }
+
+        self.assertEqual(
+            build_ai_audit_summary(prepared_receipt, processed_receipt),
+            "本次报销申请总金额100.00元|提交发票总金额0.00元|"
+            "发票有效可报销金额88.00元|发票待补充金额12.00元",
+        )
+
+    def test_writeback_payload_contains_summary_when_receipt_result_did_not_precompute_it(self) -> None:
+        prepared_receipt = {
+            "receiptCode": "REC-SUMMARY-WRITEBACK-001",
+            "serviceData": {
+                "auditInfo": {"instanceCode": "REC-SUMMARY-WRITEBACK-001", "applyAmount": "100.00"},
+            },
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "invoiceFile": {"fid": "FID-001"},
+                    "preparedInput": {"totalAmount": "120.00"},
+                },
+            ],
+        }
+        processed_receipt = {
+            "receiptCode": "REC-SUMMARY-WRITEBACK-001",
+            "serviceData": prepared_receipt["serviceData"],
+            "invoiceResults": [
+                {
+                    "invoiceKey": "FID-001",
+                    "executionStatus": "SUCCEEDED",
+                    "decisionStatus": "passed",
+                    "preparedInput": {"totalAmount": "120.00"},
+                    "decisionOutput": {"invoice_finalAmount": "95.25"},
+                }
+            ],
+        }
+
+        payload = assemble_result_audit_info(prepared_receipt, processed_receipt)
+
+        self.assertEqual(
+            payload["aiAuditSummary"],
+            "本次报销申请总金额100.00元|提交发票总金额120.00元|"
+            "发票有效可报销金额95.25元|发票待补充金额4.75元",
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

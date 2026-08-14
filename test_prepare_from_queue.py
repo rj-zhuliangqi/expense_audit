@@ -209,6 +209,7 @@ class PrepareFromQueueCliTests(unittest.TestCase):
                     },
                     "preparedInput": {
                         "invoiceNo": "INV-001",
+                        "goodsName": "*电信服务*通信服务费、*电信服务*违约金",
                         "items": [
                             {"goodsName": "*电信服务*通信服务费"},
                             {"goodsName": "*电信服务*违约金"},
@@ -319,7 +320,15 @@ class PrepareFromQueueCliTests(unittest.TestCase):
             self.assertTrue(actual_payload["auditTruthCheckLogs"][0]["atclid"])
             self.assertTrue(actual_payload["auditInvoiceFiles"][0]["aifid"])
             self.assertEqual(actual_payload["auditInvoiceInfos"][0]["atcrid"], "ATCRID-001")
-            self.assertEqual(len(actual_payload["auditTruthCheckResultBills"]), 1)
+            self.assertEqual(len(actual_payload["auditTruthCheckResultBills"]), 2)
+            self.assertEqual(
+                [row["code"] for row in actual_payload["auditTruthCheckResultBills"]],
+                ["invoiceNo", "goodsName"],
+            )
+            self.assertEqual(
+                actual_payload["auditTruthCheckResultBills"][1]["value"],
+                "*电信服务*通信服务费、*电信服务*违约金",
+            )
             self.assertEqual(len(actual_payload["auditTruthCheckResultItems"]), 1)
             self.assertEqual(len(actual_payload["auditTruthCheckResultItemCols"]), 1)
             self.assertTrue(actual_payload["auditTruthCheckResultBills"][0]["atcrbid"])

@@ -268,6 +268,48 @@ def _resolve_first_mapping(value: Any) -> dict[str, Any]:
     return {}
 
 
+def _join_goods_names(items: Any) -> str:
+    """将 OCR 明细中的商品名称按发票内容格式拼接。
+
+    OCR 的 ``items`` 可能缺失、包含非对象元素，或存在空的
+    ``goodsName``。数据准备阶段统一处理这些情况，避免流程图和回写
+    层各自实现一套拼接逻辑。
+    """
+    if not isinstance(items, list):
+        return ""
+
+    goods_names: list[str] = []
+    for item in items:
+        if not isinstance(item, Mapping):
+            continue
+        value = item.get("goodsName")
+        if value is None:
+            continue
+        normalized = str(value).strip()
+        if normalized:
+            goods_names.append(normalized)
+    return "、".join(goods_names)
+
+
+def _normalize_ocr_goods_name(ocr_data: Mapping[str, Any]) -> dict[str, Any]:
+    """把 OCR 明细中的 goodsName 汇总为单据级 goodsName。
+
+    发票内容的唯一来源是 ``items[*].goodsName``。这里不读取或回退到
+    ``contents``、``invoiceContents``、``description`` 等其他字段，避免
+    OCR 字段混用后难以定位数据问题。
+    """
+    normalized = dict(ocr_data)
+    # goodsName 是明细字段；准备数据中的单据级 goodsName 只允许由 items 生成。
+    # 同时移除历史上容易被误认为“发票内容”的别名，避免后续流程误读
+    # contents/invoiceContents/description；原始 OCR 仍保留在 ocrEnvelope 中用于审计追溯。
+    for legacy_key in ("goodsName", "contents", "invoiceContents", "description", "filtered_items"):
+        normalized.pop(legacy_key, None)
+    joined_goods_names = _join_goods_names(normalized.get("items"))
+    if joined_goods_names:
+        normalized["goodsName"] = joined_goods_names
+    return normalized
+
+
 def build_rule_input(
     receipt_code: str,
     ocr_data: dict[str, Any],
@@ -283,8 +325,11 @@ def build_rule_input(
     instance_com_code = _get_string_value(audit_info, "instanceComCode")
     invoice_file_id = _get_string_value(current_audit_invoice_file, "aifid", "afiid")
     invoice_info_id = _get_string_value(current_invoice_info, "aiiid")
+    # 发票内容唯一来自 OCR items[*].goodsName；这里使用数据准备阶段生成的
+    # 单据级 goodsName，不从 contents 等其他字段回退。
+    normalized_ocr_data = _normalize_ocr_goods_name(ocr_data)
     return {
-        **ocr_data,
+        **normalized_ocr_data,
         "instance_code": instance_code,
         "instanceComCode": instance_com_code,
         "invoice_file_id": invoice_file_id,
@@ -520,7 +565,7 @@ class ReceiptDataPreparer:
             raise ValueError("ocr provider must return a mapping")
 
         ocr_envelope = _extract_ocr_envelope(ocr_result)
-        ocr_data = _extract_normalized_ocr_data(ocr_result)
+        ocr_data = _normalize_ocr_goods_name(_extract_normalized_ocr_data(ocr_result))
         cheque_no = _get_string_value(ocr_data, "chequeNo", "invoiceNo", "serialNo")
         instance_code = _get_string_value(audit_info, "instanceCode") or receipt_code
         accounting_code = _resolve_accounting_code(ocr_data, audit_info, company_list)

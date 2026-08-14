@@ -1,0 +1,36 @@
+{
+  "ruleCode": "E15",
+  "description": "员工本人交通费用检查适用票据类型",
+  "invoiceTypes": [
+    {
+      "code": "10",
+      "name": "飞机行程单",
+      "matchValues": ["10", "飞机行程单"]
+    },
+    {
+      "code": "9",
+      "name": "火车票",
+      "matchValues": ["9", "火车票"]
+    },
+    {
+      "code": "16",
+      "name": "客运票",
+      "matchValues": ["16", "客运票", "客运车票"]
+    },
+    {
+      "code": "29",
+      "name": "数电铁路",
+      "matchValues": ["29", "数电铁路"]
+    },
+    {
+      "code": "28",
+      "name": "数电航空",
+      "matchValues": ["28", "数电航空"]
+    },
+    {
+      "code": "26",
+      "name": "数电普票",
+      "matchValues": ["26", "数电普票", "数电普通发票"]
+    }
+  ]
+}

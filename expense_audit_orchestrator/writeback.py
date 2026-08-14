@@ -4,6 +4,8 @@ from collections.abc import Callable, Mapping
 from typing import Any
 from uuid import uuid4
 
+from .receipt_summary import build_ai_audit_summary
+
 
 ComplianceRule = Callable[[str, Mapping[str, Any]], bool]
 AuditTravelsBuilder = Callable[[list[tuple[dict[str, Any], dict[str, Any]]], Mapping[str, Any]], list[dict[str, Any]]]
@@ -114,6 +116,14 @@ def assemble_result_audit_info(
         "auditTruthCheckResultItems": _build_audit_truthcheck_result_items(instance_code, invoice_pairs),
         "auditTruthCheckResultItemCols": _build_audit_truthcheck_result_item_cols(instance_code, invoice_pairs),
     }
+    # 核销单级金额汇总：优先使用编排层已计算的值；兼容直接调用
+    # assemble_result_audit_info 的场景时，在回写前按同一套 Decimal 规则补算。
+    ai_audit_summary = processed_receipt.get("aiAuditSummary")
+    if not isinstance(ai_audit_summary, str) or not ai_audit_summary.strip():
+        ai_audit_summary = build_ai_audit_summary(prepared_receipt, processed_receipt)
+    if isinstance(ai_audit_summary, str) and ai_audit_summary.strip():
+        result["aiAuditSummary"] = ai_audit_summary.strip()
+
     # 核销单级整体建议：仅在非空时输出，避免给下游送 null。
     overall_advice = processed_receipt.get("aiAuditAdvice")
     if isinstance(overall_advice, str) and overall_advice.strip():
@@ -193,6 +203,12 @@ def _build_e31_message(
         return "可用发票金额不足，暂不能提交。"
     shortage = max(apply_amount - valid_invoice_total, 0.0)
     amount_label = "本次交通费报销金额为" if _is_personal_transport_profile(expense_profile) else "本次报销金额为"
+    if _is_personal_transport_profile(expense_profile):
+        return (
+            f"本次交通费报销金额为 {_format_amount(apply_amount)} 元，"
+            f"当前有效发票金额为 {_format_amount(valid_invoice_total)} 元，"
+            f"待补充 {_format_amount(shortage)} 元。可用发票金额不足，暂不能提交。"
+        )
     return (
         f"{amount_label} {_format_amount(apply_amount)} 元，"
         f"当前可用发票金额为 {_format_amount(valid_invoice_total)} 元， "
@@ -228,9 +244,9 @@ def _override_e31_rule_result(
         overridden["distinguish_result"] = "REJECT"
         overridden["distinguishResult"] = "REJECT"
         if _is_personal_transport_profile(expense_profile):
-            # 交通费图已经输出 CSV 中的动态文案和标签；仅在旧图/缺字段时
-            # 使用交通费兜底值，不能使用通讯费的固定 E31 文案。
-            overridden["message"] = _get_string_value(overridden, "message") or _build_e31_message(
+            # E31 是核销单级金额规则，必须使用回写层计算出的整单有效发票金额；
+            # 不能保留图内按单张发票计算的 message，也不能把占位符写回结果。
+            overridden["message"] = _build_e31_message(
                 apply_amount, valid_invoice_total, expense_profile=expense_profile
             )
             overridden["policiesIndex"] = overridden.get("policiesIndex") or ""
@@ -745,6 +761,27 @@ def _build_audit_truthcheck_result_bills(
                         "aiid": current_audit_invoice_file.get("aiid"),
                     }
                 )
+
+        # goodsName 属于 OCR 明细字段，但回写接口要求将其作为发票
+        # 级别的 auditTruthCheckResultBills 结果回写。数据准备阶段已经把
+        # items[*].goodsName 汇总到单据级 goodsName；回写只读取该字段，
+        # 不再从 contents、items 或其他字段回退，避免掩盖数据准备问题。
+        goods_name = _get_string_value(prepared_input, "goodsName")
+        if goods_name:
+            rows.append(
+                {
+                    "atcrbid": str(uuid4()),
+                    "miInstanceCode": instance_code,
+                    "fid": current_audit_invoice_file.get("fid"),
+                    "name": _resolve_goods_name_label(prepared_input),
+                    "code": "goodsName",
+                    "value": goods_name,
+                    "atcrId": current_invoice_info.get("atcrid"),
+                    "createTime": create_time,
+                    "id": current_audit_invoice_file.get("fid"),
+                    "aiid": current_audit_invoice_file.get("aiid"),
+                }
+            )
     return rows
 
 
@@ -810,6 +847,14 @@ def _build_audit_truthcheck_result_item_cols(
                     }
                 )
     return rows
+
+
+def _resolve_goods_name_label(prepared_input: Mapping[str, Any]) -> str:
+    """从 item 字段映射读取 goodsName 的中文名称。"""
+    for field_mapping in _resolve_truthcheck_field_mappings(prepared_input, "item"):
+        if _get_string_value(field_mapping, "fieldName") == "goodsName":
+            return _get_string_value(field_mapping, "fieldLable") or "商品名称"
+    return "商品名称"
 
 
 def _resolve_truthcheck_field_mappings(

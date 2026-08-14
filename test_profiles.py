@@ -53,13 +53,15 @@ class GetProfileTelecomAssetDirTests(unittest.TestCase):
         enricher = profile.receipt_enrichers["telecom_list"]
         self.assertIsInstance(enricher("R", {}), list)
 
-    def test_travel_profile_registered_but_enricher_deferred(self) -> None:
-        # travel profile（差旅）已注册到注册表，但 enricher 实现仍 deferred
+    def test_travel_profile_registered_with_travel_audit_enrichers(self) -> None:
         profile = get_profile("travel")
         self.assertEqual(profile.name, "travel")
-        enricher = profile.receipt_enrichers["travel_data"]
-        with self.assertRaises(NotImplementedError):
-            enricher("R", {})
+        self.assertIn("travelAudit", profile.receipt_enrichers)
+        self.assertIn("travelAudit", profile.invoice_enrichers)
+        self.assertEqual(profile.default_graph_path.name, "graph-latest-travel-0807.json")
+        data = profile.receipt_enrichers["travelAudit"]("R", {})
+        self.assertIn("sourceStatus", data)
+        self.assertIn("messages", data)
 
     def test_personal_transport_profile_registered(self) -> None:
         # personal_transport profile（个人交通费）已注册，图路径指向个人交通费图
@@ -69,8 +71,25 @@ class GetProfileTelecomAssetDirTests(unittest.TestCase):
         self.assertEqual(profile.name, "personal_transport")
         self.assertEqual(profile.default_graph_path, PERSONAL_TRANSPORT_GRAPH_PATH)
         enricher = profile.receipt_enrichers["personal_transport_data"]
-        # 个人交通费 enricher 当前返回空 dict（无专属数据）
         self.assertEqual(enricher("R", {}), {})
+        self.assertIn("personalTransportInvoiceType", profile.invoice_enrichers)
+        invoice_enricher = profile.invoice_enrichers["personalTransportInvoiceType"]
+        result = invoice_enricher(
+            "R",
+            "invoice.pdf",
+            {"invoiceType": "72"},
+            {
+                "expenseInvoiceTypes": [
+                    {
+                        "manufacturerBillCode": "1",
+                        "invoiceType": "1-003",
+                        "manufacturerBillName": "电子普通发票",
+                    }
+                ]
+            },
+        )
+        self.assertEqual(result["personalTransportInvoiceTypeCode"], "72")
+        self.assertEqual(result["personalTransportAllowedInvoiceTypeCodes"], ["72"])
 
     def test_graph_path_env_override(self) -> None:
         """图路径支持通过 .env 环境变量覆盖，无需改代码。"""
@@ -114,6 +133,21 @@ class GetProfileTelecomAssetDirTests(unittest.TestCase):
         enricher = profile.receipt_enrichers["entertainment_data"]
         # 招待费 enricher 当前返回空 dict（无专属数据）
         self.assertEqual(enricher("R", {}), {})
+
+    def test_entertainment_writeback_catalog_has_correct_e01_and_e33_descriptions(self) -> None:
+        profile = get_profile("entertainment")
+        self.assertEqual(
+            profile.audit_rule_catalog["E01"]["auditContent"],
+            "检查发票购买方公司名称与核销单财务体系映射公司名称是否一致",
+        )
+        self.assertEqual(
+            profile.audit_rule_catalog["E33"]["auditContent"],
+            "检查使用发票是否为当年发票",
+        )
+        self.assertEqual(
+            profile.audit_rule_catalog["E02"]["auditContent"],
+            "检查发票购买方纳税人识别号与核销单财务体系映射纳税人识别号是否一致",
+        )
 
     def test_unknown_profile_raises_value_error(self) -> None:
         with self.assertRaises(ValueError):
