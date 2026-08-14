@@ -16,7 +16,7 @@
     {
       "type": "outputNode",
       "content": {
-        "schema": "{\"type\":\"object\",\"properties\":{\"invoice_finalAmount\":{\"type\":\"number\"},\"invoice_content_valid_result\":{\"type\":\"object\",\"properties\":{\"invoice_finalAmount\":{\"type\":\"number\"}}},\"instance_code\":{\"type\":\"string\"},\"reason_code\":{\"type\":\"string\"},\"distinguish_result\":{\"type\":\"string\"},\"audit_content\":{\"type\":\"string\"},\"audit_type\":{\"type\":\"string\"},\"distinguish_content\":{\"type\":\"string\"},\"invoice_file_id\":{\"type\":\"string\"},\"invoice_info_id\":{\"type\":\"string\"},\"message\":{\"type\":\"string\"},\"policiesIndex\":{\"type\":\"string\"},\"employeeSuggestionTips\":{\"type\":\"string\"},\"create_time\":{\"type\":\"string\"},\"problem_category\":{\"type\":\"string\"},\"optimization_action_category\":{\"type\":\"string\"}}}"
+        "schema": ""
       },
       "id": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
       "name": "response",
@@ -33,7 +33,7 @@
           {
             "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
             "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "True",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E35\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
@@ -52,7 +52,7 @@
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
             "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "False",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E35\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
@@ -61,19 +61,19 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的票据类型为“\" + (invoiceType ?? \"\") + \"”，不属于交通费允许票种范围。交通费仅支持数电普票、电子普票、过路过桥费发票、火车票、客运车票、出租车票、财政收据、数电铁路等票据。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的票据类型为 “\" + (invoiceType ?? \"\") + \"”，当前票据类型不符合该费用项目要求。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请删除当前发票，并上传真实业务对应的交通费合规票据。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【风险记录】报销行为将记录，待财务合规审查。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
             "a1b2c3d4-0000-0000-0000-problemcategory0": "\"票种不符\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【更换票据】\""
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【重新开票】\""
           }
         ],
         "inputs": [
           {
             "id": "dea9a1bc-66ae-47b3-885f-9e9a1bb07571",
             "name": "票据类型",
-            "field": "isInvoicType"
+            "field": "invoiceType"
           }
         ],
         "outputs": [
@@ -133,11 +133,6 @@
             "field": "employeeSuggestionTips"
           },
           {
-            "id": "a1b2c3d4-0000-0000-0000-createtime0",
-            "name": "创建时间",
-            "field": "create_time"
-          },
-          {
             "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
             "name": "问题分类",
             "field": "problem_category"
@@ -146,6 +141,11 @@
             "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
             "name": "优化动作分类",
             "field": "optimization_action_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,
@@ -167,12 +167,12 @@
           {
             "id": "c4dda58e-659f-4608-95bc-157b12d83206",
             "key": "isInvoicType",
-            "value": "(serviceData.personalTransportInvoiceTypeCode ?? \"\") in (serviceData.personalTransportAllowedInvoiceTypeCodes ?? [])"
+            "value": "invoiceType in map(serviceData.expenseInvoiceTypes as c, c.manufacturerBillCode)"
           },
           {
             "id": "af675bce-5b08-46e4-b516-e39222576c0d",
             "key": "isCompanyExists",
-            "value": "(orgName ?? buyerName ?? \"\") != \"\" and (orgName ?? buyerName ?? \"\") == (filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].companyName ?? filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].cName ?? filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].cname ?? \"\")"
+            "value": "(orgName ?? buyerName ?? \"\") in map(serviceData.companyList as c, c.cName ?? c.cname ?? c.companyName)"
           },
           {
             "id": "e9aa2ade-0afc-4964-94dc-2d223a7dbb88",
@@ -200,54 +200,9 @@
             "value": "(invoiceDate ?? \"\") != \"\" and (serviceData.auditInfo.submitTime ?? \"\") != \"\" and d(invoiceDate).year() == d(serviceData.auditInfo.submitTime).year()"
           },
           {
-            "id": "72a12351-9846-4261-9bf0-9f401b115418",
-            "key": "isPassengerTicket",
-            "value": "(invoiceType ?? \"\") in [\"火车票\",\"火车/高铁票\",\"客运汽车票\",\"公路汽车票\",\"数电铁路\",\"9\",\"16\",\"29\"]"
-          },
-          {
-            "id": "836d5202-3c70-482b-aafe-813bed86dd30",
-            "key": "isPassengerNameMatch",
-            "value": "$.isPassengerTicket ? ((passengerName ?? \"\") == (serviceData.auditInfo.verifiUserName ?? \"\")) : true"
-          },
-          {
-            "id": "7ea832d6-4806-4968-aeff-321e9b736c6d",
-            "key": "isPassengerInvoiceType",
-            "value": "((invoiceType ?? \"\") in [\"26\", \"72\"]) or ((serviceData.personalTransportInvoiceTypeCode ?? \"\") in [\"26\", \"72\"])"
-          },
-          {
-            "id": "personal-transport-passenger-content",
-            "key": "hasPassengerTransportContent",
-            "value": "contains((goodsName ?? \"\"), \"运输服务\") or contains((goodsName ?? \"\"), \"乘车费\") or contains((goodsName ?? \"\"), \"客运服务费\")"
-          },
-          {
-            "id": "personal-transport-passenger-cargo-content",
-            "key": "hasCargoContent",
-            "value": "contains((goodsName ?? \"\"), \"货物\")"
-          },
-          {
-            "id": "personal-transport-passenger-content-gate",
-            "key": "isPassengerTransportContent",
-            "value": "$.hasPassengerTransportContent and not($.hasCargoContent)"
-          },
-          {
-            "id": "personal-transport-passenger-name-gate",
-            "key": "isPassengerNameCheckApplicable",
-            "value": "$.isPassengerInvoiceType and $.isPassengerTransportContent"
-          },
-          {
-            "id": "abec0e34-373e-4554-a707-bccfc87fb136",
-            "key": "hasPassengerInfo",
-            "value": "$.isPassengerNameCheckApplicable ? (passengerName ?? \"\") != \"\" : true"
-          },
-          {
-            "id": "d4f9f03c-13f8-4e55-9b4d-6e78c8e53a37",
-            "key": "isDigitalPassengerNameMatch",
-            "value": "$.isPassengerNameCheckApplicable ? ((passengerName ?? \"\") == \"\" or (passengerName ?? \"\") == (serviceData.auditInfo.verifiUserName ?? \"\")) : true"
-          },
-          {
-            "id": "466d9389-b4a7-4f98-81ad-2e10a6ae993d",
-            "key": "isTaxiConsecutive",
-            "value": "not((serviceData.taxiInvoiceSerial.isTaxiInvoice ?? false) and ((serviceData.taxiInvoiceSerial.historyHit ?? false) or (serviceData.taxiInvoiceSerial.batchHit ?? false)))"
+            "id": "94c8882d-9c36-482e-90b4-5d843bb9bdce",
+            "key": "isTelecomOperator",
+            "value": "contains((salerName ?? \"\"), \"电信\") or contains((salerName ?? \"\"), \"移动\") or contains((salerName ?? \"\"), \"中国联合网络通信\") or contains((salerName ?? \"\"), \"联通\")"
           }
         ],
         "passThrough": true,
@@ -292,15 +247,15 @@
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E01\"",
-            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"WARNING\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
             "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查使用的发票购买方抬头与公司信息是否一致\"",
             "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的购货方信息为“\" + (buyerName ?? orgName ?? \"\") + \"”，与核销单所属公司“\" + (filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].companyName ?? filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].cName ?? filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].cname ?? \"\") + \"”不一致。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据购货方名称为 “\" + (buyerName ?? \"\") + \"”，与你所在公司 “\" + (filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].companyName ?? filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].cName ?? filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].cname ?? orgName ?? \"\") + \"” 不一致。\\n\\n如果是员工，正确购货方就是开本人姓名发票；如果是公司，正确的购货方就是本人所在公司体系抬头\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2.1.1员工需要确保票据中公司信息的准确性。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请联系销货方按正确公司抬头和纳税人识别号重新开票，重新上传后系统会再次校验。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"若该费用不允许使用个人抬头，\\n【修改抬头】请联系开票方按正确公司抬头 “\" + (filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].companyName ?? filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].cName ?? filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].cname ?? orgName ?? \"\") + \"” 重新开票。\\n\\n若该费用允许使用个人抬头，\\n请确认购货方名称是否为本人真实姓名 “\" + (serviceData.auditInfo.verifiUserName ?? \"\") + \"”；如不一致，请重新开票或补充说明。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
             "a1b2c3d4-0000-0000-0000-problemcategory0": "\"抬头不符\"",
             "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【重新开票】\""
@@ -370,11 +325,6 @@
             "field": "employeeSuggestionTips"
           },
           {
-            "id": "a1b2c3d4-0000-0000-0000-createtime0",
-            "name": "创建时间",
-            "field": "create_time"
-          },
-          {
             "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
             "name": "问题分类",
             "field": "problem_category"
@@ -383,6 +333,11 @@
             "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
             "name": "优化动作分类",
             "field": "optimization_action_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,
@@ -405,11 +360,11 @@
           {
             "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
             "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "True",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
-            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E02\"",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"W28\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查使用的发票购买方纳税人识别号与公司信息是否一致\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票抬头为个人时运营商是否在报销范围内\"",
             "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
@@ -422,22 +377,22 @@
             "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
           },
           {
-            "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
+            "_id": "c15f3a7b-9d2e-4f81-b63c-8a71e4d92f06",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
-            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E02\"",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"W28\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查使用的发票购买方纳税人识别号与公司信息是否一致\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票抬头为个人时运营商是否在报销范围内\"",
             "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的购货方纳税人识别号为“\" + (buyerTaxNo ?? \"\") + \"”，与所属公司正确纳税人识别号“\" + (filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].companyTax ?? \"\") + \"”不一致。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据购货方名称为 “\" + (buyerName ?? \"\") + \"”，与你所在公司 “\" + (filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].companyName ?? filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].cName ?? filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].cname ?? orgName ?? \"\") + \"” 不一致。\\n\\n如果是员工，正确购货方就是开本人姓名发票；如果是公司，正确的购货方就是本人所在公司体系抬头\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2.1.1员工需要确保票据中公司信息的准确性。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请联系开票方按正确公司抬头和纳税人识别号重新开票，重新上传后系统会再次校验。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"若该费用不允许使用个人抬头，\\n【修改抬头】请联系开票方按正确公司抬头 “\" + (filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].companyName ?? filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].cName ?? filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].cname ?? orgName ?? \"\") + \"” 重新开票。\\n\\n若该费用允许使用个人抬头，\\n请确认购货方名称是否为本人真实姓名 “\" + (serviceData.auditInfo.verifiUserName ?? \"\") + \"”；如不一致，请重新开票或补充说明。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"税号不符\"",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"抬头不符\"",
             "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【重新开票】\""
           }
         ],
@@ -445,7 +400,7 @@
           {
             "id": "dea9a1bc-66ae-47b3-885f-9e9a1bb07571",
             "name": "票据类型",
-            "field": "isTaxExists"
+            "field": "header_personal_check"
           }
         ],
         "outputs": [
@@ -505,9 +460,139 @@
             "field": "employeeSuggestionTips"
           },
           {
+            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
+            "name": "问题分类",
+            "field": "problem_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
+            "name": "优化动作分类",
+            "field": "optimization_action_category"
+          },
+          {
             "id": "a1b2c3d4-0000-0000-0000-createtime0",
             "name": "创建时间",
             "field": "create_time"
+          }
+        ],
+        "passThrough": false,
+        "inputField": null,
+        "outputPath": "header_personal_result",
+        "executionMode": "single"
+      },
+      "id": "e2b630c8-096d-4fea-ad4c-986473d8a880",
+      "name": "抬头个人检查",
+      "position": {
+        "x": 685,
+        "y": 1175
+      }
+    },
+    {
+      "type": "decisionTableNode",
+      "content": {
+        "hitPolicy": "first",
+        "rules": [
+          {
+            "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
+            "_description": "",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E02\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查使用的发票购买方纳税人识别号与公司信息是否一致\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
+            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
+          },
+          {
+            "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
+            "_description": "",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E02\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查使用的发票购买方纳税人识别号与公司信息是否一致\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
+            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据购货方税号为 “\" + (buyerTaxNo ?? \"\") + \"”，与你所在公司 “\" + (filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].companyName ?? filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].cName ?? filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].cname ?? orgName ?? \"\") + \"” 不一致。\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2.1.1员工需要确保票据中公司信息的准确性。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【重新开票】请联系开票方按正确公司名称 “\" + (filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].companyName ?? filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].cName ?? filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].cname ?? orgName ?? \"\") + \"” 和正确纳税人识别号 “\" + (filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].companyTax ?? \"\") + \"” 重新开票。重新上传后，系统会再次校验税号是否一致。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"税号不符\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【重新开票】\""
+          }
+        ],
+        "inputs": [
+          {
+            "id": "dea9a1bc-66ae-47b3-885f-9e9a1bb07571",
+            "name": "票据类型",
+            "field": "header_personal_check"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "f88cbb46-eb13-4ceb-9c68-0983f58e985f",
+            "name": "核销单号",
+            "field": "instance_code"
+          },
+          {
+            "id": "48a29115-f542-44d3-8c02-3ff71e19ee38",
+            "name": "稽核代码",
+            "field": "reason_code"
+          },
+          {
+            "id": "f35ede49-0eae-4dda-b39e-11a11383697a",
+            "name": "识别结果（warning  reject   pass）",
+            "field": "distinguish_result"
+          },
+          {
+            "id": "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e",
+            "name": "稽核内容",
+            "field": "audit_content"
+          },
+          {
+            "id": "14801e5c-ebef-43a4-a56a-23cb5adf4a83",
+            "name": "稽核类型",
+            "field": "audit_type"
+          },
+          {
+            "id": "d9a8e0e2-8a13-4a39-b50e-c339519e811e",
+            "name": "识别内容",
+            "field": "distinguish_content"
+          },
+          {
+            "id": "f47902a7-1dc2-41c9-8375-fa15174317bd",
+            "name": "发票文件主键",
+            "field": "invoice_file_id"
+          },
+          {
+            "id": "629d6a9c-0e78-40c1-baef-0abea4b1e67f",
+            "name": "发票信息主键",
+            "field": "invoice_info_id"
+          },
+          {
+            "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
+            "name": "日志内容",
+            "field": "message"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-regulation0",
+            "name": "制度",
+            "field": "policiesIndex"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
+            "name": "建议",
+            "field": "employeeSuggestionTips"
           },
           {
             "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
@@ -518,6 +603,11 @@
             "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
             "name": "优化动作分类",
             "field": "optimization_action_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,
@@ -568,9 +658,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"本次交通费报销金额为 \" + string(number(serviceData.auditInfo.applyAmount ?? 0)) + \" 元，当前有效发票金额为 \" + string(number(totalAmount ?? 0)) + \" 元，待补充 \" + string((number(serviceData.auditInfo.applyAmount ?? 0) > number(totalAmount ?? 0) ? number(serviceData.auditInfo.applyAmount ?? 0) - number(totalAmount ?? 0) : 0)) + \" 元。可用发票金额不足，暂不能提交。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"本次报销金额为 \" + string(number(serviceData.auditInfo.applyAmount ?? 0)) + \" 元，当前可用发票金额为 \" + string(number(totalAmount ?? 0)) + \" 元， 待补充\" + string((number(serviceData.auditInfo.applyAmount ?? 0) > number(totalAmount ?? 0) ? number(serviceData.auditInfo.applyAmount ?? 0) - number(totalAmount ?? 0) : 0)) + \" 元。可用发票金额不足，暂不能提交。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请补充上传金额足够的有效交通费发票；若下方已有票据被标记异常，请先按提示修正。也可将填报金额调减至有效发票金额以内。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请补充上传金额足够的有效发票。若下方已有发票被标记为异常，请先按提示修正这些发票；修正通过后，系统会重新计算可用发票金额。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
             "a1b2c3d4-0000-0000-0000-problemcategory0": "\"金额不足\"",
             "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【补充发票】【调减金额】\""
@@ -640,11 +730,6 @@
             "field": "employeeSuggestionTips"
           },
           {
-            "id": "a1b2c3d4-0000-0000-0000-createtime0",
-            "name": "创建时间",
-            "field": "create_time"
-          },
-          {
             "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
             "name": "问题分类",
             "field": "problem_category"
@@ -653,6 +738,11 @@
             "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
             "name": "优化动作分类",
             "field": "optimization_action_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,
@@ -663,8 +753,8 @@
       "id": "dcc29290-4d5e-4eb9-8e77-eee31820529a",
       "name": "金额充足检查",
       "position": {
-        "x": 645,
-        "y": 445
+        "x": 655,
+        "y": 450
       }
     },
     {
@@ -703,12 +793,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的销货方“\" + (salerName ?? \"\") + \"”命中公司或税务高风险/黑名单企业。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的销货方为 “\" + (salerName ?? \"\") + \"”，该销货方在税务或公司风险名单中。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请联系销货方作废当前发票，并提供真实业务对应的合规发票。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【更换发票】该销货方存在税务或公司风险，当前发票不能使用。请联系销货方作废原发票，并提供真实业务对应的合规发票。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"高风险销方\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【发票作废】【更换发票】\""
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"虚开发票\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【重新开票】\""
           }
         ],
         "inputs": [
@@ -775,11 +865,6 @@
             "field": "employeeSuggestionTips"
           },
           {
-            "id": "a1b2c3d4-0000-0000-0000-createtime0",
-            "name": "创建时间",
-            "field": "create_time"
-          },
-          {
             "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
             "name": "问题分类",
             "field": "problem_category"
@@ -788,6 +873,11 @@
             "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
             "name": "优化动作分类",
             "field": "optimization_action_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,
@@ -838,12 +928,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 已在核销单 \" + (filter((serviceData.invoiceUsageHistory ?? []) as h, h.chequeNo == (invoiceNo ?? \"\"))[0].miInstanceCode ?? filter((serviceData.invoiceUsageHistory ?? []) as h, h.chequeNo == (invoiceNo ?? \"\"))[0].instanceCode ?? \"未知\") + \" 中使用，不能重复报销。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 已在以下报销单中使用过：\" + (filter((serviceData.invoiceUsageHistory ?? []) as h, h.chequeNo == (invoiceNo ?? \"\"))[0].miInstanceCode ?? filter((serviceData.invoiceUsageHistory ?? []) as h, h.chequeNo == (invoiceNo ?? \"\"))[0].instanceCode ?? \"未知\") + \"；已报销金额为 \" + string(number((filter((serviceData.invoiceUsageHistory ?? []) as h, h.chequeNo == (invoiceNo ?? \"\"))[0].estimatedTotalAmount ?? filter((serviceData.invoiceUsageHistory ?? []) as h, h.chequeNo == (invoiceNo ?? \"\"))[0].totalAmount ?? 0))) + \" 元，不能再次用于本次报销。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请删除该票据，并上传未被使用过的真实交通费票据。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【删除重复发票】请删除本次发票，并上传未使用过的有效发票。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
             "a1b2c3d4-0000-0000-0000-problemcategory0": "\"重复报销\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【删除票据】\""
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【重新开票】\""
           }
         ],
         "inputs": [
@@ -910,11 +1000,6 @@
             "field": "employeeSuggestionTips"
           },
           {
-            "id": "a1b2c3d4-0000-0000-0000-createtime0",
-            "name": "创建时间",
-            "field": "create_time"
-          },
-          {
             "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
             "name": "问题分类",
             "field": "problem_category"
@@ -923,6 +1008,11 @@
             "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
             "name": "优化动作分类",
             "field": "optimization_action_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,
@@ -973,12 +1063,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的开票日期为 \" + (invoiceDate ?? \"\") + \"，与本次报销提交年度 \" + string(d(serviceData.auditInfo.submitTime).year()) + \" 不一致。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的开票日期为 \" + (invoiceDate ?? \"\") + \"，本次报销提交年度为 \" + string(d(serviceData.auditInfo.submitTime).year()) + \"。该发票不是本年度开具的发票。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2.2.3除跨年差旅外,票据不允许跨年核销使用\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请确认该票据是否属于本次报销周期。若不属于，请删除并更换本年度票据；确属业务合理跨期的，请补充说明后提交财务复核。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【更换发票】请上传本年度\" + string(d(serviceData.auditInfo.submitTime).year()) + \"开具的发票。若属于跨年差旅等允许例外场景，请补充跨年原因和对应行程/业务说明。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
             "a1b2c3d4-0000-0000-0000-problemcategory0": "\"跨期发票\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【确认账期】【删除票据】\""
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【重新开票】\""
           }
         ],
         "inputs": [
@@ -1045,11 +1135,6 @@
             "field": "employeeSuggestionTips"
           },
           {
-            "id": "a1b2c3d4-0000-0000-0000-createtime0",
-            "name": "创建时间",
-            "field": "create_time"
-          },
-          {
             "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
             "name": "问题分类",
             "field": "problem_category"
@@ -1058,6 +1143,11 @@
             "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
             "name": "优化动作分类",
             "field": "optimization_action_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,
@@ -1070,6 +1160,141 @@
       "position": {
         "x": 660,
         "y": 765
+      }
+    },
+    {
+      "type": "decisionTableNode",
+      "content": {
+        "hitPolicy": "first",
+        "rules": [
+          {
+            "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
+            "_description": "",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E32\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查票据账单年份是否与报销年份一致\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"verification-form\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
+            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
+          },
+          {
+            "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
+            "_description": "",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E32\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查票据账单年份是否与报销年份一致\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"verification-form\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
+            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的账单周期为 \" + (billingPeriod ?? remark ?? \"\") + \"，本次报销提交年度为 \" + string(d(serviceData.auditInfo.submitTime).year()) + \"，两者不一致。\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n4.1.3.3员工应使用运营商开具的月结费用发票(国际通讯费用票据以当地实际情况为准)在额度内实报实销。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【风险记录】报销行为将记录，待财务合规审查。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"跨期发票\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
+          }
+        ],
+        "inputs": [
+          {
+            "id": "dea9a1bc-66ae-47b3-885f-9e9a1bb07571",
+            "name": "票据类型",
+            "field": "isInvoiceYearMatched"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "f88cbb46-eb13-4ceb-9c68-0983f58e985f",
+            "name": "核销单号",
+            "field": "instance_code"
+          },
+          {
+            "id": "48a29115-f542-44d3-8c02-3ff71e19ee38",
+            "name": "稽核代码",
+            "field": "reason_code"
+          },
+          {
+            "id": "f35ede49-0eae-4dda-b39e-11a11383697a",
+            "name": "识别结果（warning  reject   pass）",
+            "field": "distinguish_result"
+          },
+          {
+            "id": "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e",
+            "name": "稽核内容",
+            "field": "audit_content"
+          },
+          {
+            "id": "14801e5c-ebef-43a4-a56a-23cb5adf4a83",
+            "name": "稽核类型",
+            "field": "audit_type"
+          },
+          {
+            "id": "d9a8e0e2-8a13-4a39-b50e-c339519e811e",
+            "name": "识别内容",
+            "field": "distinguish_content"
+          },
+          {
+            "id": "f47902a7-1dc2-41c9-8375-fa15174317bd",
+            "name": "发票文件主键",
+            "field": "invoice_file_id"
+          },
+          {
+            "id": "629d6a9c-0e78-40c1-baef-0abea4b1e67f",
+            "name": "发票信息主键",
+            "field": "invoice_info_id"
+          },
+          {
+            "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
+            "name": "日志内容",
+            "field": "message"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-regulation0",
+            "name": "制度",
+            "field": "policiesIndex"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
+            "name": "建议",
+            "field": "employeeSuggestionTips"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
+            "name": "问题分类",
+            "field": "problem_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
+            "name": "优化动作分类",
+            "field": "optimization_action_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
+          }
+        ],
+        "passThrough": false,
+        "inputField": null,
+        "outputPath": "invoice_year_match_result",
+        "executionMode": "single"
+      },
+      "id": "f27969dd-cdcd-43da-9e75-328e4546239c",
+      "name": "发票报销年份检查",
+      "position": {
+        "x": 685,
+        "y": 1270
       }
     },
     {
@@ -1135,12 +1360,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的发票真伪查验未通过，暂不符合真实、合法、合规票据要求。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 未通过税局发票真伪查验，系统无法确认该发票为真实有效发票。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"若为新开票据，请在开票 24 小时后重新上传或发起查验；若仍无法验真，请联系开票方处理或更换合规发票。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【重新查验】如果发票刚开具，请等待 24 小时后重新提交；如果仍查验不通过，请联系开票方确认发票信息，必要时重新开票。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"发票验真异常\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【稍后重试】【更换发票】\""
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"查验无果\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【稍后填报】\""
           },
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
@@ -1154,12 +1379,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 已被销货方作废，不能作为本次报销凭证。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 当前状态为 已作废，已不能作为有效发票报销。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请联系销货方或在对应开票渠道重新开具有效发票后再提交。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【重新开票】该发票已作废，不能报销。请联系销货方重新开具有效发票后再上传。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"发票作废\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【发票重开】\""
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"作废发票\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【重新开票】\""
           },
           {
             "_id": "75f486cf-bdf6-49cc-8c72-1ae0f6f40f50",
@@ -1173,12 +1398,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 已被销售方红冲，不能作为本次报销凭证。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 当前状态为 已红冲，已不能作为有效发票报销。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请联系销货方重新开具有效发票，并删除当前红冲票据。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【重新开票】该发票已被红冲，不能报销。请联系销货方重新开具未红冲、未作废的有效发票。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"发票红冲\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【发票重开】\""
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"冲红发票\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【重新开票】\""
           }
         ],
         "inputs": [
@@ -1245,11 +1470,6 @@
             "field": "employeeSuggestionTips"
           },
           {
-            "id": "a1b2c3d4-0000-0000-0000-createtime0",
-            "name": "创建时间",
-            "field": "create_time"
-          },
-          {
             "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
             "name": "问题分类",
             "field": "problem_category"
@@ -1258,6 +1478,11 @@
             "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
             "name": "优化动作分类",
             "field": "optimization_action_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,
@@ -1268,8 +1493,143 @@
       "id": "3e42eda0-70e0-4df2-8abc-6f2dbe4f2535",
       "name": "检查发票问题",
       "position": {
+        "x": 675,
+        "y": 975
+      }
+    },
+    {
+      "type": "decisionTableNode",
+      "content": {
+        "hitPolicy": "first",
+        "rules": [
+          {
+            "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
+            "_description": "",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E19\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票开具方是否属于运营商\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"expense-item\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
+            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
+          },
+          {
+            "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
+            "_description": "",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E19\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票开具方是否属于运营商\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"expense-item\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
+            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的开具方为 “\" + (salerName ?? \"\") + \"”，不属于移动、电信、联通、广电等公司认可的通讯运营商。\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n4.1.3.3员工应使用运营商开具的月结费用发票(国际通讯费用票据以当地实际情况为准)在额度内实报实销。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【更换发票】通讯费应使用移动、电信、联通、广电等运营商开具的月结发票。请删除当前发票，并上传运营商发票。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"非运营商发票\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【重新开票】\""
+          }
+        ],
+        "inputs": [
+          {
+            "id": "dea9a1bc-66ae-47b3-885f-9e9a1bb07571",
+            "name": "票据类型",
+            "field": "isTelecomOperator"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "f88cbb46-eb13-4ceb-9c68-0983f58e985f",
+            "name": "核销单号",
+            "field": "instance_code"
+          },
+          {
+            "id": "48a29115-f542-44d3-8c02-3ff71e19ee38",
+            "name": "稽核代码",
+            "field": "reason_code"
+          },
+          {
+            "id": "f35ede49-0eae-4dda-b39e-11a11383697a",
+            "name": "识别结果（warning  reject   pass）",
+            "field": "distinguish_result"
+          },
+          {
+            "id": "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e",
+            "name": "稽核内容",
+            "field": "audit_content"
+          },
+          {
+            "id": "14801e5c-ebef-43a4-a56a-23cb5adf4a83",
+            "name": "稽核类型",
+            "field": "audit_type"
+          },
+          {
+            "id": "d9a8e0e2-8a13-4a39-b50e-c339519e811e",
+            "name": "识别内容",
+            "field": "distinguish_content"
+          },
+          {
+            "id": "f47902a7-1dc2-41c9-8375-fa15174317bd",
+            "name": "发票文件主键",
+            "field": "invoice_file_id"
+          },
+          {
+            "id": "629d6a9c-0e78-40c1-baef-0abea4b1e67f",
+            "name": "发票信息主键",
+            "field": "invoice_info_id"
+          },
+          {
+            "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
+            "name": "日志内容",
+            "field": "message"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-regulation0",
+            "name": "制度",
+            "field": "policiesIndex"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
+            "name": "建议",
+            "field": "employeeSuggestionTips"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
+            "name": "问题分类",
+            "field": "problem_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
+            "name": "优化动作分类",
+            "field": "optimization_action_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
+          }
+        ],
+        "passThrough": false,
+        "inputField": null,
+        "outputPath": "telecom_result",
+        "executionMode": "single"
+      },
+      "id": "b9c42bf4-8560-4493-bf19-b8623f635c4d",
+      "name": "发票运营商检查",
+      "position": {
         "x": 670,
-        "y": 945
+        "y": 875
       }
     },
     {
@@ -1287,6 +1647,11 @@
             "value": "contains((buyerName ?? \"\"), \"公司\")"
           },
           {
+            "id": "7baa400b-6e9c-449a-9a04-e3318d7c0515",
+            "key": "is_in_telecom_list",
+            "value": "some((serviceData.telecom_list ?? []) as t, contains((salerName ?? \"\"), (t[0] ?? t.name ?? \"\")) and contains((salerName ?? \"\"), (t[1] ?? t.city ?? \"\")))"
+          },
+          {
             "id": "fd203418-999a-4aaa-9712-e9971b09d2f7",
             "key": "is_same_peple",
             "value": "(serviceData.auditInfo.verifiUserName ?? \"\") != \"\" and ((buyerName ?? \"\") == (serviceData.auditInfo.verifiUserName ?? \"\") or (buyerName ?? \"\") == ((serviceData.auditInfo.verifiUserName ?? \"\") + \"（个人）\") or (buyerName ?? \"\") == ((serviceData.auditInfo.verifiUserName ?? \"\") + \" (个人)\") or (buyerName ?? \"\") == ((serviceData.auditInfo.verifiUserName ?? \"\") + \"(个人)\") or (buyerName ?? \"\") == ((serviceData.auditInfo.verifiUserName ?? \"\") + \" （个人）\") or (buyerName ?? \"\") == ((serviceData.auditInfo.verifiUserName ?? \"\") + \"个人\"))"
@@ -1294,7 +1659,12 @@
           {
             "id": "99145f04-7d00-4d80-bcc8-4c1ce810915a",
             "key": "header_check",
-            "value": "$.is_company ? $.is_in_company_list : false"
+            "value": "$.is_company ? $.is_in_company_list:($.is_same_peple and $.is_in_telecom_list)"
+          },
+          {
+            "id": "9db2de79-bbf9-41cc-a7b6-03595332fede",
+            "key": "header_personal_check",
+            "value": "$.is_company ? true : ($.is_same_peple and $.is_in_telecom_list)"
           }
         ],
         "passThrough": true,
@@ -1310,9 +1680,210 @@
       }
     },
     {
+      "type": "decisionTableNode",
+      "content": {
+        "hitPolicy": "first",
+        "rules": [
+          {
+            "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
+            "_description": "",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"W32\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查员工使用发票的手机号与飞书备案的手机号相同\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"staff-behavior\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
+            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
+          },
+          {
+            "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
+            "_description": "",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"W32\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查员工使用发票的手机号与飞书备案的手机号相同\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"staff-behavior\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
+            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的账单手机号为 “\" + (remarkPhone ?? \"\") + \"”，员工备案手机号为 “\" + (serviceData.auditInfo.verifiUserPhone ?? \"\") + \"”，两者不一致。\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n4.1.3.3员工应使用运营商开具的月结费用发票(国际通讯费用票据以当地实际情况为准)在额度内实报实销。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【风险记录】报销行为将记录，待财务合规审查。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"号码不符\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【风险记录】\""
+          }
+        ],
+        "inputs": [
+          {
+            "id": "dea9a1bc-66ae-47b3-885f-9e9a1bb07571",
+            "name": "票据类型",
+            "field": "isSamePhone"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "f88cbb46-eb13-4ceb-9c68-0983f58e985f",
+            "name": "核销单号",
+            "field": "instance_code"
+          },
+          {
+            "id": "48a29115-f542-44d3-8c02-3ff71e19ee38",
+            "name": "稽核代码",
+            "field": "reason_code"
+          },
+          {
+            "id": "f35ede49-0eae-4dda-b39e-11a11383697a",
+            "name": "识别结果（warning  reject   pass）",
+            "field": "distinguish_result"
+          },
+          {
+            "id": "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e",
+            "name": "稽核内容",
+            "field": "audit_content"
+          },
+          {
+            "id": "14801e5c-ebef-43a4-a56a-23cb5adf4a83",
+            "name": "稽核类型",
+            "field": "audit_type"
+          },
+          {
+            "id": "d9a8e0e2-8a13-4a39-b50e-c339519e811e",
+            "name": "识别内容",
+            "field": "distinguish_content"
+          },
+          {
+            "id": "f47902a7-1dc2-41c9-8375-fa15174317bd",
+            "name": "发票文件主键",
+            "field": "invoice_file_id"
+          },
+          {
+            "id": "629d6a9c-0e78-40c1-baef-0abea4b1e67f",
+            "name": "发票信息主键",
+            "field": "invoice_info_id"
+          },
+          {
+            "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
+            "name": "日志内容",
+            "field": "message"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-regulation0",
+            "name": "制度",
+            "field": "policiesIndex"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
+            "name": "建议",
+            "field": "employeeSuggestionTips"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
+            "name": "问题分类",
+            "field": "problem_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
+            "name": "优化动作分类",
+            "field": "optimization_action_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
+          }
+        ],
+        "passThrough": false,
+        "inputField": null,
+        "outputPath": "phone_result",
+        "executionMode": "single"
+      },
+      "id": "bbdba655-bd68-47bd-9944-cca70b73f06d",
+      "name": "手机号检查",
+      "position": {
+        "x": 680,
+        "y": 1165
+      }
+    },
+    {
       "type": "functionNode",
       "content": {
-        "source": "export const handler = async (input) => {\n  // 发票内容唯一使用数据准备阶段生成的单据级 goodsName，不从其他字段回退。\n  const goodsName = String(input?.goodsName ?? '');\n  const context = input?.context || {};\n  const contentMissing = goodsName.trim() === '';\n  const normalizedGoodsName = goodsName.replace(/[\\s，。、“”‘’（）()【】\\[\\]：:；;、/\\\\_-]+/g, '');\n  const rechargeCardRuleHit = !contentMissing && /(预付(?:费)?卡|充值卡|卡充值|充值|预存(?:款|费)?|储值(?:卡|账户)?|单用途卡|多用途卡|成品油卡|加油卡|购物卡|礼品卡|消费卡|福利卡|卡券|电子卡)/i.test(normalizedGoodsName);\n\n  if (contentMissing) {\n    return {\n      prompt: '',\n      skipLlm: true,\n      llmBypassResult: { passed: true },\n      context\n    };\n  }\n  if (rechargeCardRuleHit) {\n    return {\n      prompt: '',\n      skipLlm: true,\n      llmBypassResult: { passed: false },\n      context\n    };\n  }\n\n  const optimizedPrompt = `# Role\n你是一位极其严谨的企业财税合规审计专家，负责审查发票商品内容（发票内容）中是否包含公司明令禁止报销的\"预付、充值、储值类卡券\"项目。\n\n# 核心审查规则\n请仔细阅读给出的【发票内容】。如果内容中包含、涉及或暗示了\"预付卡销售\"、\"充值\"、\"预存\"、\"储值\"等资金前置占用的非即期消费行为，则判定为【不合规】；如果是正常的交通费消费（运输服务费、乘车费、客运服务费、通行费、汽油费、充电服务费、供电服务费、代驾费、停车费），则判定为【合规】。\n\n# 同义词和语义扩展\n- “预付卡销售”“预存款”“储值账户”“充值服务”等同义表达，均按预付/充值/储值类项目判断；\n- 正常的即时交通服务消费，不因税收分类名称本身被判定为违规。\n\n# 核心判据清单\n- 【不合规（Passed = false）的特征】词：预付卡、单用途卡、充值、充值卡、预存、储值、面值、卡券、成品油(卡)。\n- 【合规（Passed = true）的特征】词：运输服务费、乘车费、客运服务费、通行费、汽油费、充电服务费、供电服务费、代驾费、停车费。\n\n# 示例参考 (Few-Shot)\n- 输入：*运输服务*客运服务费 ➡️ 返回：{\"passed\": true}\n- 输入：*现代服务*代驾费 ➡️ 返回：{\"passed\": true}\n- 输入：*现代服务*预付卡销售 ➡️ 返回：{\"passed\": false}\n- 输入：*现代服务*充值卡 ➡️ 返回：{\"passed\": false}\n- 输入：*现代服务*违约金 ➡️ 返回：{\"passed\": false}\n\n# 无法确定时返回 true：只有明确命中禁止项目时才判定为不合规。\n\n# 极其严格的输出格式要求\n你必须【仅仅且直接】返回一个标准的 JSON 对象，严禁包含任何前言、后记、Markdown 标记（如 json 块标签）或多余的文字解释。\n\nJSON 结构必须严格如下：\n{\n  \"passed\": 判定结果（布尔类型 true 或 false，不要带引号）\n}\n\n# 待审查的真实数据\n发票内容是：${goodsName}`;\n\n  // 3. 返回高准确率的最终大模型提示词\n  return {\n    prompt: optimizedPrompt,\n    skipLlm: false,\n    context\n  };\n};\n"
+        "source": "export const handler = async (input) => {\n  const source = input || {};\n  const context = source.context || {};\n  const remark = source.remark ?? context.remark ?? '';\n  const remarkText = String(remark ?? '');\n  const phoneMatch = remarkText.match(/(?:业务号码|手机号码|用户号码|联系电话)\\s*[:：]?\\s*((?:1\\d{2}[\\s-]?\\d{4}[\\s-]?\\d{4}))/);\n  const remarkPhoneExtracted = phoneMatch ? phoneMatch[1].replace(/[\\s-]/g, '') : '';\n  const billingMatch = remarkText.match(/(?:账期(?:月|周期)?|计费周期)\\s*[:：]?\\s*([0-9]{8}(?:\\s*[-–—]+\\s*[0-9]{8})?|[0-9]{6}(?:\\s*[-–—]+\\s*[0-9]{6})?)/);\n  const billingPeriod = billingMatch ? billingMatch[1].replace(/\\s+/g, '').replace(/[–—]+/g, '--') : '';\n  \n  // 从 submitTime 提取提交年份，计算前一年\n  const submitTime = context.serviceData?.auditInfo?.submitTime ?? '';\n  let submitYear = null;\n  if (submitTime) {\n    const match = String(submitTime).match(/(\\d{4})/);\n    if (match) {\n      submitYear = parseInt(match[1], 10) - 1;\n    }\n  }\n  const submitYearStr = submitYear !== null ? String(submitYear) : '未知';\n  const thresholdMonth = submitYear !== null ? submitYear * 100 + 12 : null;\n  const billingMonths = billingPeriod.match(/\\d{6}/g) || [];\n  const fallbackIsInvoiceYearMatched = thresholdMonth !== null && billingMonths.some((month) => Number(month) >= thresholdMonth);\n\n  const optimizedPrompt = `# Role\n你是一名严谨的电信发票备注信息审核助手。\n\n# Task\n请根据【remark】字段内容，完成以下任务：\n1. remarkPhone: 提取用户实际使用的中国大陆 11 位手机号。\n2. isInvoiceYearMatched: 判断账期中是否包含提交年份前一年的12月及之后的账期。\n3. matchReason: 给出判断原因。\n\n# 关键变量（已注入）\n- submitYear（提交年份的前一年）: ${submitYearStr}\n- 账期匹配阈值（前一年12月）: ${thresholdMonth !== null ? thresholdMonth : '未知'}\n  - 例如 submitYear=2025，则阈值=202512，需要检查是否有 >= 202512 的账期\n  - 例如 submitYear=2024，则阈值=202412，需要检查是否有 >= 202412 的账期\n\n# Rules\n- 优先提取\"业务号码\"\"手机号码\"\"用户号码\"\"联系电话\"等标签对应的 11 位手机号。\n- 排除 10000、10010、10086 等客服短号，排除座机、发票代码、税号、流水号等非手机号数字。\n- 如果手机号中有空格、短横线或其他分隔符，请去掉分隔符后返回连续 11 位数字。\n- 若无法确定手机号，remarkPhone 返回空字符串。\n- isInvoiceYearMatched 判断规则：\n  - 提取 remark 中所有账期月份（YYYYMM 格式），检查是否有任何一个月份 >= 阈值月份（${thresholdMonth !== null ? thresholdMonth : '未知'}）\n  - 如果有，返回 true；否则返回 false\n  - 如果无法确定 submitYear 或无法解析账期，返回 false\n- matchReason 必须清晰说明判断依据，例如：\n  - \"账期包含 202512（>= 阈值 202512），匹配成功\"\n  - \"所有账期均 < 阈值 202512，不匹配\"\n  - \"无法识别账期信息，默认不匹配\"\n\n# Examples\n- remark: 业务号码:15652828661;账期:202512-202603\n  submitYear=2025, threshold=202512\n  output: {\"remarkPhone\":\"15652828661\",\"isInvoiceYearMatched\":true,\"matchReason\":\"账期包含 202512（>= 阈值 202512），匹配成功\"}\n- remark: 用户号码 156 5282 8661，计费周期 2025年12月01日至2026年03月31日\n  submitYear=2025, threshold=202512\n  output: {\"remarkPhone\":\"15652828661\",\"isInvoiceYearMatched\":true,\"matchReason\":\"账期包含 202512（>= 阈值 202512），匹配成功\"}\n- remark: 账期:202504,202505,202506\n  submitYear=2025, threshold=202512\n  output: {\"remarkPhone\":\"\",\"isInvoiceYearMatched\":false,\"matchReason\":\"所有账期 202504,202505,202506 均 < 阈值 202512，不匹配\"}\n- remark: 账期:202511-202512\n  submitYear=2025, threshold=202512\n  output: {\"remarkPhone\":\"\",\"isInvoiceYearMatched\":true,\"matchReason\":\"账期包含 202512（>= 阈值 202512），匹配成功\"}\n\n# Output\n你必须只返回 JSON，不要输出任何解释、前后缀或 Markdown。\n\nJSON 结构严格如下：\n{\n  \"remarkPhone\": \"11位手机号，未识别时为空字符串\",\n  \"isInvoiceYearMatched\": true 或 false,\n  \"matchReason\": \"判断原因的详细说明\"\n}\n\n# Input Remark\n${remark}`;\n\n  return {\r\n\n    prompt: optimizedPrompt,\n    submitYear: submitYear,\n    thresholdMonth: thresholdMonth,\r\n    billingPeriod: billingPeriod,\n    billingPeriodExtracted: billingPeriod,\n    remarkPhoneExtracted: remarkPhoneExtracted,\n    fallbackIsInvoiceYearMatched: fallbackIsInvoiceYearMatched,\n    context: source.context || {}\r\n  };\n};"
+      },
+      "id": "6acb7b84-51a3-4d7d-9556-960d459d518d",
+      "name": "手机号账期抽取prompt",
+      "position": {
+        "x": -365,
+        "y": 1175
+      }
+    },
+    {
+      "type": "functionNode",
+      "content": {
+        "source": "import http from 'http';\r\n\r\nexport const handler = async (input) => {\r\n  try {\r\n    const context = input && input.context ? input.context : {};\r\n    if (!context.llmGatewayUrl) {\r\n      throw new Error('llmGatewayUrl not injected in context; configure NODE_GATEWAY_URL in .env');\r\n    }\r\n    const LOCAL_LLM_URL = context.llmGatewayUrl;\r\n    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\r\n\r\n    if (!prompt) {\r\n      throw new Error('missing prompt from previous component output');\r\n    }\r\n\r\n    const payload = {\r\n      prompt\r\n    };\r\n\r\n    if (input.systemPrompt || context.systemPrompt) {\r\n      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\r\n    }\r\n\r\n    if (input.model || context.llmModel) {\r\n      payload.model = input.model || context.llmModel;\r\n    }\r\n\r\n    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\r\n      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\r\n    }\r\n\r\n    if (input.context && input.context.runId) { payload.runId = input.context.runId; }\r\n    if (input.context && input.context.receiptCode) { payload.receiptCode = input.context.receiptCode; }\r\n    if (input.context && input.context.invoiceKey) { payload.invoiceKey = input.context.invoiceKey; }\r\n    const response = await http.post(LOCAL_LLM_URL, payload);\r\n\r\n    if (!response || response.status < 200 || response.status >= 300) {\r\n      throw new Error('local llm service failed at ' + LOCAL_LLM_URL + ': ' + (response && response.status ? response.status : 'unknown'));\r\n    }\r\n\r\n    const result = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});\r\n\r\n    return {\r\n      llm_status: result.llmStatus || 'error',\r\n      llm_result: result.llmResult || null,\r\n      raw_content: result.rawContent || null,\r\n      error_message: result.errorMessage || null,\r\n      // Preserve locally extracted fields for downstream feedback templates.\r\n      billingPeriod: input.billingPeriod ?? input.billingPeriodExtracted ?? '',\r\n      billingPeriodExtracted: input.billingPeriodExtracted ?? input.billingPeriod ?? '',\r\n      remarkPhoneExtracted: input.remarkPhoneExtracted ?? '',\r\n      fallbackIsInvoiceYearMatched: input.fallbackIsInvoiceYearMatched ?? false\r\n    };\r\n  } catch (error) {\r\n    return {\r\n      llm_status: 'error',\r\n      error_message: error && error.message ? error.message : String(error),\r\n      // Preserve the same fallback values when the LLM call fails.\r\n      billingPeriod: input && (input.billingPeriod ?? input.billingPeriodExtracted) || '',\r\n      billingPeriodExtracted: input && (input.billingPeriodExtracted ?? input.billingPeriod) || '',\r\n      remarkPhoneExtracted: input && input.remarkPhoneExtracted || '',\r\n      fallbackIsInvoiceYearMatched: input && input.fallbackIsInvoiceYearMatched || false\r\n    };\r\n  }\r\n};"
+      },
+      "id": "c7aa4eb5-df79-49aa-8e16-c5d7e455c903",
+      "name": "手机号账期调用llm",
+      "position": {
+        "x": -95,
+        "y": 1175
+      }
+    },
+    {
+      "type": "expressionNode",
+      "content": {
+        "expressions": [
+          {
+            "id": "df856c4d-6df3-4401-9bb3-ab53d3f85744",
+            "key": "remarkPhone",
+            "value": "llm_status == \"success\" ? (llm_result.remarkPhone ?? \"\") : (remarkPhoneExtracted ?? \"\")"
+          },
+          {
+            "id": "a0b1bb1e-67e3-4458-a80b-b264500bdbf4",
+            "key": "isInvoiceYearMatched",
+            "value": "llm_status == \"success\" ? (llm_result.isInvoiceYearMatched ?? false) : (fallbackIsInvoiceYearMatched ?? false)"
+          },
+          {
+            "id": "32dbb6be-b04b-49dd-9247-304869d26f83",
+            "key": "isSamePhone",
+            "value": "$.remarkPhone == serviceData.auditInfo.verifiUserPhone"
+          },
+          {
+            "id": "88a57be4-bd55-4efc-a5b6-2593eebfae84",
+            "key": "matchReason",
+            "value": "llm_status == \"success\" ? (llm_result.matchReason ?? \"\") : \"LLM调用失败\""
+          },
+          {
+            "id": "billing-period-extracted-for-feedback",
+            "key": "billingPeriod",
+            "value": "billingPeriodExtracted ?? billingPeriod ?? \"\""
+          }
+        ],
+        "passThrough": true,
+        "inputField": null,
+        "outputPath": null,
+        "executionMode": "single"
+      },
+      "id": "a6e16f2e-1e43-4f71-8895-0ee44210a4c7",
+      "name": "手机号账期抽取后处理",
+      "position": {
+        "x": 200,
+        "y": 1215
+      }
+    },
+    {
+      "type": "functionNode",
+      "content": {
+        "source": "export const handler = async (input) => {\r\n  // 1. 深度兼容获取拼接好的发票商品内容字符串（兼容顶级和 context 结构）\r\n  const context = input.context || {};\r\n  const goodsName = input.goodsName ?? '无';\r\n\r\n  // 2. 结构化、极度严谨的专家级提示词组装\r\n  const optimizedPrompt = `# Role\r\n你是一位极其严谨的企业财税合规审计专家，负责审查发票商品内容（发票内容）中是否包含公司明令禁止报销的“预付、充值、储值类卡券”项目。\r\n\r\n# 核心审查规则\r\n请仔细阅读给出的【发票内容】。如果内容中包含、涉及或暗示了“预付卡销售”、“话费充值”、“卡券购买”、“预存、储值”等资金前置占用的非即期消费行为，则判定为【不合规】；如果是正常的单次通信服务费、宽带费或实物消费，则判定为【合规】。\r\n\r\n# 核心判据清单\r\n- 【不合规（Passed = false）的特征】词：预付卡、单用途卡、充值、充值卡、预存、储值、面值、卡券。\r\n- 【合规（Passed = true）的特征】词：通信服务费、信息服务费、话费、宽带费、月租费、套餐费。\r\n\r\n# 示例参考 (Few-Shot)\r\n- 输入：*电信服务*通信服务费 ➡️ 返回：{\"passed\": true}\r\n- 输入：*电信服务*话费充值 ➡️ 返回：{\"passed\": false}\r\n- 输入：*现代服务*预付卡销售 ➡️ 返回：{\"passed\": false}\r\n- 输入：*电信服务*违约金 ➡️ 返回：{\"passed\": false}\r\n\r\n# 极其严格的输出格式要求\r\n你必须【仅仅且直接】返回一个标准的 JSON 对象，严禁包含任何前言、后记、Markdown 标记（如 json 块标签）或多余的文字解释。\r\n\r\nJSON 结构必须严格如下：\r\n{\r\n  \"passed\": 判定结果（布尔类型 true 或 false，不要带引号）\r\n}\r\n\r\n# 待审查的真实数据\r\n发票内容是：${goodsName}`;\r\n\r\n  // 3. 返回高准确率的最终大模型提示词\r\n  return {\r\n\r\n    prompt: optimizedPrompt,\r\n    context: input.context || {}\r\n  };\r\n};\r\n"
       },
       "id": "33a6a837-0964-4c10-b451-e277138820aa",
       "name": "充值卡检查prompt",
@@ -1324,7 +1895,7 @@
     {
       "type": "functionNode",
       "content": {
-        "source": "export const handler = async (input) => {\n  const items = Array.isArray(input?.items) ? input.items : [];\n  const context = input?.context || {};\n  const goodsName = String(input?.goodsName ?? '');\n  const invoiceNo = String(input?.invoiceNo ?? '');\n  const contentMissing = goodsName.trim() === '';\n\n  // 发票没有明细时没有可供判断的内容，按无法明确判断默认合规，且不调用模型。\n  // 严禁因为没有发票内容而拒绝。\n  if (contentMissing) {\n    return {\n      prompt: '',\n      skipLlm: true,\n      llmBypassResult: { passed: true },\n      context\n    };\n  }\n\n  const fullPrompt = `# Role\n你是一名经验丰富、极其严谨的企业财务审计专家。\n你的任务是根据《锐捷网络员工费用管理与报销制度》，判断发票内容是否属于交通费允许报销的项目范围。\n你的审核结果将直接用于企业财务系统。必须保证：判断准确、不误判、JSON格式稳定。\n\n# 原始数据\n【发票号码】${invoiceNo}\n【发票内容(goodsName)】${goodsName}\n【发票明细(items)】${JSON.stringify(items)}\n\n# 交通费允许报销范围（符合以下任一即为合规）\n## 1. 乘坐公共交通产生的费用\n- 运输服务费、乘车费、客运服务费、通行费\n- 适用场景：地铁、公交、轻轨、网约车、火车\n\n## 2. 驾车产生的费用\n- 汽油费、充电服务费、供电服务费、代驾费、停车费、通行费\n\n## 3. 允许的关键词列表（发票内容包含以下关键词即视为合规）\n代驾、停车、电费、供电、充电、客运、车位管理费、通行费、代订车、信息系统增值服务、车辆停放、运输服务、停车占道费\n\n# 交通费禁止报销范围（命中以下即为不合规）\n## 1. 预付卡、充值卡、成品油卡\n包括但不限于：预付卡销售、充值卡、预存、储值、成品油(卡)、面值、卡券。\n\n## 2. 机票及航空相关费用\n包括但不限于：机票、航空运输、机票代理、退票费、改签费。\n\n## 3. 保险费\n包括但不限于：交通意外险、车辆保险、保险服务。\n\n## 4. 车辆维修费\n包括但不限于：车辆维修、保养、配件、修理费、钣金、喷漆。\n\n## 5. 其他非交通费范围\n上述允许报销范围以外的费用，如餐饮服务、住宿服务、办公用品等。\n\n# 核心判定原则（必须严格执行）\n\n## 原则1：禁止按照税收分类直接判断\n以下内容属于税务分类：电信服务、现代服务、信息技术服务、运输服务。这些分类本身不能作为违规依据。\n例如：商品名称\"*运输服务*客运服务费\"属于正常交通费，可报销，不得判定为不合规。\n\n## 原则2：必须基于发票内容关键词判断\n判断发票内容是否属于交通费允许报销范围，应基于发票明细(goodsName)或发票内容(goodsName)中是否包含允许的关键词或属于允许的业务类型。\n\n## 原则3：存在歧义时默认合规\n如果发票内容无法明确判断是否属于交通费范围，默认判定为合规(passed=true)。\n\n# 输出格式要求\n你必须仅仅且直接返回一个标准的JSON对象，严禁包含任何前言、后记、Markdown标记或多余的文字解释。\nJSON结构必须严格如下：\n{\n  \"passed\": 判定结果（布尔类型true或false，不要带引号）\n}\n\n# 待审查的真实数据\n发票内容：${goodsName}`;\n\n  return { prompt: fullPrompt, skipLlm: false, context };\n};\n"
+        "source": "export const handler = async (input) => {\r\n  // 1. 数据准备阶段已将 items[*].goodsName 拼接为单据级 goodsName。\r\n  //    goodsName 用于内容语义审核，items 保留用于逐项金额核算。\r\n  const goodsName = String(input?.goodsName ?? '');\r\n  const items = Array.isArray(input?.items) ? input.items : [];\r\n\r\n  // 2. 仅获取税后含税金额 totalAmount。\r\n  // 税后金额缺失或非法时按 0 处理，禁止回退到税前 invoiceAmount。\r\n  const rawTotalAmount = input.totalAmount ?? 0;\r\n  const parsedTotalAmount = parseFloat(rawTotalAmount);\r\n  const totalAmount = isNaN(parsedTotalAmount) ? 0 : parsedTotalAmount;\r\n\r\n\r\n  // 3. 构造审核 Prompt\r\n  const fullPrompt = `# Role\r\n\r\n你是一名经验丰富、极其严谨的企业财务审计专家。\r\n\r\n你的任务是根据《锐捷网络员工费用管理与报销制度》，\r\n对员工提交的发票明细(items)进行合规审核，\r\n识别禁止报销项目，并计算最终可报销金额。\r\n\r\n你的审核结果将直接用于企业财务系统。\r\n\r\n必须保证：\r\n\r\n- 判断准确\r\n- 不误扣\r\n- 不漏扣\r\n- 计算准确\r\n- JSON格式稳定\r\n\r\n\r\n# 原始数据\r\n\r\n【发票总额(totalAmount，含税)】\r\n\r\n${totalAmount}\r\n\r\n\r\n# 企业禁止报销制度\r\n\r\n以下类型属于禁止报销：\r\n\r\n\r\n## 1. 互联网宽带相关服务\r\n\r\n包括但不限于：\r\n\r\n- 宽带安装\r\n- 宽带调测\r\n- 宽带移机\r\n- 宽带服务费\r\n- 光纤安装\r\n- 网络安装\r\n\r\n\r\n## 2. 广播影视套餐及会员服务\r\n\r\n包括但不限于：\r\n\r\n- IPTV\r\n- 有线电视\r\n- 视频会员\r\n- 游戏会员\r\n- 音乐会员\r\n- 腾讯视频会员\r\n- 爱奇艺会员\r\n- 优酷会员\r\n- 芒果TV会员\r\n- 哔哩哔哩会员\r\n- QQ音乐会员\r\n- 网易云会员\r\n- 其他流媒体会员\r\n\r\n\r\n## 3. 业务处罚费用\r\n\r\n包括但不限于：\r\n\r\n- 解约费\r\n- 违约金\r\n- 滞纳金\r\n- 赔偿金\r\n- 代收费\r\n\r\n\r\n## 4. 其他信息技术服务、现代服务\r\n\r\n仅当商品名称能够明确体现属于上述禁止业务时，\r\n才可以判定为禁止报销。\r\n\r\n\r\n# 核心判定原则（必须严格执行）\r\n\r\n\r\n## 原则1：禁止按照税收分类直接判断\r\n\r\n以下内容属于税务分类：\r\n\r\n- 电信服务\r\n- 现代服务\r\n- 信息技术服务\r\n\r\n这些分类本身不能作为违规依据。\r\n\r\n\r\n例如：\r\n\r\n商品名称：\r\n\r\n\"*电信服务*通信服务费\"\r\n\r\n\r\n审核：\r\n\r\n属于正常通信服务。\r\n\r\n没有体现：\r\n\r\n- 宽带安装\r\n- 宽带调测\r\n- IPTV\r\n- 视频会员\r\n- 游戏会员\r\n- 解约费\r\n- 违约金\r\n\r\n因此：\r\n\r\n结论：\r\n\r\n可报销。\r\n\r\n不得扣减。\r\n\r\n\r\n--------------------------------\r\n\r\n\r\n## 原则2：必须满足两个条件才允许扣减\r\n\r\n\r\n条件一：\r\n\r\ngoodsName明确体现禁止业务。\r\n\r\n\r\n条件二：\r\n\r\n该业务可以直接对应企业禁止报销制度。\r\n\r\n\r\n两个条件同时满足，\r\n\r\n才允许扣减。\r\n\r\n\r\n否则：\r\n\r\n默认可报销。\r\n\r\n\r\n--------------------------------\r\n\r\n\r\n## 原则3：存在歧义时默认可报销\r\n\r\n\r\n以下情况不得扣减：\r\n\r\n\r\n- 仅出现\"电信服务\"\r\n- 仅出现\"现代服务\"\r\n- 仅出现\"信息技术服务\"\r\n- 商品名称过于宽泛\r\n- 无法确认具体业务\r\n\r\n\r\n遵循：\r\n\r\n\"有明确依据才扣减，无明确依据默认可报销\"\r\n\r\n\r\n--------------------------------\r\n\r\n\r\n# Few-shot审核示例\r\n\r\n\r\n## 示例1：正常通信费用\r\n\r\n\r\ngoodsName：\r\n\r\n*电信服务*通信服务费\r\n\r\n\r\ndetailAmount：\r\n\r\n100\r\n\r\n\r\n审核结果：\r\n\r\n可报销。\r\n\r\n\r\n原因：\r\n\r\n通信服务费属于正常通信费用。\r\n\r\n不能因为包含\"电信服务\"分类而认定违规。\r\n\r\n\r\n--------------------------------\r\n\r\n\r\n## 示例2：宽带安装费用\r\n\r\n\r\ngoodsName：\r\n\r\n*电信服务*宽带安装费\r\n\r\n\r\ndetailAmount：\r\n\r\n200\r\n\r\n\r\n审核结果：\r\n\r\n违规。\r\n\r\n\r\n原因：\r\n\r\n属于互联网宽带安装服务。\r\n\r\n符合禁止报销范围。\r\n\r\n扣减200元。\r\n\r\n\r\n--------------------------------\r\n\r\n\r\n## 示例3：会员服务\r\n\r\n\r\ngoodsName：\r\n\r\n*广播影视服务*腾讯视频会员\r\n\r\n\r\ndetailAmount：\r\n\r\n30\r\n\r\n\r\n审核结果：\r\n\r\n违规。\r\n\r\n\r\n原因：\r\n\r\n属于视频会员服务。\r\n\r\n符合禁止报销范围。\r\n\r\n扣减30元。\r\n\r\n\r\n--------------------------------\r\n\r\n\r\n## 示例4：无法确认业务\r\n\r\n\r\ngoodsName：\r\n\r\n*信息技术服务*网络服务费\r\n\r\n\r\ndetailAmount：\r\n\r\n50\r\n\r\n\r\n审核结果：\r\n\r\n可报销。\r\n\r\n\r\n原因：\r\n\r\n无法确认属于宽带安装、会员服务或其他禁止业务。\r\n\r\n存在歧义。\r\n\r\n不得扣减。\r\n\r\n\r\n--------------------------------\r\n\r\n\r\n# 审核执行流程（必须严格按照顺序）\r\n\r\n\r\n第一步：\r\n\r\n逐项检查items中的每个商品。\r\n\r\n\r\n第二步：\r\n\r\n判断商品是否明确属于禁止报销范围。\r\n\r\n\r\n第三步：\r\n\r\n收集所有违规项目：\r\n\r\n包括：\r\n\r\n- goodsName\r\n- detailAmount\r\n- 违规原因\r\n\r\n\r\n第四步：\r\n\r\n计算违规金额：\r\n\r\n违规总金额 =\r\n所有违规项目detailAmount之和\r\n\r\n\r\n第五步：\r\n\r\n计算最终金额：\r\n\r\nfinalAmount =\r\ntotalAmount - 违规总金额\r\n\r\n\r\n第六步：\r\n\r\n最终校验：\r\n\r\n必须确认：\r\n\r\n1. 没有遗漏违规项目；\r\n\r\n2. 没有重复扣减；\r\n\r\n3. finalAmount计算正确；\r\n\r\n4. finalAmount最多保留两位小数。\r\n\r\n\r\n# Reason输出规范\r\n\r\n\r\n如果存在违规项目：\r\n\r\nreason必须按照以下结构输出：\r\n\r\n\r\n原始发票金额：xxx元。\r\n\r\n\r\n违规项目：\r\n\r\n1. 商品名称：xxx\r\n\r\n金额：xxx元\r\n\r\n违规原因：xxx\r\n\r\n\r\n2. 商品名称：xxx\r\n\r\n金额：xxx元\r\n\r\n违规原因：xxx\r\n\r\n\r\n累计扣减金额：\r\n\r\nxxx元。\r\n\r\n\r\n扣减依据：\r\n\r\n《锐捷网络员工费用管理与报销制度》相关禁止报销规定。\r\n\r\n\r\n最终可报销金额：\r\n\r\nxxx元。\r\n\r\n\r\n\r\n如果没有违规项目：\r\n\r\nreason必须输出：\r\n\r\n\"经审核，所有发票明细均符合企业费用报销制度，本次无需扣减。\"\r\n\r\n\r\n# 输出要求（极其严格）\r\n\r\n\r\n只能返回JSON对象。\r\n\r\n禁止输出：\r\n\r\n- Markdown\r\n- json代码块\r\n- 解释文字\r\n- 前言\r\n- 后记\r\n\r\n\r\n格式必须为：\r\n\r\n{\r\n  \"finalAmount\": Number,\r\n  \"reason\": \"中文说明\"\r\n}\r\n\r\n\r\n要求：\r\n\r\n1. finalAmount必须是Number类型。\r\n\r\n错误：\r\n\r\n\"100.00\"\r\n\r\n\r\n正确：\r\n\r\n100.00\r\n\r\n\r\n2. 禁止输出：\r\n\r\nnull\r\n\r\nNaN\r\n\r\nundefined\r\n\r\nInfinity\r\n\r\n\r\n3. finalAmount最多保留两位小数。\r\n\r\n\r\n# 数据准备阶段拼接后的发票内容（goodsName）\r\n\r\n${JSON.stringify(goodsName)}\r\n\r\n# 待审核发票明细（用于逐项金额核算）\r\n\r\nitems：\r\n\r\n${JSON.stringify(items, null, 2)}\r\n`;\r\n\r\n\r\n  // 4. 返回Prompt\r\n  return {\r\n    prompt: fullPrompt,\r\n    context: input.context || {}\r\n  };\r\n};"
       },
       "id": "c442459e-4762-485c-b4bf-deae05a2b896",
       "name": "发票合规prompt",
@@ -1336,7 +1907,7 @@
     {
       "type": "functionNode",
       "content": {
-        "source": "import http from 'http';\n\nexport const handler = async (input) => {\n  try {\n    // 规则节点已经确定结果时，直接返回，不调用远端 LLM。\n    if (input?.skipLlm === true) {\n      return {\n        llm_status: 'success',\n        llm_result: input.llmBypassResult || { passed: true },\n        skipped: true,\n        error_message: null\n      };\n    }\n\n    const context = input && input.context ? input.context : {};\n    if (!context.llmGatewayUrl) {\n      throw new Error('llmGatewayUrl not injected in context; configure NODE_GATEWAY_URL in .env');\n    }\n    const LOCAL_LLM_URL = context.llmGatewayUrl;\n    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\n\n    if (!prompt) {\n      throw new Error('missing prompt from previous component output');\n    }\n\n    const payload = { prompt };\n    if (input.systemPrompt || context.systemPrompt) {\n      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\n    }\n    if (input.model || context.llmModel) {\n      payload.model = input.model || context.llmModel;\n    }\n    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\n      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\n    }\n    if (input.context && input.context.runId) { payload.runId = input.context.runId; }\n    if (input.context && input.context.receiptCode) { payload.receiptCode = input.context.receiptCode; }\n    if (input.context && input.context.invoiceKey) { payload.invoiceKey = input.context.invoiceKey; }\n    const response = await http.post(LOCAL_LLM_URL, payload);\n\n    if (!response || response.status < 200 || response.status >= 300) {\n      throw new Error('local llm service failed at ' + LOCAL_LLM_URL + ': ' + (response && response.status ? response.status : 'unknown'));\n    }\n\n    const result = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});\n    return {\n      llm_status: result.llmStatus || 'error',\n      llm_result: result.llmResult || null,\n      raw_content: result.rawContent || null,\n      error_message: result.errorMessage || null\n    };\n  } catch (error) {\n    return {\n      llm_status: 'error',\n      llm_result: null,\n      error_message: error && error.message ? error.message : String(error)\n    };\n  }\n};"
+        "source": "import http from 'http';\r\n\r\nexport const handler = async (input) => {\r\n  try {\r\n    const context = input && input.context ? input.context : {};\r\n    if (!context.llmGatewayUrl) {\r\n      throw new Error('llmGatewayUrl not injected in context; configure NODE_GATEWAY_URL in .env');\r\n    }\r\n    const LOCAL_LLM_URL = context.llmGatewayUrl;\r\n    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\r\n\r\n    if (!prompt) {\r\n      throw new Error('missing prompt from previous component output');\r\n    }\r\n\r\n    const payload = {\r\n      prompt\r\n    };\r\n\r\n    if (input.systemPrompt || context.systemPrompt) {\r\n      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\r\n    }\r\n\r\n    if (input.model || context.llmModel) {\r\n      payload.model = input.model || context.llmModel;\r\n    }\r\n\r\n    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\r\n      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\r\n    }\r\n\r\n    if (input.context && input.context.runId) { payload.runId = input.context.runId; }\r\n    if (input.context && input.context.receiptCode) { payload.receiptCode = input.context.receiptCode; }\r\n    if (input.context && input.context.invoiceKey) { payload.invoiceKey = input.context.invoiceKey; }\r\n    const response = await http.post(LOCAL_LLM_URL, payload);\r\n\r\n    if (!response || response.status < 200 || response.status >= 300) {\r\n      throw new Error('local llm service failed at ' + LOCAL_LLM_URL + ': ' + (response && response.status ? response.status : 'unknown'));\r\n    }\r\n\r\n    const result = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});\r\n\r\n    return {\r\n      recharge_llm_status: result.llmStatus || 'error',\r\n      recharge_llm_result: result.llmResult || null,\r\n      recharge_raw_content: result.rawContent || null,\r\n      error_message: result.errorMessage || null\r\n    };\r\n  } catch (error) {\r\n    return {\r\n      recharge_llm_status: 'error',\r\n      recharge_llm_result: null,\r\n      error_message: error && error.message ? error.message : String(error)\r\n    };\r\n  }\r\n};"
       },
       "id": "109af3d5-6dec-4cd0-a09e-de43b026c491",
       "name": "调用llm",
@@ -1348,7 +1919,7 @@
     {
       "type": "functionNode",
       "content": {
-        "source": "import http from 'http';\n\nexport const handler = async (input) => {\n  try {\n    // 规则节点已经确定结果时，直接返回，不调用远端 LLM。\n    if (input?.skipLlm === true) {\n      return {\n        llm_status: 'success',\n        llm_result: input.llmBypassResult || { passed: true },\n        skipped: true,\n        error_message: null\n      };\n    }\n\n    const context = input && input.context ? input.context : {};\n    if (!context.llmGatewayUrl) {\n      throw new Error('llmGatewayUrl not injected in context; configure NODE_GATEWAY_URL in .env');\n    }\n    const LOCAL_LLM_URL = context.llmGatewayUrl;\n    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\n\n    if (!prompt) {\n      throw new Error('missing prompt from previous component output');\n    }\n\n    const payload = { prompt };\n    if (input.systemPrompt || context.systemPrompt) {\n      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\n    }\n    if (input.model || context.llmModel) {\n      payload.model = input.model || context.llmModel;\n    }\n    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\n      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\n    }\n    if (input.context && input.context.runId) { payload.runId = input.context.runId; }\n    if (input.context && input.context.receiptCode) { payload.receiptCode = input.context.receiptCode; }\n    if (input.context && input.context.invoiceKey) { payload.invoiceKey = input.context.invoiceKey; }\n    const response = await http.post(LOCAL_LLM_URL, payload);\n\n    if (!response || response.status < 200 || response.status >= 300) {\n      throw new Error('local llm service failed at ' + LOCAL_LLM_URL + ': ' + (response && response.status ? response.status : 'unknown'));\n    }\n\n    const result = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});\n    return {\n      llm_status: result.llmStatus || 'error',\n      llm_result: result.llmResult || null,\n      raw_content: result.rawContent || null,\n      error_message: result.errorMessage || null\n    };\n  } catch (error) {\n    return {\n      llm_status: 'error',\n      llm_result: null,\n      error_message: error && error.message ? error.message : String(error)\n    };\n  }\n};"
+        "source": "import http from 'http';\r\n\r\nexport const handler = async (input) => {\r\n  try {\r\n    const context = input && input.context ? input.context : {};\r\n    if (!context.llmGatewayUrl) {\r\n      throw new Error('llmGatewayUrl not injected in context; configure NODE_GATEWAY_URL in .env');\r\n    }\r\n    const LOCAL_LLM_URL = context.llmGatewayUrl;\r\n    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\r\n\r\n    if (!prompt) {\r\n      throw new Error('missing prompt from previous component output');\r\n    }\r\n\r\n    const payload = {\r\n      prompt\r\n    };\r\n\r\n    if (input.systemPrompt || context.systemPrompt) {\r\n      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\r\n    }\r\n\r\n    if (input.model || context.llmModel) {\r\n      payload.model = input.model || context.llmModel;\r\n    }\r\n\r\n    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\r\n      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\r\n    }\r\n\r\n    if (input.context && input.context.runId) { payload.runId = input.context.runId; }\r\n    if (input.context && input.context.receiptCode) { payload.receiptCode = input.context.receiptCode; }\r\n    if (input.context && input.context.invoiceKey) { payload.invoiceKey = input.context.invoiceKey; }\r\n    const response = await http.post(LOCAL_LLM_URL, payload);\r\n\r\n    if (!response || response.status < 200 || response.status >= 300) {\r\n      throw new Error('local llm service failed at ' + LOCAL_LLM_URL + ': ' + (response && response.status ? response.status : 'unknown'));\r\n    }\r\n\r\n    const result = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});\r\n\r\n    return {\r\n      compliance_llm_status: result.llmStatus || 'error',\r\n      compliance_llm_result: result.llmResult || null,\r\n      compliance_raw_content: result.rawContent || null,\r\n      error_message: result.errorMessage || null\r\n    };\r\n  } catch (error) {\r\n    return {\r\n      compliance_llm_status: 'error',\r\n      compliance_llm_result: null,\r\n      error_message: error && error.message ? error.message : String(error)\r\n    };\r\n  }\r\n};"
       },
       "id": "514e15db-3657-4fa3-9228-88b750ea08f8",
       "name": "调用llm",
@@ -1364,7 +1935,12 @@
           {
             "id": "04ae98ab-aee6-4a3f-8452-a81320a3429c",
             "key": "rechargeCardCheck",
-            "value": "llm_status == \"success\" ? (llm_result.passed == true ? \"true\" : \"false\") : \"error\""
+            "value": "recharge_llm_status == \"success\" ? (recharge_llm_result.passed == true ? \"true\" : \"false\") : \"error\""
+          },
+          {
+            "id": "50871993-19cd-4009-ae64-68ad282cb902",
+            "key": "isValidInvoiceAmount",
+            "value": "compliance_llm_status == \"success\" ? (compliance_llm_result.finalAmount != null ? \"true\" : \"false\") : \"error\""
           }
         ],
         "passThrough": true,
@@ -1434,12 +2010,12 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的明细中包含“\" + (goodsName ?? \"\") + \"”，属于预付、充值、预存类内容，不符合交通费报销要求。\"",
-            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n4.2.2报销范围\\n4.2.2.2 禁止报销：\\n预付卡销售、充值卡、成品油(卡)；\\n上述允许报销范围以外的费用，如机票、保险费、车辆维修费等。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请删除当前票据，并提供实际交通服务发生后开具的合规发票。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的明细中包含 “\" + (goodsName ?? \"\") + \"”。公司制度不允许使用充值卡、预付卡、预存款类发票报销通讯费。\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n4.1.2.2禁止报销：预付卡销售、充值卡、流量/通话费预存;\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"当前发票不能报销。请联系销货方重新开具月结通讯费发票，不要开具充值卡、预付卡、预存款类发票。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"充值消费\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【删除发票】【重新开票】\""
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"禁止项目\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【重新开票】\""
           }
         ],
         "inputs": [
@@ -1506,11 +2082,6 @@
             "field": "employeeSuggestionTips"
           },
           {
-            "id": "a1b2c3d4-0000-0000-0000-createtime0",
-            "name": "创建时间",
-            "field": "create_time"
-          },
-          {
             "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
             "name": "问题分类",
             "field": "problem_category"
@@ -1519,6 +2090,11 @@
             "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
             "name": "优化动作分类",
             "field": "optimization_action_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,
@@ -1539,558 +2115,19 @@
         "hitPolicy": "first",
         "rules": [
           {
-            "_id": "e295de81-08db-4917-a0b9-2125ca29b756",
-            "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
-            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
-            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E15\"",
-            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查是否有员工本人费用\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
-            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
-            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
-            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
-            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
-          },
-          {
-            "_id": "219b5a37-3f96-4def-96a4-c9664a058ec1",
-            "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
-            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
-            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E15\"",
-            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查是否有员工本人费用\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
-            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
-            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
-            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的旅客姓名为“\" + (passengerName ?? \"\") + \"”，与核销人“\" + (serviceData.auditInfo.verifiUserName ?? \"\") + \"”不一致。火车票、客运汽车票、数电铁路等实名交通票据应为本人票据。\"",
-            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n5.1.1.2 员工仅能填报本人产生的费用。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请删除该票据，并上传本人真实出行对应的交通票据。\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"非本人票据\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【换开发票】\""
-          }
-        ],
-        "inputs": [
-          {
-            "id": "dea9a1bc-66ae-47b3-885f-9e9a1bb07571",
-            "name": "票据类型",
-            "field": "isPassengerNameMatch"
-          }
-        ],
-        "outputs": [
-          {
-            "id": "f88cbb46-eb13-4ceb-9c68-0983f58e985f",
-            "name": "核销单号",
-            "field": "instance_code"
-          },
-          {
-            "id": "48a29115-f542-44d3-8c02-3ff71e19ee38",
-            "name": "稽核代码",
-            "field": "reason_code"
-          },
-          {
-            "id": "f35ede49-0eae-4dda-b39e-11a11383697a",
-            "name": "识别结果（warning  reject   pass）",
-            "field": "distinguish_result"
-          },
-          {
-            "id": "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e",
-            "name": "稽核内容",
-            "field": "audit_content"
-          },
-          {
-            "id": "14801e5c-ebef-43a4-a56a-23cb5adf4a83",
-            "name": "稽核类型",
-            "field": "audit_type"
-          },
-          {
-            "id": "d9a8e0e2-8a13-4a39-b50e-c339519e811e",
-            "name": "识别内容",
-            "field": "distinguish_content"
-          },
-          {
-            "id": "f47902a7-1dc2-41c9-8375-fa15174317bd",
-            "name": "发票文件主键",
-            "field": "invoice_file_id"
-          },
-          {
-            "id": "629d6a9c-0e78-40c1-baef-0abea4b1e67f",
-            "name": "发票信息主键",
-            "field": "invoice_info_id"
-          },
-          {
-            "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
-            "name": "日志内容",
-            "field": "message"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-regulation0",
-            "name": "制度",
-            "field": "policiesIndex"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
-            "name": "建议",
-            "field": "employeeSuggestionTips"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-createtime0",
-            "name": "创建时间",
-            "field": "create_time"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
-            "name": "问题分类",
-            "field": "problem_category"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
-            "name": "优化动作分类",
-            "field": "optimization_action_category"
-          }
-        ],
-        "passThrough": false,
-        "inputField": null,
-        "outputPath": "passenger_name_result",
-        "executionMode": "single"
-      },
-      "id": "travel_e15_passenger_name_check",
-      "name": "本人姓名检查",
-      "position": {
-        "x": 660,
-        "y": 875
-      }
-    },
-    {
-      "type": "decisionTableNode",
-      "content": {
-        "hitPolicy": "first",
-        "rules": [
-          {
-            "_id": "fb3f990b-07bd-4786-bb56-8eb8e32eaeae",
-            "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
-            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
-            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"W29\"",
-            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查旅客运输发票是否有出行人信息\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
-            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
-            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
-            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
-            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
-          },
-          {
-            "_id": "fabd88a1-3743-44c7-8d72-fc3d0d078eb8",
-            "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
-            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
-            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"W29\"",
-            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"WARNING\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查旅客运输发票是否有出行人信息\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
-            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
-            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
-            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的旅客运输发票未填写出行人信息。当前规则不强制要求填写，但如填写出行人必须为核销人本人。\"",
-            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n5.1.1.2 员工仅能填报本人产生的费用。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"当前规则不强制要求填写出行人信息；如填写，请确保出行人为核销人本人。\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"出行人信息异常\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【换开发票】\""
-          }
-        ],
-        "inputs": [
-          {
-            "id": "dea9a1bc-66ae-47b3-885f-9e9a1bb07571",
-            "name": "票据类型",
-            "field": "hasPassengerInfo"
-          }
-        ],
-        "outputs": [
-          {
-            "id": "f88cbb46-eb13-4ceb-9c68-0983f58e985f",
-            "name": "核销单号",
-            "field": "instance_code"
-          },
-          {
-            "id": "48a29115-f542-44d3-8c02-3ff71e19ee38",
-            "name": "稽核代码",
-            "field": "reason_code"
-          },
-          {
-            "id": "f35ede49-0eae-4dda-b39e-11a11383697a",
-            "name": "识别结果（warning  reject   pass）",
-            "field": "distinguish_result"
-          },
-          {
-            "id": "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e",
-            "name": "稽核内容",
-            "field": "audit_content"
-          },
-          {
-            "id": "14801e5c-ebef-43a4-a56a-23cb5adf4a83",
-            "name": "稽核类型",
-            "field": "audit_type"
-          },
-          {
-            "id": "d9a8e0e2-8a13-4a39-b50e-c339519e811e",
-            "name": "识别内容",
-            "field": "distinguish_content"
-          },
-          {
-            "id": "f47902a7-1dc2-41c9-8375-fa15174317bd",
-            "name": "发票文件主键",
-            "field": "invoice_file_id"
-          },
-          {
-            "id": "629d6a9c-0e78-40c1-baef-0abea4b1e67f",
-            "name": "发票信息主键",
-            "field": "invoice_info_id"
-          },
-          {
-            "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
-            "name": "日志内容",
-            "field": "message"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-regulation0",
-            "name": "制度",
-            "field": "policiesIndex"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
-            "name": "建议",
-            "field": "employeeSuggestionTips"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-createtime0",
-            "name": "创建时间",
-            "field": "create_time"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
-            "name": "问题分类",
-            "field": "problem_category"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
-            "name": "优化动作分类",
-            "field": "optimization_action_category"
-          }
-        ],
-        "passThrough": false,
-        "inputField": null,
-        "outputPath": "passenger_info_result",
-        "executionMode": "single"
-      },
-      "id": "travel_w29_passenger_info_check",
-      "name": "出行人信息检查",
-      "position": {
-        "x": 670,
-        "y": 1010
-      }
-    },
-    {
-      "type": "decisionTableNode",
-      "content": {
-        "hitPolicy": "first",
-        "rules": [
-          {
-            "_id": "b8f26ed9-0d6f-4c4f-8f6c-4f9b0a67d5a1",
-            "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
-            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
-            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E37\"",
-            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查旅客运输发票出行人是否与核销人一致\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
-            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
-            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
-            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
-            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
-          },
-          {
-            "_id": "ea4de6b8-1d08-4d2b-b9c4-98f4bc46bd10",
-            "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
-            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
-            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E37\"",
-            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查旅客运输发票出行人是否与核销人一致\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
-            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
-            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
-            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的出行人“\" + (passengerName ?? \"\") + \"”与核销人“\" + (serviceData.auditInfo.verifiUserName ?? \"\") + \"”不一致。旅客运输发票如填写出行人信息，应为核销人本人。\"",
-            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n5.1.1.2 员工仅能填报本人产生的费用。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请删除该票据，并上传出行人为核销人本人的真实交通票据。\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"出行人信息异常\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【换开发票】\""
-          }
-        ],
-        "inputs": [
-          {
-            "id": "dea9a1bc-66ae-47b3-885f-9e9a1bb07571",
-            "name": "票据类型",
-            "field": "isDigitalPassengerNameMatch"
-          }
-        ],
-        "outputs": [
-          {
-            "id": "f88cbb46-eb13-4ceb-9c68-0983f58e985f",
-            "name": "核销单号",
-            "field": "instance_code"
-          },
-          {
-            "id": "48a29115-f542-44d3-8c02-3ff71e19ee38",
-            "name": "稽核代码",
-            "field": "reason_code"
-          },
-          {
-            "id": "f35ede49-0eae-4dda-b39e-11a11383697a",
-            "name": "识别结果（warning  reject   pass）",
-            "field": "distinguish_result"
-          },
-          {
-            "id": "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e",
-            "name": "稽核内容",
-            "field": "audit_content"
-          },
-          {
-            "id": "14801e5c-ebef-43a4-a56a-23cb5adf4a83",
-            "name": "稽核类型",
-            "field": "audit_type"
-          },
-          {
-            "id": "d9a8e0e2-8a13-4a39-b50e-c339519e811e",
-            "name": "识别内容",
-            "field": "distinguish_content"
-          },
-          {
-            "id": "f47902a7-1dc2-41c9-8375-fa15174317bd",
-            "name": "发票文件主键",
-            "field": "invoice_file_id"
-          },
-          {
-            "id": "629d6a9c-0e78-40c1-baef-0abea4b1e67f",
-            "name": "发票信息主键",
-            "field": "invoice_info_id"
-          },
-          {
-            "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
-            "name": "日志内容",
-            "field": "message"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-regulation0",
-            "name": "制度",
-            "field": "policiesIndex"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
-            "name": "建议",
-            "field": "employeeSuggestionTips"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-createtime0",
-            "name": "创建时间",
-            "field": "create_time"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
-            "name": "问题分类",
-            "field": "problem_category"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
-            "name": "优化动作分类",
-            "field": "optimization_action_category"
-          }
-        ],
-        "passThrough": false,
-        "inputField": null,
-        "outputPath": "digital_passenger_name_result",
-        "executionMode": "single"
-      },
-      "id": "travel_e37_digital_passenger_name_check",
-      "name": "数电普通发票出行人姓名检查",
-      "position": {
-        "x": 670,
-        "y": 1145
-      }
-    },
-    {
-      "type": "decisionTableNode",
-      "content": {
-        "hitPolicy": "first",
-        "rules": [
-          {
-            "_id": "5d331936-236d-437f-84d4-0fe40ed341ac",
-            "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
-            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
-            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"W19\"",
-            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查出租车发票号码是否连续\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
-            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
-            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
-            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
-            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
-          },
-          {
-            "_id": "80f698e1-333b-4a5a-be82-88402c4ef8df",
-            "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
-            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
-            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"W19\"",
-            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查出租车发票号码是否连续\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
-            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
-            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
-            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"本次报销中存在出租车发票连票，发票号 \" + (invoiceNo ?? \"\") + \" 与历史库或本次报销中的其他出租车发票存在连票关系，存在异常报销风险。\"",
-            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范\\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请确认票据是否真实对应本次业务出行。无法说明合理业务原因的，请删除相关票据；保留提交的，系统将记录并转财务复核。\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"连号票据\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【删除票据】\""
-          }
-        ],
-        "inputs": [
-          {
-            "id": "dea9a1bc-66ae-47b3-885f-9e9a1bb07571",
-            "name": "票据类型",
-            "field": "isTaxiConsecutive"
-          }
-        ],
-        "outputs": [
-          {
-            "id": "f88cbb46-eb13-4ceb-9c68-0983f58e985f",
-            "name": "核销单号",
-            "field": "instance_code"
-          },
-          {
-            "id": "48a29115-f542-44d3-8c02-3ff71e19ee38",
-            "name": "稽核代码",
-            "field": "reason_code"
-          },
-          {
-            "id": "f35ede49-0eae-4dda-b39e-11a11383697a",
-            "name": "识别结果（warning  reject   pass）",
-            "field": "distinguish_result"
-          },
-          {
-            "id": "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e",
-            "name": "稽核内容",
-            "field": "audit_content"
-          },
-          {
-            "id": "14801e5c-ebef-43a4-a56a-23cb5adf4a83",
-            "name": "稽核类型",
-            "field": "audit_type"
-          },
-          {
-            "id": "d9a8e0e2-8a13-4a39-b50e-c339519e811e",
-            "name": "识别内容",
-            "field": "distinguish_content"
-          },
-          {
-            "id": "f47902a7-1dc2-41c9-8375-fa15174317bd",
-            "name": "发票文件主键",
-            "field": "invoice_file_id"
-          },
-          {
-            "id": "629d6a9c-0e78-40c1-baef-0abea4b1e67f",
-            "name": "发票信息主键",
-            "field": "invoice_info_id"
-          },
-          {
-            "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
-            "name": "日志内容",
-            "field": "message"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-regulation0",
-            "name": "制度",
-            "field": "policiesIndex"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
-            "name": "建议",
-            "field": "employeeSuggestionTips"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-createtime0",
-            "name": "创建时间",
-            "field": "create_time"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
-            "name": "问题分类",
-            "field": "problem_category"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
-            "name": "优化动作分类",
-            "field": "optimization_action_category"
-          }
-        ],
-        "passThrough": false,
-        "inputField": null,
-        "outputPath": "taxi_consecutive_result",
-        "executionMode": "single"
-      },
-      "id": "travel_w19_taxi_consecutive_check",
-      "name": "出租车连号检查",
-      "position": {
-        "x": 660,
-        "y": 1075
-      }
-    },
-    {
-      "type": "decisionTableNode",
-      "content": {
-        "hitPolicy": "first",
-        "rules": [
-          {
-            "_id": "b2062d21-376c-4f8d-8734-2bc93556129a",
+            "_id": "c05ec8d9-671a-4b8c-ad94-235c059c4fa0",
             "_description": "LLM调用失败",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"error\"",
+            "344a0dff-93a3-4ed3-9e24-0cf2cd544911": "null",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E34\"",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
-            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E36\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票内容是否属于通讯费报销项目，是否存在异常消费\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"FAILED\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票内容是否属于交通费报销项目\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
-            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"LLM调用失败，无法判断发票内容是否属于交通费报销项目\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"expense-item\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"LLM调用失败，无法判断发票内容金额检查结果\"",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"LLM服务调用失败，发票内容项目检查无法执行\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"LLM服务调用失败，发票内容金额检查无法执行\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
@@ -2098,16 +2135,17 @@
             "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
           },
           {
-            "_id": "baff5691-3495-4d68-b677-cf805844b6c5",
+            "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
             "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"true\"",
+            "344a0dff-93a3-4ed3-9e24-0cf2cd544911": "compliance_llm_result.finalAmount",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E34\"",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
-            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E36\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票内容是否属于通讯费报销项目，是否存在异常消费\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票内容是否属于交通费报销项目\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
-            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"expense-item\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
@@ -2117,37 +2155,38 @@
             "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
           },
           {
-            "_id": "daee0651-a65a-456c-a67d-4cc3e45cf618",
+            "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
             "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"false\"",
+            "344a0dff-93a3-4ed3-9e24-0cf2cd544911": "compliance_llm_result.finalAmount",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E34\"",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
-            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E36\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票内容是否属于通讯费报销项目，是否存在异常消费\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票内容是否属于交通费报销项目\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
-            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"expense-item\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的发票内容为“\" + (goodsName ?? \"\") + \"”，不属于交通费允许报销项目范围。交通费发票内容应与代驾、停车、充电、客运、通行、运输服务、车辆停放等交通场景相关。\"",
-            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n4.2.2.1允许报销：\\n乘坐地铁、公交、轻轨、网约车、火车产生的运输服务费、乘车费、客运服务费、通行费；\\n驾车产生的汽油费、充电服务费、供电服务费、代驾费、停车费、通行费。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请删除当前发票，并提供符合交通费报销内容的发票。若发票内容为新增交通业务场景，请通过核销锐小财提交人工问询。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的明细中包含 “\" + (goodsName ?? \"\") + \"”，该项目不属于公司允许报销范围。\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n4.1.2.2禁止报销:\n互联网宽带/电视安装、调测、移机、服务费用:\n各类广播影视套餐服务,如会员服务、视频、游戏、音乐流媒体使用产生的服务费用:\n业务解约费、违约金、滞纳金、代收费项目:\n其他信息技术服务、现代服务。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【扣减金额】请删除或扣减发票中禁止报销的项目金额。若剩余金额仍需报销，请保留可报销部分；若整张发票均为禁止项目，请删除该发票。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"项目内容不符\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【换开发票】\""
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"禁止项目\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【调减金额】\""
           }
         ],
         "inputs": [
           {
             "id": "dea9a1bc-66ae-47b3-885f-9e9a1bb07571",
             "name": "票据类型",
-            "field": "isTravelContent"
+            "field": "isValidInvoiceAmount"
           }
         ],
         "outputs": [
           {
-            "id": "f88cbb46-eb13-4ceb-9c68-0983f58e985f",
-            "name": "核销单号",
-            "field": "instance_code"
+            "id": "344a0dff-93a3-4ed3-9e24-0cf2cd544911",
+            "name": "发票可用额度",
+            "field": "invoice_finalAmount"
           },
           {
             "id": "48a29115-f542-44d3-8c02-3ff71e19ee38",
@@ -2155,14 +2194,24 @@
             "field": "reason_code"
           },
           {
-            "id": "f35ede49-0eae-4dda-b39e-11a11383697a",
-            "name": "识别结果（warning  reject   pass）",
-            "field": "distinguish_result"
+            "id": "f88cbb46-eb13-4ceb-9c68-0983f58e985f",
+            "name": "核销单号",
+            "field": "instance_code"
           },
           {
             "id": "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e",
             "name": "稽核内容",
             "field": "audit_content"
+          },
+          {
+            "id": "f35ede49-0eae-4dda-b39e-11a11383697a",
+            "name": "识别结果（warning  reject   pass）",
+            "field": "distinguish_result"
+          },
+          {
+            "id": "f47902a7-1dc2-41c9-8375-fa15174317bd",
+            "name": "发票文件主键",
+            "field": "invoice_file_id"
           },
           {
             "id": "14801e5c-ebef-43a4-a56a-23cb5adf4a83",
@@ -2173,11 +2222,6 @@
             "id": "d9a8e0e2-8a13-4a39-b50e-c339519e811e",
             "name": "识别内容",
             "field": "distinguish_content"
-          },
-          {
-            "id": "f47902a7-1dc2-41c9-8375-fa15174317bd",
-            "name": "发票文件主键",
-            "field": "invoice_file_id"
           },
           {
             "id": "629d6a9c-0e78-40c1-baef-0abea4b1e67f",
@@ -2200,11 +2244,6 @@
             "field": "employeeSuggestionTips"
           },
           {
-            "id": "a1b2c3d4-0000-0000-0000-createtime0",
-            "name": "创建时间",
-            "field": "create_time"
-          },
-          {
             "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
             "name": "问题分类",
             "field": "problem_category"
@@ -2213,62 +2252,23 @@
             "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
             "name": "优化动作分类",
             "field": "optimization_action_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
           }
         ],
         "passThrough": false,
         "inputField": null,
-        "outputPath": "content_project_result",
+        "outputPath": "invoice_content_valid_result",
         "executionMode": "single"
       },
-      "id": "travel_e36_content_project_check",
-      "name": "发票内容项目检查",
+      "id": "e0603963-d6e9-47da-adbc-a23c0841d087",
+      "name": "发票内容金额检查",
       "position": {
-        "x": 660,
-        "y": 1175
-      }
-    },
-    {
-      "type": "expressionNode",
-      "content": {
-        "expressions": [
-          {
-            "id": "e36-postprocess-001",
-            "key": "isTravelContent",
-            "value": "llm_status == \"success\" ? (llm_result.passed == true ? true : false) : \"error\""
-          }
-        ],
-        "passThrough": true,
-        "inputField": null,
-        "outputPath": null,
-        "executionMode": "single"
-      },
-      "id": "travel_e36_llm_postprocess",
-      "name": "E36内容检查后处理",
-      "position": {
-        "x": 200,
-        "y": 1280
-      }
-    },
-    {
-      "type": "expressionNode",
-      "content": {
-        "expressions": [
-          {
-            "id": "a1b2c3d4-0000-0000-0000-final00001",
-            "key": "invoice_finalAmount",
-            "value": "number(totalAmount ?? 0)"
-          }
-        ],
-        "passThrough": true,
-        "inputField": null,
-        "outputPath": null,
-        "executionMode": "single"
-      },
-      "id": "travel_set_final_amount",
-      "name": "设置发票可用额度",
-      "position": {
-        "x": 670,
-        "y": 1280
+        "x": 675,
+        "y": 1500
       }
     }
   ],
@@ -2370,6 +2370,24 @@
       "type": "edge"
     },
     {
+      "id": "e4e3d5ef-8f50-4ae2-a792-6878f967050c",
+      "sourceId": "f27969dd-cdcd-43da-9e75-328e4546239c",
+      "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
+      "type": "edge"
+    },
+    {
+      "id": "519e6f02-900b-4478-a17b-c32f3a8a15fb",
+      "sourceId": "c67dcb33-2750-4a43-8af7-8346612c04a9",
+      "targetId": "b9c42bf4-8560-4493-bf19-b8623f635c4d",
+      "type": "edge"
+    },
+    {
+      "id": "ab69586d-77e2-4074-ae45-1f3ff71c1479",
+      "sourceId": "b9c42bf4-8560-4493-bf19-b8623f635c4d",
+      "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
+      "type": "edge"
+    },
+    {
       "id": "972247ae-950c-4503-96ae-8f6a17c63b05",
       "sourceId": "9948bfb0-d9fb-416d-b9a2-b22a875094f0",
       "targetId": "df8506e4-11fd-4e0d-8198-17a25fcb4f50",
@@ -2385,6 +2403,30 @@
       "id": "7686fa07-91e7-486c-975e-6dbff20d956f",
       "sourceId": "d3046965-dbaf-41cd-ba93-0d957fe67ec8",
       "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
+      "type": "edge"
+    },
+    {
+      "id": "ecd3f68f-00c7-48ca-bc90-4410404af044",
+      "sourceId": "df8506e4-11fd-4e0d-8198-17a25fcb4f50",
+      "targetId": "e2b630c8-096d-4fea-ad4c-986473d8a880",
+      "type": "edge"
+    },
+    {
+      "id": "78f05050-754b-4e55-9ba0-a3538495a7e1",
+      "sourceId": "e2b630c8-096d-4fea-ad4c-986473d8a880",
+      "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
+      "type": "edge"
+    },
+    {
+      "id": "7a40ed67-9e10-4959-8087-0078bd447ec5",
+      "sourceId": "bbdba655-bd68-47bd-9944-cca70b73f06d",
+      "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
+      "type": "edge"
+    },
+    {
+      "id": "b44e8f70-c930-42c2-a723-585b3be6e985",
+      "sourceId": "6acb7b84-51a3-4d7d-9556-960d459d518d",
+      "targetId": "c7aa4eb5-df79-49aa-8e16-c5d7e455c903",
       "type": "edge"
     },
     {
@@ -2406,6 +2448,18 @@
       "type": "edge"
     },
     {
+      "id": "c744380b-eb6b-46d8-a0ae-3006f118bb68",
+      "sourceId": "514e15db-3657-4fa3-9228-88b750ea08f8",
+      "targetId": "ee403929-4b10-40ed-98a5-1b7cef33387f",
+      "type": "edge"
+    },
+    {
+      "id": "f2e49dba-7dd9-43c9-93ee-87f4608dcf52",
+      "sourceId": "c7aa4eb5-df79-49aa-8e16-c5d7e455c903",
+      "targetId": "a6e16f2e-1e43-4f71-8895-0ee44210a4c7",
+      "type": "edge"
+    },
+    {
       "id": "83e28259-5e50-481b-badf-61ca7c4ed673",
       "sourceId": "ee403929-4b10-40ed-98a5-1b7cef33387f",
       "targetId": "b49e3359-766d-4ff3-9115-423eb06cebe7",
@@ -2418,86 +2472,38 @@
       "type": "edge"
     },
     {
+      "id": "6e93bc7d-5b29-4fdb-bb4b-a3414f159480",
+      "sourceId": "9948bfb0-d9fb-416d-b9a2-b22a875094f0",
+      "targetId": "a6e16f2e-1e43-4f71-8895-0ee44210a4c7",
+      "type": "edge"
+    },
+    {
       "id": "5357c3cb-4e6e-4341-8ecd-a0cd3622c178",
       "sourceId": "9948bfb0-d9fb-416d-b9a2-b22a875094f0",
       "targetId": "ee403929-4b10-40ed-98a5-1b7cef33387f",
       "type": "edge"
     },
     {
-      "id": "b822cb02-1715-494a-8250-5c039fea44ca",
-      "sourceId": "c67dcb33-2750-4a43-8af7-8346612c04a9",
-      "targetId": "travel_e15_passenger_name_check",
+      "id": "342eb6f6-e6f4-4ee8-89dd-bf839d895bb3",
+      "sourceId": "a6e16f2e-1e43-4f71-8895-0ee44210a4c7",
+      "targetId": "f27969dd-cdcd-43da-9e75-328e4546239c",
       "type": "edge"
     },
     {
-      "id": "9d600f38-9535-4134-a0c0-e2bce51e5f62",
-      "sourceId": "travel_e15_passenger_name_check",
-      "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
+      "id": "91d7151d-84a1-4a7e-a945-9cad32ce5ad4",
+      "sourceId": "a6e16f2e-1e43-4f71-8895-0ee44210a4c7",
+      "targetId": "bbdba655-bd68-47bd-9944-cca70b73f06d",
       "type": "edge"
     },
     {
-      "id": "04462af6-968a-4c40-89de-c49563559536",
-      "sourceId": "c67dcb33-2750-4a43-8af7-8346612c04a9",
-      "targetId": "travel_w29_passenger_info_check",
+      "id": "6a0d7bf6-5595-41c0-b121-a5738c44a3f2",
+      "sourceId": "ee403929-4b10-40ed-98a5-1b7cef33387f",
+      "targetId": "e0603963-d6e9-47da-adbc-a23c0841d087",
       "type": "edge"
     },
     {
-      "id": "7a1caaf3-278d-4893-9671-3ec25c8fdc0a",
-      "sourceId": "travel_w29_passenger_info_check",
-      "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
-      "type": "edge"
-    },
-    {
-      "id": "edge-preprocess-to-e37-digital-passenger-name",
-      "sourceId": "c67dcb33-2750-4a43-8af7-8346612c04a9",
-      "targetId": "travel_e37_digital_passenger_name_check",
-      "type": "edge"
-    },
-    {
-      "id": "edge-e37-digital-passenger-name-to-response",
-      "sourceId": "travel_e37_digital_passenger_name_check",
-      "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
-      "type": "edge"
-    },
-    {
-      "id": "ac4c996e-ef57-4802-aa2d-fe962fa8cf76",
-      "sourceId": "c67dcb33-2750-4a43-8af7-8346612c04a9",
-      "targetId": "travel_w19_taxi_consecutive_check",
-      "type": "edge"
-    },
-    {
-      "id": "a10c6408-7665-47fb-9f2b-a9a384efb4e9",
-      "sourceId": "travel_w19_taxi_consecutive_check",
-      "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
-      "type": "edge"
-    },
-    {
-      "id": "5a010ec6-b6e7-416c-ad17-6343b48a6e88",
-      "sourceId": "travel_e36_content_project_check",
-      "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
-      "type": "edge"
-    },
-    {
-      "id": "0bd1304f-0765-43a3-aa73-254f4d1494bd",
-      "sourceId": "514e15db-3657-4fa3-9228-88b750ea08f8",
-      "targetId": "travel_e36_llm_postprocess",
-      "type": "edge"
-    },
-    {
-      "id": "67dfcb8f-d74e-4ffd-ac00-e39db27be5da",
-      "sourceId": "travel_e36_llm_postprocess",
-      "targetId": "travel_e36_content_project_check",
-      "type": "edge"
-    },
-    {
-      "id": "edge-final-amount-from-preprocess",
-      "sourceId": "c67dcb33-2750-4a43-8af7-8346612c04a9",
-      "targetId": "travel_set_final_amount",
-      "type": "edge"
-    },
-    {
-      "id": "edge-final-amount-to-output",
-      "sourceId": "travel_set_final_amount",
+      "id": "0c4736c0-b294-4720-8ba4-3df00bec7490",
+      "sourceId": "e0603963-d6e9-47da-adbc-a23c0841d087",
       "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
       "type": "edge"
     },
@@ -2511,6 +2517,12 @@
       "id": "edge-request-to-compliance-items",
       "sourceId": "9948bfb0-d9fb-416d-b9a2-b22a875094f0",
       "targetId": "c442459e-4762-485c-b4bf-deae05a2b896",
+      "type": "edge"
+    },
+    {
+      "id": "edge-request-to-phone-period-prompt",
+      "sourceId": "9948bfb0-d9fb-416d-b9a2-b22a875094f0",
+      "targetId": "6acb7b84-51a3-4d7d-9556-960d459d518d",
       "type": "edge"
     }
   ]
