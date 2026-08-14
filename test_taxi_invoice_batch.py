@@ -45,6 +45,14 @@ class TaxiInvoiceBatchContextTests(unittest.TestCase):
         self.assertTrue(all(item["batchHit"] for item in serials))
         self.assertEqual(serials[0]["batchPeerInvoiceNumbers"], ["12345602"])
         self.assertEqual(serials[1]["batchPeerInvoiceNumbers"], ["12345601"])
+        self.assertEqual(
+            serials[0]["relationDescription"],
+            "本次核销单其他出租车发票号 12345602",
+        )
+        self.assertEqual(
+            serials[0]["relatedInvoiceNumbers"],
+            ["12345602"],
+        )
         for item in (first, second):
             self.assertIs(
                 item["preparedInput"]["context"]["serviceData"]["taxiInvoiceSerial"],
@@ -70,6 +78,35 @@ class TaxiInvoiceBatchContextTests(unittest.TestCase):
                 ["12345601", "12345602"],
             ],
         )
+
+
+    def test_history_numbers_are_included_in_relation_description(self) -> None:
+        item = self._prepared("12345601", current_prefix="123456")
+        serial_data = item["preparedInput"]["serviceData"]["taxiInvoiceSerial"]
+        serial_data["historyNumbers"] = ["12345699"]
+        serial_data["historyHit"] = True
+
+        serials = self._inject(item)
+
+        self.assertEqual(serials[0]["historyPeerInvoiceNumbers"], ["12345699"])
+        self.assertEqual(serials[0]["relatedInvoiceNumbers"], ["12345699"])
+        self.assertEqual(serials[0]["relationDescription"], "历史发票号 12345699")
+
+    def test_history_and_batch_numbers_are_both_included(self) -> None:
+        first = self._prepared("12345601", current_prefix="123456")
+        second = self._prepared("12345602", current_prefix="123456")
+        first["preparedInput"]["serviceData"]["taxiInvoiceSerial"]["historyNumbers"] = [
+            "12345699"
+        ]
+        first["preparedInput"]["serviceData"]["taxiInvoiceSerial"]["historyHit"] = True
+
+        serials = self._inject(first, second)
+
+        self.assertEqual(
+            serials[0]["relationDescription"],
+            "本次核销单其他出租车发票号 12345602 及历史发票号 12345699",
+        )
+        self.assertEqual(serials[0]["relatedInvoiceNumbers"], ["12345602", "12345699"])
 
     def test_different_prefixes_do_not_hit(self) -> None:
         serials = self._inject(

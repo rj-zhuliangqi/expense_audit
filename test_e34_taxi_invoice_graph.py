@@ -10,16 +10,31 @@ ROOT = Path(__file__).resolve().parent
 GRAPH_PATH = ROOT / "graph-latest-personal-transport-0722.json"
 
 
-class W19TaxiInvoiceGraphTests(unittest.TestCase):
+class E34TaxiInvoiceGraphTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.decision = load_decision(GRAPH_PATH)
 
     @staticmethod
-    def _prepared(*, is_taxi: bool, history_hit: bool = False, batch_hit: bool = False) -> dict:
+    def _prepared(
+        *,
+        is_taxi: bool,
+        history_hit: bool = False,
+        batch_hit: bool = False,
+        relation_description: str | None = None,
+    ) -> dict:
         invoice_no = "12345601"
+        if relation_description is None:
+            if history_hit and batch_hit:
+                relation_description = "本次核销单其他出租车发票号 12345602 及历史发票号 12345699"
+            elif history_hit:
+                relation_description = "历史发票号 12345699"
+            elif batch_hit:
+                relation_description = "本次核销单其他出租车发票号 12345602"
+            else:
+                relation_description = ""
         return {
-            "receipt": {"code": "REC-W19-001"},
+            "receipt": {"code": "REC-E34-001"},
             "context": {},
             "invoiceNo": invoice_no,
             "invoiceType": "8" if is_taxi else "72",
@@ -44,8 +59,9 @@ class W19TaxiInvoiceGraphTests(unittest.TestCase):
                 "taxiInvoiceSerial": {
                     "invoiceNo": invoice_no,
                     "currentPrefix": "123456",
-                    "historyNumbers": [],
+                    "historyNumbers": ["12345699"] if history_hit else [],
                     "historyHit": history_hit,
+                    "relationDescription": relation_description,
                     "batchHit": batch_hit,
                     "isTaxiInvoice": is_taxi,
                     "lookupFailed": False,
@@ -54,11 +70,11 @@ class W19TaxiInvoiceGraphTests(unittest.TestCase):
         }
 
     @staticmethod
-    def _w19(result: dict) -> dict:
+    def _e34(result: dict) -> dict:
         for value in result["decisionOutput"].values():
-            if isinstance(value, dict) and value.get("reason_code") == "W19":
+            if isinstance(value, dict) and value.get("reason_code") == "E34":
                 return value
-        raise AssertionError("W19 result not found")
+        raise AssertionError("E34 result not found")
 
     def test_history_or_batch_hit_rejects_taxi_invoice(self) -> None:
         for history_hit, batch_hit in ((True, False), (False, True)):
@@ -72,10 +88,25 @@ class W19TaxiInvoiceGraphTests(unittest.TestCase):
                     ),
                     trace=False,
                 )
-                rule = self._w19(result)
+                rule = self._e34(result)
                 self.assertEqual(rule["distinguish_result"], "REJECT")
                 self.assertNotIn("{发票号}", rule["message"])
                 self.assertIn("发票号 12345601", rule["message"])
+                if history_hit:
+                    self.assertIn("历史发票号 12345699", rule["message"])
+                if batch_hit:
+                    self.assertIn("本次核销单其他出租车发票号 12345602", rule["message"])
+
+    def test_reject_message_lists_both_history_and_batch_numbers(self) -> None:
+        result = evaluate_prepared_input(
+            self.decision,
+            self._prepared(is_taxi=True, history_hit=True, batch_hit=True),
+            trace=False,
+        )
+        rule = self._e34(result)
+        self.assertEqual(rule["distinguish_result"], "REJECT")
+        self.assertIn("本次核销单其他出租车发票号 12345602", rule["message"])
+        self.assertIn("历史发票号 12345699", rule["message"])
 
     def test_taxi_without_hit_passes(self) -> None:
         result = evaluate_prepared_input(
@@ -83,7 +114,7 @@ class W19TaxiInvoiceGraphTests(unittest.TestCase):
             self._prepared(is_taxi=True),
             trace=False,
         )
-        self.assertEqual(self._w19(result)["distinguish_result"], "PASS")
+        self.assertEqual(self._e34(result)["distinguish_result"], "PASS")
 
     def test_non_taxi_passes_even_if_flags_are_true(self) -> None:
         result = evaluate_prepared_input(
@@ -91,7 +122,7 @@ class W19TaxiInvoiceGraphTests(unittest.TestCase):
             self._prepared(is_taxi=False, history_hit=True, batch_hit=True),
             trace=False,
         )
-        self.assertEqual(self._w19(result)["distinguish_result"], "PASS")
+        self.assertEqual(self._e34(result)["distinguish_result"], "PASS")
 
 
 if __name__ == "__main__":

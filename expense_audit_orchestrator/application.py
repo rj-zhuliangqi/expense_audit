@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
@@ -194,7 +194,7 @@ class ReceiptAuditService:
         # 兼容从磁盘/队列加载、尚未经过 prepare_receipt 聚合的 prepared receipt。
         _inject_total_goods_count(prepared_receipt)
         # 所有发票已完成数据准备后一次性计算本单出租车连票关系，确保连票组中的
-        # 第一张发票也能命中 W19，不受发票执行顺序影响。
+        # 第一张发票也能命中 E34，不受发票执行顺序影响。
         _inject_taxi_invoice_batch_context(prepared_receipt)
         remaining_apply_amount = _resolve_initial_apply_amount(prepared_receipt)
 
@@ -223,7 +223,7 @@ class ReceiptAuditService:
             if remaining_apply_amount is not None:
                 _update_preparation_apply_amount(invoice_preparation, remaining_apply_amount)
 
-            # 出租车连号检测：注入本张发票之前已处理的所有发票号，供图中 W19 节点判断连号
+            # 出租车连票检测：保留旧的前序发票号字段，E34 实际读取整单关系上下文。
             _inject_previous_invoice_numbers(invoice_preparation, previous_invoice_numbers)
 
             invoice_result = self._process_invoice_preparation(
@@ -675,6 +675,26 @@ def _inject_taxi_invoice_batch_context(prepared_receipt: Mapping[str, Any]) -> N
         serial_data["batchPeerInvoiceNumbers"] = peer_invoice_numbers
         serial_data["batchHit"] = bool(peer_invoice_numbers)
 
+        invoice_no = str(serial_data.get("invoiceNo") or "").strip()
+        history_numbers = _normalize_invoice_number_list(serial_data.get("historyNumbers"))
+        # 历史接口可能返回当前发票本身，也可能只返回其连票集合；优先展示
+        # 当前发票之外的号码，若接口只返回当前号码则保留原始结果，避免问题文案丢失依据。
+        history_peer_numbers = [number for number in history_numbers if number != invoice_no]
+        if history_numbers and not history_peer_numbers:
+            history_peer_numbers = history_numbers
+        serial_data["historyPeerInvoiceNumbers"] = history_peer_numbers
+
+        related_numbers = _merge_invoice_number_lists(
+            peer_invoice_numbers,
+            history_peer_numbers,
+        )
+        serial_data["relatedInvoiceNumbers"] = related_numbers
+        serial_data["relatedInvoiceNumbersText"] = "、".join(related_numbers)
+        serial_data["relationDescription"] = _build_taxi_invoice_relation_description(
+            peer_invoice_numbers,
+            history_peer_numbers,
+        )
+
         service_data = prepared_input.get("serviceData")
         if not isinstance(service_data, dict):
             continue
@@ -688,13 +708,62 @@ def _inject_taxi_invoice_batch_context(prepared_receipt: Mapping[str, Any]) -> N
 
 
 
+def _normalize_invoice_number_list(value: Any) -> list[str]:
+    """把历史/本单连票号码归一化为去重后的字符串列表。"""
+    if isinstance(value, str):
+        values: Sequence[Any] = [value]
+    elif isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
+        values = value
+    else:
+        return []
+
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in values:
+        if isinstance(item, Mapping):
+            continue
+        normalized = str(item or "").strip()
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            result.append(normalized)
+    return result
+
+
+def _merge_invoice_number_lists(*lists: Sequence[str]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for values in lists:
+        for value in values:
+            normalized = str(value or "").strip()
+            if normalized and normalized not in seen:
+                seen.add(normalized)
+                result.append(normalized)
+    return result
+
+
+def _build_taxi_invoice_relation_description(
+    batch_peer_numbers: Sequence[str],
+    history_peer_numbers: Sequence[str],
+) -> str:
+    """生成 E34 问题文案使用的连票来源和号码说明。"""
+    batch_text = "、".join(batch_peer_numbers)
+    history_text = "、".join(history_peer_numbers)
+    if batch_text and history_text:
+        return f"本次核销单其他出租车发票号 {batch_text} 及历史发票号 {history_text}"
+    if batch_text:
+        return f"本次核销单其他出租车发票号 {batch_text}"
+    if history_text:
+        return f"历史发票号 {history_text}"
+    return "历史库或本次核销单中的其他出租车发票"
+
+
 def _inject_previous_invoice_numbers(
     invoice_preparation: Mapping[str, Any],
     previous_invoice_numbers: list[str],
 ) -> None:
     """兼容保留旧的前序发票号上下文。
 
-    W19 已改为读取 ``serviceData.taxiInvoiceSerial``，不再依赖该字段；保留注入
+    E34 已改为读取 ``serviceData.taxiInvoiceSerial``，不再依赖该字段；保留注入
     仅用于兼容历史 preparedInput 消费方。
     """
     prepared_input = invoice_preparation.get("preparedInput")

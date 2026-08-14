@@ -91,6 +91,7 @@ class PersonalTransportMessageTests(unittest.TestCase):
             "currentPrefix": None,
             "historyNumbers": ["122"],
             "historyHit": True,
+            "relationDescription": "历史发票号 122",
             "batchHit": False,
             "isTaxiInvoice": True,
             "lookupFailed": False,
@@ -105,7 +106,7 @@ class PersonalTransportMessageTests(unittest.TestCase):
             "E05": "票据 发票号 123 已在核销单 REC-OLD-001 中使用，不能重复报销。",
             "E33": "票据 发票号 123 的开票日期为 2025-01-01，与本次报销提交年度 2026 不一致。",
             "sys-001": "票据 发票号 123 的发票真伪查验未通过，暂不符合真实、合法、合规票据要求。",
-            "W19": "本次报销中存在出租车发票连票，发票号 123 与历史库或本次报销中的其他出租车发票存在连票关系，存在异常报销风险。",
+            "E34": "本次报销中存在出租车发票连票，发票号 123 与历史发票号 122 存在连票关系，存在异常报销风险。",
         }
         for code, message in expected.items():
             actual = self._rule(result, code)["message"]
@@ -429,7 +430,7 @@ class PersonalTransportMessageTests(unittest.TestCase):
         self.assertFalse(failed["historyHit"])
         self.assertTrue(failed["lookupFailed"])
 
-    def test_w19_uses_history_and_batch_flags_and_ignores_non_taxi(self) -> None:
+    def test_e34_uses_history_and_batch_flags_and_ignores_non_taxi(self) -> None:
         cases = [
             ({"isTaxiInvoice": True, "historyHit": True, "batchHit": False}, "REJECT"),
             ({"isTaxiInvoice": True, "historyHit": False, "batchHit": True}, "REJECT"),
@@ -448,9 +449,9 @@ class PersonalTransportMessageTests(unittest.TestCase):
                     **serial_data,
                 }
                 result = evaluate_prepared_input(self.decision, prepared, trace=False)
-                self.assertEqual(self._rule(result, "W19")["distinguish_result"], expected)
+                self.assertEqual(self._rule(result, "E34")["distinguish_result"], expected)
 
-    def test_w19_reject_message_contains_invoice_number_without_template_placeholder(self) -> None:
+    def test_e34_reject_message_contains_related_invoice_numbers_without_template_placeholder(self) -> None:
         prepared = self._base_input()
         prepared.update({"invoiceNo": "12345601", "invoiceType": "8"})
         prepared["serviceData"]["taxiInvoiceSerial"] = {
@@ -458,13 +459,14 @@ class PersonalTransportMessageTests(unittest.TestCase):
             "currentPrefix": "123456",
             "historyNumbers": ["12345699"],
             "historyHit": True,
+            "relationDescription": "历史发票号 12345699",
             "batchHit": False,
             "isTaxiInvoice": True,
             "lookupFailed": False,
         }
 
         result = evaluate_prepared_input(self.decision, prepared, trace=False)
-        rule = self._rule(result, "W19")
+        rule = self._rule(result, "E34")
         self.assertEqual(rule["distinguish_result"], "REJECT")
         self.assertIn("发票号 12345601", rule["message"])
         self.assertNotRegex(rule["message"], r"\{[^{}]+\}")
