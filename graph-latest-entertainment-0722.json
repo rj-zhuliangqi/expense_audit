@@ -218,6 +218,11 @@
             "id": "ba10acfd-3689-45bf-82e0-a6aa7970fca2",
             "key": "isInvoiceNumberContinuous",
             "value": "(previousInvoiceNumbers ?? []).length == 0 or invoiceNo == \"\" or some((previousInvoiceNumbers ?? []) as prev, abs(number(invoiceNo) - number(prev)) == 1)"
+          },
+          {
+            "id": "b7589756-18b6-4947-9824-4d8982dd3e34",
+            "key": "isEntertainmentTaxiInvoiceSerialClean",
+            "value": "not((serviceData.entertainmentInvoiceSerial.isTaxiInvoice ?? false) and ((serviceData.entertainmentInvoiceSerial.historyHit ?? false) or (serviceData.entertainmentInvoiceSerial.batchHit ?? false)))"
           }
         ],
         "passThrough": true,
@@ -2119,6 +2124,127 @@
         "x": 675,
         "y": 1600
       }
+    },
+    {
+      "type": "decisionTableNode",
+      "content": {
+        "hitPolicy": "first",
+        "rules": [
+          {
+            "_id": "0737e904-cfad-4cea-8243-00b63e909e18",
+            "_description": "",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E34\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查出租车发票号码是否存在历史或本次核销单连号\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
+            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+          },
+          {
+            "_id": "2effb426-4faa-4690-8664-823de961281f",
+            "_description": "",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E34\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查出租车发票号码是否存在历史或本次核销单连号\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
+            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"本次报销中存在出租车发票连号，发票号 \" + (invoiceNo ?? \"\") + \" 与\" + (serviceData.entertainmentInvoiceSerial.relationDescription ?? \"历史库或本次核销单中的其他出租车发票\") + \" 存在连号关系，存在异常报销风险。\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范\\n所有费用报销须提供真实、合法、合规的票据。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请确认票据是否真实对应本次业务。无法说明合理业务原因的，请删除相关票据；保留提交的，系统将记录并转财务复核。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+          }
+        ],
+        "inputs": [
+          {
+            "id": "dea9a1bc-66ae-47b3-885f-9e9a1bb07571",
+            "name": "出租车发票号码是否存在连号",
+            "field": "isEntertainmentTaxiInvoiceSerialClean"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "f88cbb46-eb13-4ceb-9c68-0983f58e985f",
+            "name": "核销单号",
+            "field": "instance_code"
+          },
+          {
+            "id": "48a29115-f542-44d3-8c02-3ff71e19ee38",
+            "name": "稽核代码",
+            "field": "reason_code"
+          },
+          {
+            "id": "f35ede49-0eae-4dda-b39e-11a11383697a",
+            "name": "识别结果（warning  reject   pass）",
+            "field": "distinguish_result"
+          },
+          {
+            "id": "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e",
+            "name": "稽核内容",
+            "field": "audit_content"
+          },
+          {
+            "id": "14801e5c-ebef-43a4-a56a-23cb5adf4a83",
+            "name": "稽核类型",
+            "field": "audit_type"
+          },
+          {
+            "id": "d9a8e0e2-8a13-4a39-b50e-c339519e811e",
+            "name": "识别内容",
+            "field": "distinguish_content"
+          },
+          {
+            "id": "f47902a7-1dc2-41c9-8375-fa15174317bd",
+            "name": "发票文件主键",
+            "field": "invoice_file_id"
+          },
+          {
+            "id": "629d6a9c-0e78-40c1-baef-0abea4b1e67f",
+            "name": "发票信息主键",
+            "field": "invoice_info_id"
+          },
+          {
+            "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
+            "name": "日志内容",
+            "field": "message"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-regulation0",
+            "name": "制度",
+            "field": "policiesIndex"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
+            "name": "建议",
+            "field": "employeeSuggestionTips"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
+          }
+        ],
+        "passThrough": false,
+        "inputField": null,
+        "outputPath": "taxi_invoice_serial_result",
+        "executionMode": "single"
+      },
+      "id": "ent-taxi-invoice-serial-check",
+      "name": "出租车发票连号检查",
+      "position": {
+        "x": 660,
+        "y": 1280
+      }
     }
   ],
   "edges": [
@@ -2365,6 +2491,18 @@
     {
       "id": "56a52f0e-5242-4d2e-82b9-15e34d2cc0a2",
       "sourceId": "ent-fraud-check",
+      "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
+      "type": "edge"
+    },
+    {
+      "id": "8cd3b52e-3ac5-45f1-9260-97dc4e46bd54",
+      "sourceId": "c67dcb33-2750-4a43-8af7-8346612c04a9",
+      "targetId": "ent-taxi-invoice-serial-check",
+      "type": "edge"
+    },
+    {
+      "id": "c99c1325-be9c-4dc2-ab11-8b46c0fd1090",
+      "sourceId": "ent-taxi-invoice-serial-check",
       "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
       "type": "edge"
     }
