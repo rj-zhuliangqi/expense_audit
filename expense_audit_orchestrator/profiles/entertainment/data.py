@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
-from functools import partial
+from collections.abc import Mapping, Sequence
 import json
 import os
 from pathlib import Path
 from typing import Any
 
-from expense_audit_orchestrator import audit_client
 from expense_audit_orchestrator.observability import get_logger
 
 from .client import EntertainmentApiClient
@@ -19,128 +17,6 @@ _logger = get_logger("entertainment_data")
 
 DEFAULT_E15_INVOICE_TYPE_MAP_PATH = Path(__file__).with_name("e15_invoice_type_map.json")
 E15_INVOICE_TYPE_MAP_PATH_ENV = "E15_INVOICE_TYPE_MAP_PATH"
-
-InvoiceSerialNumberProvider = Callable[[str, str, str | None], Sequence[str]]
-
-
-def _string_value(value: Any) -> str:
-    if value is None:
-        return ""
-    normalized = str(value).strip()
-    return normalized
-
-
-def normalize_invoice_serial_prefix(invoice_no: str | None) -> str | None:
-    """按字符串规则提取发票连号前缀。
-
-    连号判断规则为：发票号码去掉后两位后，前六位一致。
-    不转数字，避免前导零丢失及超长发票号码精度损失。
-    """
-    value = _string_value(invoice_no)
-    if len(value) < 8:
-        return None
-    return value[:-2][:6]
-
-
-def _normalize_invoice_serial_numbers(value: Any) -> list[str]:
-    if isinstance(value, str):
-        values: Sequence[Any] = [value]
-    elif isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
-        values = value
-    else:
-        return []
-
-    result: list[str] = []
-    seen: set[str] = set()
-    for item in values:
-        if isinstance(item, Mapping):
-            item_value = next(
-                (item.get(key) for key in ("chequeNo", "invoiceNo", "serialNo") if item.get(key)),
-                None,
-            )
-        else:
-            item_value = item
-        normalized = _string_value(item_value)
-        if normalized and normalized not in seen:
-            seen.add(normalized)
-            result.append(normalized)
-    return result
-
-
-def build_entertainment_invoice_serial_enricher(
-    *,
-    service_url: str | None = None,
-    provider: InvoiceSerialNumberProvider | None = None,
-) -> Callable[[str, str, dict[str, Any], dict[str, Any]], dict[str, Any]]:
-    """构造业务招待费发票历史连号查询 enricher。
-
-    业务招待费的连号规则适用于当前准备的发票：只要发票号码有效，
-    就按发票号码前缀查询历史连号，并将结果交给核销单级批次聚合逻辑。
-    """
-    resolved_service_url = service_url or audit_client.DEFAULT_AUDIT_SERVICE_URL
-    invoice_serial_provider = provider or partial(
-        audit_client.fetch_invoice_serial_numbers,
-        service_url=resolved_service_url,
-    )
-
-    def enricher(
-        receipt_code: str,
-        file_path: str,
-        ocr_data: dict[str, Any],
-        service_data: dict[str, Any],
-    ) -> dict[str, Any]:
-        del file_path
-        ocr = ocr_data if isinstance(ocr_data, Mapping) else {}
-        invoice_no = (
-            _string_value(ocr.get("chequeNo"))
-            or _string_value(ocr.get("invoiceNo"))
-            or _string_value(ocr.get("serialNo"))
-        )
-        current_prefix = normalize_invoice_serial_prefix(invoice_no)
-        history_numbers: list[str] = []
-        lookup_failed = False
-
-        audit_info = service_data.get("auditInfo") if isinstance(service_data, Mapping) else {}
-        if not isinstance(audit_info, Mapping):
-            audit_info = {}
-        instance_code = _string_value(audit_info.get("instanceCode")) or receipt_code
-        accounting_code = (
-            _string_value(ocr.get("accountingCode"))
-            or _string_value(audit_info.get("accountingCode"))
-        )
-
-        # 发票号缺失或长度不足 8 位时不调用历史接口，也不进行连号判断。
-        if invoice_no and current_prefix:
-            try:
-                history_numbers = _normalize_invoice_serial_numbers(
-                    invoice_serial_provider(invoice_no, instance_code, accounting_code) or []
-                )
-            except Exception as exc:
-                lookup_failed = True
-                _logger.warning(
-                    "业务招待费发票历史连号查询失败，降级为空列表",
-                    extra={
-                        "event": "data_prep.entertainment_invoice_serial.fallback",
-                        "receipt_code": receipt_code,
-                        "instance_code": instance_code,
-                        "cheque_no": invoice_no,
-                        "accounting_code": accounting_code,
-                        "error": str(exc),
-                    },
-                )
-
-        return {
-            "invoiceNo": invoice_no,
-            "currentPrefix": current_prefix,
-            "historyNumbers": history_numbers,
-            "historyHit": bool(history_numbers),
-            "batchHit": False,
-            "isEntertainmentInvoice": bool(invoice_no),
-            "lookupFailed": lookup_failed,
-            "relationSubject": "发票",
-        }
-
-    return enricher
 
 
 def _resolve_e15_map_path(path: str | Path | None = None) -> Path:
@@ -344,9 +220,7 @@ __all__ = [
     "DEFAULT_E15_INVOICE_TYPE_MAP_PATH",
     "E15_INVOICE_TYPE_MAP_PATH_ENV",
     "build_e15_invoice_type_enricher",
-    "build_entertainment_invoice_serial_enricher",
     "build_entertainment_receipt_enricher",
     "entertainment_receipt_enricher",
     "load_e15_invoice_type_map",
-    "normalize_invoice_serial_prefix",
 ]

@@ -149,7 +149,7 @@ class ReceiptAuditService:
         # 所有发票完成数据准备后一次性计算本单出租车连票关系，供需要在执行前
         # 读取 prepared receipt 的调用方使用；process_prepared_receipt() 会幂等重算一次，
         # 兼容从队列/磁盘加载的既有 prepared receipt。
-        _inject_invoice_serial_batch_context(prepared_receipt)
+        _inject_taxi_invoice_batch_context(prepared_receipt)
         return prepared_receipt
 
     def _resolve_profile_for_receipt(self, receipt_code: str) -> ExpenseProfile:
@@ -195,7 +195,7 @@ class ReceiptAuditService:
         _inject_total_goods_count(prepared_receipt)
         # 所有发票已完成数据准备后一次性计算本单出租车连票关系，确保连票组中的
         # 第一张发票也能命中 E34，不受发票执行顺序影响。
-        _inject_invoice_serial_batch_context(prepared_receipt)
+        _inject_taxi_invoice_batch_context(prepared_receipt)
         remaining_apply_amount = _resolve_initial_apply_amount(prepared_receipt)
 
         # 动态路由模式：从 prepared_receipt 取出选中的 profile，用其 graph_path 执行
@@ -629,54 +629,13 @@ def _inject_total_goods_count(prepared_receipt: Mapping[str, Any]) -> None:
             prepared_input["totalGoodsCount"] = normalized_total
 
 
-def _inject_invoice_serial_batch_context(prepared_receipt: Mapping[str, Any]) -> None:
-    """为交通费和业务招待费注入核销单级发票连号关系。
-
-    每个发票级 enricher 负责查询历史库并写入自己的 serial 数据；这里在所有
-    发票准备完成后按前六位前缀聚合本单关系。这样同一连号组中的第一张发票
-    也会命中，且在线准备、队列/磁盘加载两种执行路径都能幂等重算。
-    """
-    _inject_invoice_serial_context_for_key(
-        prepared_receipt,
-        serial_key="taxiInvoiceSerial",
-        applicable_key="isTaxiInvoice",
-        default_subject="出租车发票",
-    )
-    _inject_invoice_serial_context_for_key(
-        prepared_receipt,
-        serial_key="entertainmentInvoiceSerial",
-        applicable_key="isEntertainmentInvoice",
-        default_subject="发票",
-    )
-
-
 def _inject_taxi_invoice_batch_context(prepared_receipt: Mapping[str, Any]) -> None:
-    """兼容旧调用方：只重算个人交通费出租车连票关系。"""
-    _inject_invoice_serial_context_for_key(
-        prepared_receipt,
-        serial_key="taxiInvoiceSerial",
-        applicable_key="isTaxiInvoice",
-        default_subject="出租车发票",
-    )
+    """为每张已准备发票注入本核销单出租车连票结果。
 
-
-def _inject_entertainment_invoice_batch_context(prepared_receipt: Mapping[str, Any]) -> None:
-    """为业务招待费发票重算本核销单内的连号关系。"""
-    _inject_invoice_serial_context_for_key(
-        prepared_receipt,
-        serial_key="entertainmentInvoiceSerial",
-        applicable_key="isEntertainmentInvoice",
-        default_subject="发票",
-    )
-
-
-def _inject_invoice_serial_context_for_key(
-    prepared_receipt: Mapping[str, Any],
-    *,
-    serial_key: str,
-    applicable_key: str,
-    default_subject: str,
-) -> None:
+    ``taxiInvoiceSerial.currentPrefix`` 已在个人交通费数据准备阶段生成。本函数
+    只比较同一核销单内的出租车发票，且将结果回写到 preparedInput.serviceData 和
+    context.serviceData，兼容在线准备和从队列/磁盘加载后直接执行两种路径。
+    """
     invoice_preparations = prepared_receipt.get("invoicePreparations")
     if not isinstance(invoice_preparations, list):
         return
@@ -693,23 +652,20 @@ def _inject_invoice_serial_context_for_key(
         service_data = prepared_input.get("serviceData")
         if not isinstance(service_data, dict):
             continue
-        serial_data = service_data.get(serial_key)
+        serial_data = service_data.get("taxiInvoiceSerial")
         if not isinstance(serial_data, dict):
             continue
 
         invoice_no = str(serial_data.get("invoiceNo") or "").strip()
         current_prefix = str(serial_data.get("currentPrefix") or "").strip() or None
-        if current_prefix is None:
-            current_prefix = _normalize_invoice_serial_prefix(invoice_no)
-            serial_data["currentPrefix"] = current_prefix
-        is_applicable = bool(serial_data.get(applicable_key))
-        candidates.append((prepared_input, serial_data, current_prefix, is_applicable))
-        if is_applicable and current_prefix and invoice_no:
+        is_taxi_invoice = bool(serial_data.get("isTaxiInvoice"))
+        candidates.append((prepared_input, serial_data, current_prefix, is_taxi_invoice))
+        if is_taxi_invoice and current_prefix and invoice_no:
             grouped[current_prefix].append((prepared_input, invoice_no))
 
-    for prepared_input, serial_data, current_prefix, is_applicable in candidates:
+    for prepared_input, serial_data, current_prefix, is_taxi_invoice in candidates:
         peer_invoice_numbers: list[str] = []
-        if is_applicable and current_prefix:
+        if is_taxi_invoice and current_prefix:
             peer_invoice_numbers = [
                 invoice_no
                 for other_prepared_input, invoice_no in grouped[current_prefix]
@@ -721,8 +677,6 @@ def _inject_invoice_serial_context_for_key(
 
         invoice_no = str(serial_data.get("invoiceNo") or "").strip()
         history_numbers = _normalize_invoice_number_list(serial_data.get("historyNumbers"))
-        serial_data["historyNumbers"] = history_numbers
-        serial_data["historyHit"] = bool(history_numbers)
         # 历史接口可能返回当前发票本身，也可能只返回其连票集合；优先展示
         # 当前发票之外的号码，若接口只返回当前号码则保留原始结果，避免问题文案丢失依据。
         history_peer_numbers = [number for number in history_numbers if number != invoice_no]
@@ -736,16 +690,15 @@ def _inject_invoice_serial_context_for_key(
         )
         serial_data["relatedInvoiceNumbers"] = related_numbers
         serial_data["relatedInvoiceNumbersText"] = "、".join(related_numbers)
-        serial_data["relationDescription"] = _build_invoice_serial_relation_description(
+        serial_data["relationDescription"] = _build_taxi_invoice_relation_description(
             peer_invoice_numbers,
             history_peer_numbers,
-            subject=str(serial_data.get("relationSubject") or default_subject),
         )
 
         service_data = prepared_input.get("serviceData")
         if not isinstance(service_data, dict):
             continue
-        service_data[serial_key] = serial_data
+        service_data["taxiInvoiceSerial"] = serial_data
         prepared_input["serviceData"] = service_data
         context = prepared_input.get("context")
         if not isinstance(context, dict):
@@ -753,14 +706,6 @@ def _inject_invoice_serial_context_for_key(
             prepared_input["context"] = context
         context["serviceData"] = service_data
 
-
-
-def _normalize_invoice_serial_prefix(invoice_no: Any) -> str | None:
-    """按字符串规则计算发票连号前缀，兼容旧 prepared receipt。"""
-    value = str(invoice_no or "").strip()
-    if len(value) < 8:
-        return None
-    return value[:-2][:6]
 
 
 def _normalize_invoice_number_list(value: Any) -> list[str]:
@@ -796,34 +741,20 @@ def _merge_invoice_number_lists(*lists: Sequence[str]) -> list[str]:
     return result
 
 
-def _build_invoice_serial_relation_description(
-    batch_peer_numbers: Sequence[str],
-    history_peer_numbers: Sequence[str],
-    *,
-    subject: str,
-) -> str:
-    """生成 E34 问题文案使用的连号来源和号码说明。"""
-    batch_text = "、".join(batch_peer_numbers)
-    history_text = "、".join(history_peer_numbers)
-    if batch_text and history_text:
-        return f"本次核销单其他{subject}号 {batch_text} 及历史发票号 {history_text}"
-    if batch_text:
-        return f"本次核销单其他{subject}号 {batch_text}"
-    if history_text:
-        return f"历史发票号 {history_text}"
-    return f"历史库或本次核销单中的其他{subject}"
-
-
 def _build_taxi_invoice_relation_description(
     batch_peer_numbers: Sequence[str],
     history_peer_numbers: Sequence[str],
 ) -> str:
-    """兼容旧调用方，生成交通费出租车连票文案。"""
-    return _build_invoice_serial_relation_description(
-        batch_peer_numbers,
-        history_peer_numbers,
-        subject="出租车发票",
-    )
+    """生成 E34 问题文案使用的连票来源和号码说明。"""
+    batch_text = "、".join(batch_peer_numbers)
+    history_text = "、".join(history_peer_numbers)
+    if batch_text and history_text:
+        return f"本次核销单其他出租车发票号 {batch_text} 及历史发票号 {history_text}"
+    if batch_text:
+        return f"本次核销单其他出租车发票号 {batch_text}"
+    if history_text:
+        return f"历史发票号 {history_text}"
+    return "历史库或本次核销单中的其他出租车发票"
 
 
 def _inject_previous_invoice_numbers(
