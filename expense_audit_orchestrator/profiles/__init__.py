@@ -193,6 +193,7 @@ def _build_entertainment_profile(
 ) -> ExpenseProfile:
     from .entertainment.data import (
         build_e15_invoice_type_enricher,
+        build_entertainment_invoice_serial_enricher,
         build_entertainment_receipt_enricher,
     )
     from .entertainment.writeback import entertainment_compliance_rule
@@ -206,6 +207,9 @@ def _build_entertainment_profile(
         },
         invoice_enrichers={
             "e15InvoiceType": build_e15_invoice_type_enricher(),
+            "entertainmentInvoiceSerial": build_entertainment_invoice_serial_enricher(
+                service_url=service_url,
+            ),
         },
         compliance_rule=entertainment_compliance_rule,
         audit_rule_catalog=entertainment_audit_rule_catalog,

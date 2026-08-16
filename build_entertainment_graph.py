@@ -211,11 +211,11 @@ ENTERTAINMENT_PREPROCESS_EXPRESSIONS = [
         "value": '((isLastInvoice ?? true) == false) or (serviceData.entertainment_data.hasGiftItem ?? false) == false or number(serviceData.entertainment_data.giftReceptionCount ?? 0) <= number(totalGoodsCount ?? sum(map((items ?? []) as i, number(i.num ?? i.quantity ?? 0))))',
     },
     {
-        # 规则：同一核销单内发票号应连续。预处理层可提供完整发票号序列；
-        # 未提供序列时不作猜测，按通过处理。
+        # E34：发票号码去掉后两位后，前六位一致即视为连号。
+        # 历史库命中或本核销单内存在同前缀发票时均不通过。
         "id": _new_uuid(),
-        "key": "isInvoiceNumberContinuous",
-        "value": '(previousInvoiceNumbers ?? []).length == 0 or invoiceNo == "" or some((previousInvoiceNumbers ?? []) as prev, abs(number(invoiceNo) - number(prev)) == 1)',
+        "key": "isEntertainmentInvoiceSerialClean",
+        "value": 'not((serviceData.entertainmentInvoiceSerial.isEntertainmentInvoice ?? false) and ((serviceData.entertainmentInvoiceSerial.historyHit ?? false) or (serviceData.entertainmentInvoiceSerial.batchHit ?? false)))',
     },
 ]
 
@@ -371,14 +371,15 @@ def _build_gift_count_check_node() -> dict:
 
 
 def _build_invoice_number_check_node() -> dict:
-    """发票号码连续性检查 W34（普通规则）。"""
+    """发票连号检查 E34。"""
     node_id = "ent-invoice-number-check"
+    audit_content = "检查发票号码是否连续或连票"
     rules = [
         _std_rule_row(
             input_value="true",
-            reason_code="W34",
+            reason_code="E34",
             distinguish_result="PASS",
-            audit_content="检查同一核销单内发票号码是否连续",
+            audit_content=audit_content,
             audit_type="general-rules",
             message='""',
             policies_index='""',
@@ -386,20 +387,20 @@ def _build_invoice_number_check_node() -> dict:
         ),
         _std_rule_row(
             input_value="false",
-            reason_code="W34",
-            distinguish_result="WARNING",
-            audit_content="检查同一核销单内发票号码是否连续",
+            reason_code="E34",
+            distinguish_result="REJECT",
+            audit_content=audit_content,
             audit_type="general-rules",
-            message='"发票号【"+(invoiceNo??"")+"】与本核销单其他发票号码不连续，存在发票缺失风险"',
-            policies_index='"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范"',
-            suggestion='"【补充确认】请核对本核销单发票号码是否完整连续，并补充缺失票据或说明原因"',
+            message='"本次报销中存在业务招待费发票连号，发票号 " + (invoiceNo ?? "") + " 与" + (serviceData.entertainmentInvoiceSerial.relationDescription ?? "历史库或本次核销单中的其他发票") + " 存在连号关系，存在异常报销风险。"',
+            policies_index='"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范\\n所有费用报销须提供真实、合法、合规的票据。"',
+            suggestion='"请确认票据是否真实对应本次业务。无法说明合理业务原因的，请删除相关票据；保留提交的，系统将记录并转财务复核。"',
         ),
     ]
     return _make_decision_table(
         node_id=node_id,
-        name="发票号码连续性检查",
-        input_field="isInvoiceNumberContinuous",
-        input_name="发票号码是否连续",
+        name="发票连号检查",
+        input_field="isEntertainmentInvoiceSerialClean",
+        input_name="发票号码是否连续或连票",
         rules=rules,
         output_path="invoice_number_result",
         position={"x": 660, "y": 1180},
@@ -1008,7 +1009,7 @@ def build_entertainment_graph() -> dict:
     nodes.append(_build_tax_number_check_node())      # E02
     nodes.append(_build_self_expense_check_node())      # E15
     nodes.append(_build_gift_count_check_node())        # W33
-    nodes.append(_build_invoice_number_check_node())    # W34
+    nodes.append(_build_invoice_number_check_node())    # E34
 
     # --- Phase 3: LLM 内容合规节点改造 ---
     # 删除旧的充值卡检查prompt、调用llm、后处理、充值卡检查节点

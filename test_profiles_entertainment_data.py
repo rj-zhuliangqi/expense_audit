@@ -3,8 +3,10 @@ import unittest
 from expense_audit_orchestrator.profiles.entertainment.client import EntertainmentApiClient
 from expense_audit_orchestrator.profiles.entertainment.data import (
     build_e15_invoice_type_enricher,
+    build_entertainment_invoice_serial_enricher,
     build_entertainment_receipt_enricher,
     load_e15_invoice_type_map,
+    normalize_invoice_serial_prefix,
 )
 
 
@@ -112,3 +114,122 @@ class EntertainmentServiceUrlBindingTests(unittest.TestCase):
             get_profile("entertainment", service_url="http://mock-service")
 
         client_class.assert_called_once_with(service_url="http://mock-service")
+
+
+class EntertainmentInvoiceSerialDataTests(unittest.TestCase):
+    def test_normalizes_invoice_prefix_as_string(self) -> None:
+        self.assertEqual(normalize_invoice_serial_prefix("0012345601"), "001234")
+        self.assertEqual(normalize_invoice_serial_prefix("12345678901234567890"), "123456")
+        self.assertIsNone(normalize_invoice_serial_prefix("1234567"))
+
+    def test_queries_history_with_invoice_priority_and_context_parameters(self) -> None:
+        calls = []
+
+        def provider(cheque_no, instance_code, accounting_code):
+            calls.append((cheque_no, instance_code, accounting_code))
+            return ["12345699"]
+
+        enricher = build_entertainment_invoice_serial_enricher(provider=provider)
+        result = enricher(
+            "REC-ENT-001",
+            "invoice.pdf",
+            {
+                "chequeNo": "12345601",
+                "invoiceNo": "99999999",
+                "serialNo": "88888888",
+                "accountingCode": "111",
+            },
+            {"auditInfo": {"instanceCode": "INS-001", "accountingCode": "222"}},
+        )
+
+        self.assertEqual(calls, [("12345601", "INS-001", "111")])
+        self.assertEqual(result["invoiceNo"], "12345601")
+        self.assertEqual(result["currentPrefix"], "123456")
+        self.assertEqual(result["historyNumbers"], ["12345699"])
+        self.assertTrue(result["historyHit"])
+        self.assertTrue(result["isEntertainmentInvoice"])
+        self.assertFalse(result["lookupFailed"])
+
+    def test_falls_back_from_cheque_no_to_invoice_no_and_serial_no(self) -> None:
+        calls = []
+
+        def provider(cheque_no, instance_code, accounting_code):
+            calls.append(cheque_no)
+            return []
+
+        enricher = build_entertainment_invoice_serial_enricher(provider=provider)
+        invoice_result = enricher(
+            "REC",
+            "invoice.pdf",
+            {"chequeNo": "", "invoiceNo": "12345601", "serialNo": "88888888"},
+            {"auditInfo": {"instanceCode": "INS"}},
+        )
+        serial_result = enricher(
+            "REC",
+            "invoice.pdf",
+            {"serialNo": "12345602"},
+            {"auditInfo": {"instanceCode": "INS"}},
+        )
+
+        self.assertEqual(calls, ["12345601", "12345602"])
+        self.assertEqual(invoice_result["invoiceNo"], "12345601")
+        self.assertEqual(serial_result["invoiceNo"], "12345602")
+
+    def test_normalizes_mapping_history_items_and_empty_history(self) -> None:
+        enricher = build_entertainment_invoice_serial_enricher(
+            provider=lambda *_args: [
+                {"chequeNo": "12345699"},
+                {"invoiceNo": "12345698"},
+                {"serialNo": "12345697"},
+                {},
+                None,
+            ]
+        )
+        result = enricher(
+            "REC",
+            "invoice.pdf",
+            {"invoiceNo": "12345601"},
+            {"auditInfo": {"instanceCode": "INS"}},
+        )
+        self.assertEqual(result["historyNumbers"], ["12345699", "12345698", "12345697"])
+        self.assertTrue(result["historyHit"])
+
+        empty = build_entertainment_invoice_serial_enricher(provider=lambda *_args: [])(
+            "REC",
+            "invoice.pdf",
+            {"invoiceNo": "12345601"},
+            {"auditInfo": {"instanceCode": "INS"}},
+        )
+        self.assertEqual(empty["historyNumbers"], [])
+        self.assertFalse(empty["historyHit"])
+
+    def test_lookup_failure_degrades_without_blocking_data_preparation(self) -> None:
+        def provider(*_args):
+            raise RuntimeError("service unavailable")
+
+        result = build_entertainment_invoice_serial_enricher(provider=provider)(
+            "REC",
+            "invoice.pdf",
+            {"invoiceNo": "12345601"},
+            {"auditInfo": {"instanceCode": "INS"}},
+        )
+
+        self.assertEqual(result["historyNumbers"], [])
+        self.assertFalse(result["historyHit"])
+        self.assertTrue(result["lookupFailed"])
+
+    def test_missing_or_short_invoice_number_does_not_call_history_service(self) -> None:
+        calls = []
+
+        def provider(*args):
+            calls.append(args)
+            return ["unexpected"]
+
+        enricher = build_entertainment_invoice_serial_enricher(provider=provider)
+        for ocr_data in ({}, {"invoiceNo": "1234567"}):
+            result = enricher("REC", "invoice.pdf", ocr_data, {})
+            self.assertFalse(result["historyHit"])
+            self.assertFalse(result["lookupFailed"])
+            self.assertIsNone(result["currentPrefix"])
+
+        self.assertEqual(calls, [])
