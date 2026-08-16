@@ -26,6 +26,7 @@ entertainment_audit_rule_catalog: dict[str, dict[str, str]] = {
     "E15": {"auditContent": "检查是否有员工本人费用"},
     "W33": {"auditContent": "检查礼品数量与接待人数的合理性"},
     "W34": {"auditContent": "检查同一核销单内发票号码是否连续"},
+    "E34": {"auditContent": "检查出租车发票号码是否存在历史或本次核销单连号"},
     "E36": {"auditContent": "检查发票内容是否含禁止核销内容"},
     "E17": {"auditContent": "检查发票内容是否包含充值卡、预付卡或预存类项目"},
     "W31": {"auditContent": "检查使用的发票销货方是否为高风险发票"},

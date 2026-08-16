@@ -2,21 +2,154 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from functools import partial
 import json
 import os
 from pathlib import Path
 from typing import Any
 
+from expense_audit_orchestrator import audit_client
 from expense_audit_orchestrator.observability import get_logger
 
 from .client import EntertainmentApiClient
+from ..personal_transport.data import is_taxi_invoice
 
 
 _logger = get_logger("entertainment_data")
 
 DEFAULT_E15_INVOICE_TYPE_MAP_PATH = Path(__file__).with_name("e15_invoice_type_map.json")
 E15_INVOICE_TYPE_MAP_PATH_ENV = "E15_INVOICE_TYPE_MAP_PATH"
+
+InvoiceSerialNumberProvider = Callable[[str, str, str | None], Sequence[Any]]
+
+
+def _string_value(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def normalize_invoice_serial_prefix(invoice_no: Any) -> str | None:
+    """按出租车发票连号规则提取比较前缀。
+
+    发票号码去掉后两位后，剩余号码的前六位一致即视为连号。整个过程
+    只按字符串处理，避免前导零丢失和超长发票号数值精度损失。
+    """
+    value = _string_value(invoice_no)
+    if len(value) < 8:
+        return None
+    return value[:-2][:6]
+
+
+def _normalize_invoice_serial_numbers(value: Any) -> list[str]:
+    """兼容历史接口可能返回的多种列表项格式。"""
+    if isinstance(value, str):
+        values: Sequence[Any] = [value]
+    elif isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
+        values = value
+    else:
+        return []
+
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in values:
+        item_value: Any = item
+        if isinstance(item, Mapping):
+            item_value = next(
+                (
+                    item.get(key)
+                    for key in ("chequeNo", "invoiceNo", "serialNo")
+                    if item.get(key) is not None
+                ),
+                None,
+            )
+        if isinstance(item_value, (Mapping, list, tuple, set)):
+            continue
+        normalized = _string_value(item_value)
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            result.append(normalized)
+    return result
+
+
+def build_entertainment_invoice_serial_enricher(
+    *,
+    service_url: str | None = None,
+    provider: InvoiceSerialNumberProvider | None = None,
+) -> Callable[[str, str, dict[str, Any], dict[str, Any]], dict[str, Any]]:
+    """构造业务招待费出租车发票历史连号查询 enricher。
+
+    业务招待费沿用个人交通费 E34 的出租车识别、历史查询和降级策略，
+    但只对出租车发票查询；普通餐饮、住宿等招待费发票不会调用连号接口。
+    """
+    resolved_service_url = service_url or audit_client.DEFAULT_AUDIT_SERVICE_URL
+    invoice_serial_provider = provider or partial(
+        audit_client.fetch_invoice_serial_numbers,
+        service_url=resolved_service_url,
+    )
+
+    def enricher(
+        receipt_code: str,
+        file_path: str,
+        ocr_data: dict[str, Any],
+        service_data: dict[str, Any],
+    ) -> dict[str, Any]:
+        del file_path
+        ocr = ocr_data if isinstance(ocr_data, Mapping) else {}
+        invoice_no = (
+            _string_value(ocr.get("chequeNo"))
+            or _string_value(ocr.get("invoiceNo"))
+            or _string_value(ocr.get("serialNo"))
+        )
+        taxi_invoice = is_taxi_invoice(ocr)
+        current_prefix = normalize_invoice_serial_prefix(invoice_no)
+        history_numbers: list[str] = []
+        lookup_failed = False
+
+        audit_info = service_data.get("auditInfo") if isinstance(service_data, Mapping) else {}
+        if not isinstance(audit_info, Mapping):
+            audit_info = {}
+        instance_code = _string_value(audit_info.get("instanceCode")) or receipt_code
+        accounting_code = (
+            _string_value(ocr.get("accountingCode"))
+            or _string_value(audit_info.get("accountingCode"))
+        )
+
+        # 发票号缺失或长度不足 8 位时不调用历史接口，也不进行连号判断。
+        if taxi_invoice and invoice_no and current_prefix:
+            try:
+                history_numbers = _normalize_invoice_serial_numbers(
+                    invoice_serial_provider(invoice_no, instance_code, accounting_code) or []
+                )
+            except Exception as exc:
+                lookup_failed = True
+                _logger.warning(
+                    "业务招待费出租车发票历史连号查询失败，降级为空列表",
+                    extra={
+                        "event": "data_prep.entertainment_taxi_invoice_serial.fallback",
+                        "receipt_code": receipt_code,
+                        "instance_code": instance_code,
+                        "cheque_no": invoice_no,
+                        "accounting_code": accounting_code,
+                        "error": str(exc),
+                    },
+                )
+
+        return {
+            "invoiceNo": invoice_no,
+            "currentPrefix": current_prefix,
+            "historyNumbers": history_numbers,
+            "historyHit": bool(history_numbers),
+            "batchHit": False,
+            "isTaxiInvoice": taxi_invoice,
+            # 保留兼容字段，便于既有 prepared receipt/外部调用方迁移。
+            "isEntertainmentInvoice": taxi_invoice,
+            "relationSubject": "出租车发票",
+            "lookupFailed": lookup_failed,
+        }
+
+    return enricher
 
 
 def _resolve_e15_map_path(path: str | Path | None = None) -> Path:
@@ -220,7 +353,9 @@ __all__ = [
     "DEFAULT_E15_INVOICE_TYPE_MAP_PATH",
     "E15_INVOICE_TYPE_MAP_PATH_ENV",
     "build_e15_invoice_type_enricher",
+    "build_entertainment_invoice_serial_enricher",
     "build_entertainment_receipt_enricher",
     "entertainment_receipt_enricher",
     "load_e15_invoice_type_map",
+    "normalize_invoice_serial_prefix",
 ]

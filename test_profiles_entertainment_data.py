@@ -3,8 +3,10 @@ import unittest
 from expense_audit_orchestrator.profiles.entertainment.client import EntertainmentApiClient
 from expense_audit_orchestrator.profiles.entertainment.data import (
     build_e15_invoice_type_enricher,
+    build_entertainment_invoice_serial_enricher,
     build_entertainment_receipt_enricher,
     load_e15_invoice_type_map,
+    normalize_invoice_serial_prefix,
 )
 
 
@@ -97,6 +99,111 @@ class EntertainmentDataTests(unittest.TestCase):
             {},
         )
 
+    def test_taxi_invoice_serial_enricher_queries_history_with_expected_arguments(self) -> None:
+        calls = []
+
+        def provider(cheque_no, instance_code, accounting_code):
+            calls.append((cheque_no, instance_code, accounting_code))
+            return ["12345699", {"invoiceNo": "12345698"}, {"unknown": "ignored"}]
+
+        enricher = build_entertainment_invoice_serial_enricher(
+            service_url="https://service.example",
+            provider=provider,
+        )
+        result = enricher(
+            "RECEIPT-001",
+            "invoice.pdf",
+            {
+                "chequeNo": "12345601",
+                "invoiceType": "8",
+                "accountingCode": "AC-001",
+            },
+            {"auditInfo": {"instanceCode": "INSTANCE-001"}},
+        )
+
+        self.assertEqual(calls, [("12345601", "INSTANCE-001", "AC-001")])
+        self.assertEqual(result["invoiceNo"], "12345601")
+        self.assertEqual(result["currentPrefix"], "123456")
+        self.assertEqual(result["historyNumbers"], ["12345699", "12345698"])
+        self.assertTrue(result["historyHit"])
+        self.assertTrue(result["isTaxiInvoice"])
+        self.assertFalse(result["lookupFailed"])
+
+    def test_taxi_invoice_serial_enricher_uses_invoice_number_fallback_order(self) -> None:
+        calls = []
+
+        def provider(cheque_no, instance_code, accounting_code):
+            calls.append((cheque_no, instance_code, accounting_code))
+            return []
+
+        enricher = build_entertainment_invoice_serial_enricher(provider=provider)
+        result = enricher(
+            "RECEIPT-002",
+            "invoice.pdf",
+            {
+                "chequeNo": "",
+                "invoiceNo": "0012345601",
+                "serialNo": "99999999",
+                "invoiceTypeName": "出租车票",
+            },
+            {"auditInfo": {"instanceCode": "INSTANCE-002", "accountingCode": "AC-002"}},
+        )
+
+        self.assertEqual(calls, [("0012345601", "INSTANCE-002", "AC-002")])
+        self.assertEqual(result["invoiceNo"], "0012345601")
+        self.assertEqual(result["currentPrefix"], "001234")
+        self.assertFalse(result["historyHit"])
+
+    def test_non_taxi_entertainment_invoice_does_not_query_history(self) -> None:
+        def provider(*args):
+            raise AssertionError(f"history lookup should not run: {args}")
+
+        result = build_entertainment_invoice_serial_enricher(provider=provider)(
+            "RECEIPT-003",
+            "invoice.pdf",
+            {"chequeNo": "12345601", "invoiceType": "餐饮服务"},
+            {"auditInfo": {"instanceCode": "INSTANCE-003"}},
+        )
+
+        self.assertFalse(result["isTaxiInvoice"])
+        self.assertEqual(result["historyNumbers"], [])
+        self.assertFalse(result["historyHit"])
+
+    def test_short_taxi_invoice_number_does_not_query_history(self) -> None:
+        def provider(*args):
+            raise AssertionError(f"short invoice number must not be looked up: {args}")
+
+        result = build_entertainment_invoice_serial_enricher(provider=provider)(
+            "RECEIPT-004",
+            "invoice.pdf",
+            {"chequeNo": "1234567", "invoiceType": "8"},
+            {"auditInfo": {"instanceCode": "INSTANCE-004"}},
+        )
+
+        self.assertTrue(result["isTaxiInvoice"])
+        self.assertIsNone(result["currentPrefix"])
+        self.assertFalse(result["historyHit"])
+
+    def test_history_lookup_failure_degrades_without_blocking(self) -> None:
+        def provider(*args):
+            raise RuntimeError("service unavailable")
+
+        result = build_entertainment_invoice_serial_enricher(provider=provider)(
+            "RECEIPT-005",
+            "invoice.pdf",
+            {"chequeNo": "12345601", "invoiceType": "8"},
+            {"auditInfo": {"instanceCode": "INSTANCE-005"}},
+        )
+
+        self.assertEqual(result["historyNumbers"], [])
+        self.assertFalse(result["historyHit"])
+        self.assertTrue(result["lookupFailed"])
+
+    def test_invoice_serial_prefix_preserves_leading_zero_and_long_values(self) -> None:
+        self.assertEqual(normalize_invoice_serial_prefix("0012345601"), "001234")
+        self.assertEqual(normalize_invoice_serial_prefix("123456789012345601"), "123456")
+        self.assertIsNone(normalize_invoice_serial_prefix("1234567"))
+
 
 if __name__ == "__main__":
     unittest.main()
@@ -112,3 +219,10 @@ class EntertainmentServiceUrlBindingTests(unittest.TestCase):
             get_profile("entertainment", service_url="http://mock-service")
 
         client_class.assert_called_once_with(service_url="http://mock-service")
+
+    def test_profile_contains_entertainment_invoice_serial_enricher(self) -> None:
+        from expense_audit_orchestrator.profiles import get_profile
+
+        profile = get_profile("entertainment", service_url="https://service.example")
+
+        self.assertIn("entertainmentInvoiceSerial", profile.invoice_enrichers)
