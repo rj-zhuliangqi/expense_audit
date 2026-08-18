@@ -36,7 +36,7 @@ sudo systemctl enable --now \
 | `expense-node-gateway` | `127.0.0.1` | `8091` | 图内 LLM/节点调用网关 |
 | `expense-rabbitmq-worker` | — | — | RabbitMQ → 数据准备 → runtime → 回写 |
 
-监听地址和端口由 `.env` 中的 `GRAPH_RUNTIME_HOST`、`GRAPH_RUNTIME_PORT`、`NODE_GATEWAY_HOST`、`NODE_GATEWAY_PORT` 提供；模板仍保留 `127.0.0.1:8090` 和 `127.0.0.1:8091` 的默认值，不改变现有 systemd 服务名称、接口路径或生产端口约定。worker 使用 `GRAPH_RUNTIME_URL` 和 `AUDIT_SERVICE_URL`，费用类型图路径使用四个正式根目录图文件。
+监听地址和端口由 `.env` 中的 `GRAPH_RUNTIME_HOST`、`GRAPH_RUNTIME_PORT`、`NODE_GATEWAY_HOST`、`NODE_GATEWAY_PORT` 提供；模板仍保留 `127.0.0.1:8090` 和 `127.0.0.1:8091` 的默认值，不改变现有 systemd 服务名称、接口路径或生产端口约定。worker 使用 `GRAPH_RUNTIME_URL` 和 `AUDIT_SERVICE_URL`，费用类型图路径使用 `resources/graphs/` 下的四个正式流程图。
 
 启动顺序：graph runtime 和 node gateway 先启动，worker 后启动。worker 会拒绝指向本地 mock 的 `AUDIT_SERVICE_URL`。
 
@@ -58,6 +58,6 @@ sudo systemctl restart expense-graph-runtime expense-node-gateway expense-rabbit
 
 ## 流程图与运行入口
 
-worker 的默认图是 `graph-latest-0727-1900.json`。四个正式流程图都必须保留在仓库根目录并纳入 Git。worker 的实际实现位于 `apps/workers/rabbitmq_worker.py`，根目录 `rabbitmq_worker.py` 只是兼容启动器；旧命令仍然有效。
+worker 的默认图是 `resources/graphs/graph-latest-0727-1900.json`。四个正式流程图都必须纳入 Git，并保留稳定文件名。worker 的实际实现位于 `apps/workers/rabbitmq_worker.py`，根目录 `rabbitmq_worker.py` 只是兼容启动器；旧命令仍然有效。
 
 本地调试入口位于 `apps/cli/`、`apps/builders/` 和 `apps/diagnostics/`，生产 systemd 不会启动这些一次性工具。

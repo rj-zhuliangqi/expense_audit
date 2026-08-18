@@ -9,8 +9,8 @@ import zen
 from graph_runtime.core import load_decision
 
 
-from expense_audit_orchestrator.paths import PROJECT_ROOT as ROOT
-GRAPH_PATH = ROOT / "graph-latest-0727-1900.json"
+from expense_audit_orchestrator.paths import OFFICIAL_GRAPH_PATHS
+GRAPH_PATH = OFFICIAL_GRAPH_PATHS["telecom"]
 
 
 class TelecomE34InvoiceContentGraphTests(unittest.TestCase):

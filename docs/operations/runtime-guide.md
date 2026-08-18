@@ -6,7 +6,7 @@
 - `graph_runtime/`：流程图执行 HTTP 服务。
 - `node_gateway/`：LLM/节点调用网关。
 - `apps/cli/`、`apps/workers/`、`apps/builders/`、`apps/diagnostics/`：应用入口和工具。
-- `resources/`：样例与参考数据；正式流程图仍在仓库根目录。
+- `resources/`：样例与参考数据；正式流程图统一存放在 `resources/graphs/`。
 - `tests/unit/`、`tests/graph/`、`tests/integration/`：按职责归档的测试。
 
 根目录的 `rabbitmq_worker.py`、`execute_graph.py`、`prepare_from_queue.py` 等仍是兼容启动器；新代码和测试优先使用 `apps.*` 实际实现模块。
@@ -54,7 +54,7 @@ curl -sS http://127.0.0.1:18090/health
 
 curl -sS -X POST http://127.0.0.1:18090/api/v1/graph-runtime/evaluations \
   -H 'Content-Type: application/json' \
-  -d '{"graphPath":"graph-latest-0727-1900.json","preparedInput":{"context":{"receiptCode":"REC-001"}},"includePreparedInput":true}'
+  -d '{"graphPath":"resources/graphs/graph-latest-0727-1900.json","preparedInput":{"context":{"receiptCode":"REC-001"}},"includePreparedInput":true}'
 ```
 
 ### 3. 启动节点调用网关
@@ -73,7 +73,7 @@ GRAPH_RUNTIME_URL=http://127.0.0.1:18090 \
 .venv/bin/python rabbitmq_worker.py \
   --amqp-url "$RABBITMQ_URL" \
   --audit-service-url https://service-uate-gw.ruijie.com.cn \
-  --graph-path graph-latest-0727-1900.json \
+  --graph-path resources/graphs/graph-latest-0727-1900.json \
   --queues audit \
   --prepared-output-dir output/worker-debug/prepared \
   --writeback-output-dir output/worker-debug/writeback
@@ -219,7 +219,7 @@ GRAPH_RUNTIME_URL=http://127.0.0.1:18090 \
 .venv/bin/python rabbitmq_worker.py \
   --amqp-url "$RABBITMQ_URL" \
   --audit-service-url https://service-uate-gw.ruijie.com.cn \
-  --graph-path graph-latest-0727-1900.json \
+  --graph-path resources/graphs/graph-latest-0727-1900.json \
   --queues audit
 ```
 
@@ -232,7 +232,7 @@ GRAPH_RUNTIME_URL=http://127.0.0.1:18090 \
 .venv/bin/python rabbitmq_worker.py \
   --amqp-url "$RABBITMQ_URL" \
   --audit-service-url https://service-uate-gw.ruijie.com.cn \
-  --graph-path graph-latest-0727-1900.json \
+  --graph-path resources/graphs/graph-latest-0727-1900.json \
   --queues audit
 ```
 
@@ -245,7 +245,7 @@ GRAPH_RUNTIME_URL=http://127.0.0.1:18090 \
 .venv/bin/python rabbitmq_worker.py \
   --amqp-url "$RABBITMQ_URL" \
   --audit-service-url https://service-uate-gw.ruijie.com.cn \
-  --graph-path graph-latest-0727-1900.json \
+  --graph-path resources/graphs/graph-latest-0727-1900.json \
   --queues audit \
   --prepared-output-dir output/worker-debug/prepared \
   --writeback-output-dir output/worker-debug/writeback

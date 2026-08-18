@@ -8,6 +8,7 @@ from expense_audit_orchestrator.paths import (
     DEFAULT_GRAPH_PATH,
     DEFAULT_OCR_PATH,
     DEFAULT_OPERATOR_CITY_CSV_PATH,
+    GRAPHS_ROOT,
     OFFICIAL_GRAPH_PATHS,
     PROJECT_ROOT,
     resolve_project_path,
@@ -24,6 +25,7 @@ class ProjectPathContractTests(unittest.TestCase):
         })
         for graph_path in OFFICIAL_GRAPH_PATHS.values():
             self.assertTrue(graph_path.is_file(), graph_path)
+            self.assertEqual(graph_path.parent, GRAPHS_ROOT)
             payload = json.loads(graph_path.read_text(encoding="utf-8"))
             self.assertIsInstance(payload, dict)
 
@@ -36,6 +38,8 @@ class ProjectPathContractTests(unittest.TestCase):
 
     def test_relative_paths_are_project_relative(self) -> None:
         self.assertEqual(resolve_project_path("resources/samples/prepare_test.json"), DEFAULT_OCR_PATH)
+        self.assertEqual(resolve_project_path("resources/graphs/graph-latest-travel-0807.json"), OFFICIAL_GRAPH_PATHS["travel"])
+        self.assertEqual(resolve_project_path("graph-latest-travel-0807.json"), OFFICIAL_GRAPH_PATHS["travel"])
         self.assertEqual(resolve_project_path("/tmp/custom.json"), Path("/tmp/custom.json"))
         self.assertEqual(resolve_project_path(None, DEFAULT_GRAPH_PATH), DEFAULT_GRAPH_PATH)
 

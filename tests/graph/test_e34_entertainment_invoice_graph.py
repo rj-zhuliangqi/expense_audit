@@ -7,8 +7,8 @@ from pathlib import Path
 from graph_runtime.application import evaluate_prepared_input
 from graph_runtime.core import load_decision
 
-from expense_audit_orchestrator.paths import PROJECT_ROOT as ROOT
-GRAPH_PATH = ROOT / "graph-latest-entertainment-0722.json"
+from expense_audit_orchestrator.paths import OFFICIAL_GRAPH_PATHS
+GRAPH_PATH = OFFICIAL_GRAPH_PATHS["entertainment"]
 
 
 class E34EntertainmentInvoiceGraphTests(unittest.TestCase):

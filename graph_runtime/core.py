@@ -4,11 +4,11 @@ from collections import OrderedDict
 from collections.abc import Mapping
 from pathlib import Path
 from threading import RLock
-
-from expense_audit_orchestrator.paths import DEFAULT_GRAPH_PATH
 from typing import Any
 
 import zen
+
+from expense_audit_orchestrator.paths import DEFAULT_GRAPH_PATH, resolve_project_path
 
 
 _COMPILED_GRAPH_CACHE: OrderedDict[str, zen.ZenDecision] = OrderedDict()
@@ -39,7 +39,11 @@ def _normalize_graph_content(graph_content: Mapping[str, object] | str) -> str:
 
 
 def load_decision(graph_path: Path | str = DEFAULT_GRAPH_PATH) -> zen.ZenDecision:
-    resolved_graph_path = Path(graph_path).resolve()
+    # Accept project-relative paths and legacy root-level graph filenames while
+    # keeping the canonical assets under resources/graphs/.
+    project_graph_path = resolve_project_path(graph_path, DEFAULT_GRAPH_PATH)
+    assert project_graph_path is not None
+    resolved_graph_path = project_graph_path.resolve()
     stat = resolved_graph_path.stat()
     content = resolved_graph_path.read_text(encoding="utf-8")
     cache_key = f"path:{resolved_graph_path}:{stat.st_mtime_ns}:{stat.st_size}"

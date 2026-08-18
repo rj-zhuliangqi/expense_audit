@@ -7,7 +7,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from ..paths import DEFAULT_GRAPH_PATH, OFFICIAL_GRAPH_PATHS, PROJECT_ROOT, ROOT
+from ..paths import (
+    DEFAULT_GRAPH_PATH,
+    OFFICIAL_GRAPH_PATHS,
+    PROJECT_ROOT,
+    ROOT,
+    resolve_project_path,
+)
 from ..writeback_client import AUDIT_INFO_SAVE_PATH
 
 
@@ -24,15 +30,12 @@ ENTERTAINMENT_GRAPH_PATH_ENV = "ENTERTAINMENT_GRAPH_PATH"
 def _resolve_graph_path(env_key: str, default: Path | None) -> Path | None:
     """从环境变量读取图路径，留空则用代码内默认值。
 
-    相对路径以项目根目录 ROOT 为基准解析；空字符串视为未设置（用默认值）。
+    相对路径以项目根目录为基准解析；空字符串视为未设置（用默认值）。
     """
     raw = (os.getenv(env_key) or "").strip()
     if not raw:
         return default
-    p = Path(raw)
-    if not p.is_absolute():
-        p = ROOT / p
-    return p
+    return resolve_project_path(raw, default)
 
 
 PERSONAL_TRANSPORT_GRAPH_PATH = _resolve_graph_path(

@@ -8,10 +8,10 @@ from graph_runtime.application import evaluate_prepared_input
 from graph_runtime.core import load_decision
 
 
-from expense_audit_orchestrator.paths import PROJECT_ROOT as ROOT
+from expense_audit_orchestrator.paths import OFFICIAL_GRAPH_PATHS
 GRAPH_PATHS = (
-    ROOT / "graph-latest-0727-1900.json",
-    ROOT / "graph-latest-entertainment-0722.json",
+    OFFICIAL_GRAPH_PATHS["telecom"],
+    OFFICIAL_GRAPH_PATHS["entertainment"],
 )
 INPUT_FIELD_ID = "dea9a1bc-66ae-47b3-885f-9e9a1bb07571"
 OUTPUT_RESULT_ID = "f35ede49-0eae-4dda-b39e-11a11383697a"

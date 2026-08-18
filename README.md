@@ -24,6 +24,10 @@ apps/builders/                # 流程图与参考数据构建器
 apps/diagnostics/             # 联调和诊断工具
 resources/samples/            # 样例输入
 resources/reference/          # 运行所需参考数据
+resources/graphs/             # 正式流程图（稳定文件名）
+docs/notes/                   # 方案、问题记录
+docs/operations/             # 运行与操作手册
+deploy/                      # 安装脚本、启动脚本和 systemd 模板
 tests/unit/                   # 单元测试
 tests/graph/                 # 流程图契约测试
 tests/integration/            # 集成测试说明与入口
@@ -77,12 +81,18 @@ git merge --no-ff fix/<description>
 git push origin main
 ```
 
-正式流程图是源码的一部分，以下文件必须纳入 Git 版本跟踪：
+正式流程图是源码的一部分，统一存放在 `resources/graphs/`，以下文件必须纳入 Git 版本跟踪：
 
-- `graph-latest-0727-1900.json`
-- `graph-latest-entertainment-0722.json`
-- `graph-latest-personal-transport-0722.json`
-- `graph-latest-travel-0807.json`
+- `resources/graphs/graph-latest-0727-1900.json`
+- `resources/graphs/graph-latest-entertainment-0722.json`
+- `resources/graphs/graph-latest-personal-transport-0722.json`
+- `resources/graphs/graph-latest-travel-0807.json`
+
+## 文档
+
+- 运行与架构说明：[`docs/operations/runtime-guide.md`](docs/operations/runtime-guide.md)
+- 部署说明：[`deploy/README.md`](deploy/README.md)
+- 方案与问题记录：[`docs/notes/`](docs/notes/)
 
 ## 部署
 

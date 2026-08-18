@@ -9,7 +9,7 @@ Usage::
 
     python build_travel_graph.py
 
-Output: graph-latest-travel-0807.json
+Output: resources/graphs/graph-latest-travel-0807.json
 """
 from __future__ import annotations
 
@@ -491,7 +491,7 @@ def main(argv: list[str] | None = None) -> None:
         "--source",
         type=Path,
         default=None,
-        help="travel rule CSV source; defaults to the legacy local source path",
+        help="travel rule CSV source; defaults to resources/reference/travel_rules.csv",
     )
     args = parser.parse_args(argv)
     graph = build_travel_graph(args.source)

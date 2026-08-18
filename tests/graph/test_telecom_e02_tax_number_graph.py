@@ -7,8 +7,8 @@ from pathlib import Path
 import zen
 
 
-from expense_audit_orchestrator.paths import PROJECT_ROOT as ROOT
-GRAPH_PATH = ROOT / "graph-latest-0727-1900.json"
+from expense_audit_orchestrator.paths import OFFICIAL_GRAPH_PATHS
+GRAPH_PATH = OFFICIAL_GRAPH_PATHS["telecom"]
 INPUT_FIELD_ID = "dea9a1bc-66ae-47b3-885f-9e9a1bb07571"
 OUTPUT_RESULT_ID = "f35ede49-0eae-4dda-b39e-11a11383697a"
 REASON_CODE_ID = "48a29115-f542-44d3-8c02-3ff71e19ee38"
