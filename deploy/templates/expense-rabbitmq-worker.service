@@ -1,0 +1,22 @@
+[Unit]
+Description=Expense Audit - RabbitMQ Worker (主链路)
+After=network-online.target rabbitmq-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{DEPLOY_USER}}
+WorkingDirectory={{DEPLOY_DIR}}
+Environment=GRAPH_RUNTIME_URL=http://127.0.0.1:8090
+Environment=AUDIT_SERVICE_URL=https://service-uate-gw.ruijie.com.cn/
+EnvironmentFile={{DEPLOY_DIR}}/.env
+ExecStart={{DEPLOY_DIR}}/.venv/bin/python -m apps.workers.rabbitmq_worker \
+  --graph-runtime-url ${GRAPH_RUNTIME_URL} \
+  --graph-path {{DEPLOY_DIR}}/graph-latest-0727-1900.json \
+  --audit-service-url ${AUDIT_SERVICE_URL} \
+  --queues audit
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

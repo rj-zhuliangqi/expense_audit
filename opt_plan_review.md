@@ -141,7 +141,7 @@ class ExpenseProfile:
 
 **回归命令**（readme.md:391）：
 ```
-cd /mnt/d/gorules/expense_audit
+cd .
 .venv/bin/python -m unittest test_execute_graph.py test_main.py -v
 ```
 

@@ -1,0 +1,18 @@
+[Unit]
+Description=Expense Audit - Node Gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{DEPLOY_USER}}
+WorkingDirectory={{DEPLOY_DIR}}
+Environment=NODE_GATEWAY_HOST=127.0.0.1
+Environment=NODE_GATEWAY_PORT=8091
+EnvironmentFile={{DEPLOY_DIR}}/.env
+ExecStart={{DEPLOY_DIR}}/.venv/bin/python -m uvicorn node_gateway.api:create_app --factory --host ${NODE_GATEWAY_HOST} --port ${NODE_GATEWAY_PORT}
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

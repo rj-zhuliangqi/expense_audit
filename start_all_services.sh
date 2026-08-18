@@ -11,8 +11,11 @@ ENV_FILE="$ROOT_DIR/.env"
 LOG_DIR="$ROOT_DIR/output/service-logs"
 PID_DIR="$ROOT_DIR/output/service-pids"
 
-GRAPH_PORT="18090"
-NODE_PORT="8091"
+GRAPH_HOST="${GRAPH_RUNTIME_HOST:-127.0.0.1}"
+GRAPH_PORT="${GRAPH_RUNTIME_PORT:-18090}"
+NODE_HOST="${NODE_GATEWAY_HOST:-127.0.0.1}"
+NODE_PORT="${NODE_GATEWAY_PORT:-8091}"
+AUDIT_URL="${AUDIT_SERVICE_URL:-https://service-uate-gw.ruijie.com.cn/}"
 
 GRAPH_LOG="$LOG_DIR/graph_runtime.log"
 NODE_LOG="$LOG_DIR/node_gateway.log"
@@ -176,27 +179,27 @@ start_bg \
   "graph_runtime" \
   "$GRAPH_LOG" \
   "$GRAPH_PID_FILE" \
-  "$VENV_PY" -u -m uvicorn graph_runtime.api:create_app --factory --host 127.0.0.1 --port "$GRAPH_PORT"
+  "$VENV_PY" -u -m uvicorn graph_runtime.api:create_app --factory --host "$GRAPH_HOST" --port "$GRAPH_PORT"
 
-wait_for_health "http://127.0.0.1:$GRAPH_PORT/health" "graph_runtime"
+wait_for_health "http://$GRAPH_HOST:$GRAPH_PORT/health" "graph_runtime"
 
 echo "[step] starting node_gateway on :$NODE_PORT"
 start_bg \
   "node_gateway" \
   "$NODE_LOG" \
   "$NODE_PID_FILE" \
-  "$VENV_PY" -u -m uvicorn node_gateway.api:create_app --factory --host 127.0.0.1 --port "$NODE_PORT"
+  "$VENV_PY" -u -m uvicorn node_gateway.api:create_app --factory --host "$NODE_HOST" --port "$NODE_PORT"
 
-wait_for_health "http://127.0.0.1:$NODE_PORT/health" "node_gateway"
+wait_for_health "http://$NODE_HOST:$NODE_PORT/health" "node_gateway"
 
 echo "[step] starting rabbitmq_worker"
 start_bg \
   "rabbitmq_worker" \
   "$WORKER_LOG" \
   "$WORKER_PID_FILE" \
-  env GRAPH_RUNTIME_URL="http://127.0.0.1:$GRAPH_PORT" "$VENV_PY" -u rabbitmq_worker.py \
+  env GRAPH_RUNTIME_URL="http://$GRAPH_HOST:$GRAPH_PORT" "$VENV_PY" -u -m apps.workers.rabbitmq_worker \
     --amqp-url "$RABBITMQ_URL" \
-    --audit-service-url "https://service-uate-gw.ruijie.com.cn" \
+    --audit-service-url "$AUDIT_URL" \
     --ei-code-map-path "expense_audit_orchestrator/profiles/ei_code_map.json" \
     --queues "audit" \
     --prepared-output-dir "output/worker-debug/prepared" \

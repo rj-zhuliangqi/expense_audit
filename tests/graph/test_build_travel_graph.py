@@ -18,7 +18,7 @@ class TravelGraphBuildTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         # Keep the checked-in artifact and the generator synchronized for local
         # and CI runs, without changing any data-preparation code.
-        build_travel_graph.main()
+        build_travel_graph.main([])
         cls.graph = json.loads(GRAPH_PATH.read_text(encoding="utf-8"))
 
     def test_graph_shape_and_standard_outputs(self) -> None:

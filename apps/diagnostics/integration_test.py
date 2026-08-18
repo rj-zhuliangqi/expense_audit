@@ -14,10 +14,12 @@ from pathlib import Path
 
 # 先加载 .env 环境变量
 from dotenv import load_dotenv
-load_dotenv(Path(__file__).resolve().parent / ".env", override=False)
 
-# 把项目根目录加到路径
-PROJECT_ROOT = Path(__file__).resolve().parent
+from expense_audit_orchestrator.paths import PROJECT_ROOT
+
+load_dotenv(PROJECT_ROOT / ".env", override=False)
+
+# 兼容直接从仓库根目录启动该诊断脚本。
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from expense_audit_orchestrator.audit_client import (
@@ -198,7 +200,7 @@ def test_full_pipeline(receipt_code: str, service_url: str, output_dir: Path | N
 
     # 确定输出目录
     if output_dir is None:
-        output_dir = Path(__file__).resolve().parent / "output" / receipt_code
+        output_dir = PROJECT_ROOT / "output" / "integration" / receipt_code
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"📁 输出目录: {output_dir}")
 

@@ -1,7 +1,7 @@
 """
 构建业务招待费稽核工作流 graph JSON。
 
-基于通讯费 graph-latest-0722-1100.json 的结构，为业务招待费生成新的 graph：
+基于通讯费 graph-latest-0727-1900.json 的结构，为业务招待费生成新的 graph：
 - 复用通用稽核节点（E35/E31/E33/sys-001-004/E09/E05/E17）
 - 删除通讯费旧版节点，并重建业务招待费所需的 E01 抬头检查
 - 新增业务招待费特有节点（E36 禁止内容、E15 员工本人费用、W33 礼品数量、W34 原有发票连续性、E34 出租车发票连号、W31 虚开发票预警）
@@ -14,11 +14,12 @@
 """
 from __future__ import annotations
 
+import argparse
 import json
 import uuid
 from pathlib import Path
 
-from expense_audit_orchestrator.paths import OFFICIAL_GRAPH_PATHS, PROJECT_ROOT
+from expense_audit_orchestrator.paths import OFFICIAL_GRAPH_PATHS, PROJECT_ROOT, resolve_project_path
 
 REPO_ROOT = PROJECT_ROOT
 SRC_GRAPH = OFFICIAL_GRAPH_PATHS["telecom"]
@@ -995,11 +996,16 @@ def _build_fraud_check_node() -> dict:
 # 主构建逻辑
 # ---------------------------------------------------------------------------
 
-def build_entertainment_graph() -> dict:
+def build_entertainment_graph(source_path: Path | str | None = None) -> dict:
     """构建业务招待费稽核工作流 graph。"""
     # 旧版通讯费源图在部分部署包中未随仓库分发，使用同结构的最新源图兜底。
-    source_graph = SRC_GRAPH
+    source_graph = resolve_project_path(source_path, SRC_GRAPH)
+    assert source_graph is not None
     if not source_graph.exists():
+        if source_path is not None:
+            raise FileNotFoundError(
+                f"source graph not found: {source_graph}. Provide a valid path with --source PATH."
+            )
         fallback_graph = OFFICIAL_GRAPH_PATHS["telecom"]
         if not fallback_graph.exists():
             raise FileNotFoundError(
@@ -1190,8 +1196,16 @@ def build_entertainment_graph() -> dict:
     return graph
 
 
-def main() -> None:
-    graph = build_entertainment_graph()
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description="Build the entertainment-expense audit graph")
+    parser.add_argument(
+        "--source",
+        type=Path,
+        default=None,
+        help="source graph path; defaults to the official telecom graph",
+    )
+    args = parser.parse_args(argv)
+    graph = build_entertainment_graph(args.source)
     with open(DST_GRAPH, "w", encoding="utf-8") as f:
         json.dump(graph, f, ensure_ascii=False, indent=2)
     print(f"✓ 已生成业务招待费稽核工作流: {DST_GRAPH}")

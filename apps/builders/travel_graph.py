@@ -13,6 +13,7 @@ Output: graph-latest-travel-0807.json
 """
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 import re
@@ -21,7 +22,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from expense_audit_orchestrator.paths import LEGACY_TRAVEL_RULE_SOURCE, OFFICIAL_GRAPH_PATHS, PROJECT_ROOT
+from expense_audit_orchestrator.paths import LEGACY_TRAVEL_RULE_SOURCE, OFFICIAL_GRAPH_PATHS, PROJECT_ROOT, resolve_project_path
 
 ROOT = PROJECT_ROOT
 SOURCE_GRAPH = OFFICIAL_GRAPH_PATHS["telecom"]
@@ -66,8 +67,14 @@ def _std_outputs() -> list[dict[str, str]]:
     return [{"id": fid, "name": name, "field": field} for fid, name, field in STD_OUTPUTS]
 
 
-def _load_csv_rows() -> list[dict[str, str]]:
-    with AUDIT_CSV.open("r", encoding="utf-8-sig", newline="") as handle:
+def _load_csv_rows(source_path: Path | str | None = None) -> list[dict[str, str]]:
+    source = resolve_project_path(source_path, AUDIT_CSV)
+    assert source is not None
+    if not source.exists():
+        raise FileNotFoundError(
+            f"travel rule source not found: {source}. Provide it with --source PATH."
+        )
+    with source.open("r", encoding="utf-8-sig", newline="") as handle:
         rows = list(csv.DictReader(handle))
     if len(rows) != 32:
         raise ValueError(f"Expected 32 travel audit rows, found {len(rows)}")
@@ -418,9 +425,11 @@ def _make_content_decision_node(row: dict[str, str], definition: dict[str, Any])
     return node
 
 
-def _build_graph() -> dict[str, Any]:
+def _build_graph(source_path: Path | str | None = None) -> dict[str, Any]:
+    if not SOURCE_GRAPH.exists():
+        raise FileNotFoundError(f"source graph not found: {SOURCE_GRAPH}")
     source = json.loads(SOURCE_GRAPH.read_text(encoding="utf-8"))
-    rows = _load_csv_rows()
+    rows = _load_csv_rows(source_path)
     row_map = {i + 1: row for i, row in enumerate(rows)}
 
     # Preserve the canonical request/response node shape and source metadata,
@@ -472,12 +481,20 @@ def _build_graph() -> dict[str, Any]:
     return {"contentType": source.get("contentType", "application/vnd.gorules.decision"), "nodes": nodes, "edges": edges}
 
 
-def build_travel_graph() -> dict[str, Any]:
-    return _build_graph()
+def build_travel_graph(source_path: Path | str | None = None) -> dict[str, Any]:
+    return _build_graph(source_path)
 
 
-def main() -> None:
-    graph = build_travel_graph()
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description="Build the travel-expense audit graph")
+    parser.add_argument(
+        "--source",
+        type=Path,
+        default=None,
+        help="travel rule CSV source; defaults to the legacy local source path",
+    )
+    args = parser.parse_args(argv)
+    graph = build_travel_graph(args.source)
     OUTPUT_GRAPH.write_text(json.dumps(graph, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Generated {OUTPUT_GRAPH} ({len(graph['nodes'])} nodes, {len(graph['edges'])} edges)")
 

@@ -1,3 +1,16 @@
+# Expense Audit 运行与架构说明
+
+代码按职责整理为：
+
+- `expense_audit_orchestrator/`：数据准备、规则输入、费用类型 profile、回写。
+- `graph_runtime/`：流程图执行 HTTP 服务。
+- `node_gateway/`：LLM/节点调用网关。
+- `apps/cli/`、`apps/workers/`、`apps/builders/`、`apps/diagnostics/`：应用入口和工具。
+- `resources/`：样例与参考数据；正式流程图仍在仓库根目录。
+- `tests/unit/`、`tests/graph/`、`tests/integration/`：按职责归档的测试。
+
+根目录的 `rabbitmq_worker.py`、`execute_graph.py`、`prepare_from_queue.py` 等仍是兼容启动器；新代码和测试优先使用 `apps.*` 实际实现模块。
+
 # Expense Audit 拆分后的职责与启动方式
 
 当前结构应理解成“两类服务 + 一个客户端 / worker”，不是三个 HTTP 服务。
@@ -30,7 +43,7 @@
 ### 1. 启动图运行时服务
 
 ```bash
-cd /mnt/d/gorules/expense_audit
+cd .
 .venv/bin/python -m uvicorn graph_runtime.api:create_app --factory --host 127.0.0.1 --port 18090
 ```
 
@@ -41,26 +54,26 @@ curl -sS http://127.0.0.1:18090/health
 
 curl -sS -X POST http://127.0.0.1:18090/api/v1/graph-runtime/evaluations \
   -H 'Content-Type: application/json' \
-  -d '{"graphPath":"graph-latest-0707-2301.json","preparedInput":{"context":{"receiptCode":"REC-001"}},"includePreparedInput":true}'
+  -d '{"graphPath":"graph-latest-0727-1900.json","preparedInput":{"context":{"receiptCode":"REC-001"}},"includePreparedInput":true}'
 ```
 
 ### 3. 启动节点调用网关
 
 ```bash
-cd /mnt/d/gorules/expense_audit
+cd .
 .venv/bin/python -m uvicorn node_gateway.api:create_app --factory --host 127.0.0.1 --port 8091
 ```
 
 ### 4. 启动 rabbitmq worker（主链路）
 
 ```bash
-cd /mnt/d/gorules/expense_audit
+cd .
 set -a && source .env && set +a
 GRAPH_RUNTIME_URL=http://127.0.0.1:18090 \
 .venv/bin/python rabbitmq_worker.py \
   --amqp-url "$RABBITMQ_URL" \
   --audit-service-url https://service-uate-gw.ruijie.com.cn \
-  --graph-path graph-latest-0707-2301.json \
+  --graph-path graph-latest-0727-1900.json \
   --queues audit \
   --prepared-output-dir output/worker-debug/prepared \
   --writeback-output-dir output/worker-debug/writeback
@@ -89,7 +102,7 @@ GRAPH_RUNTIME_URL=http://127.0.0.1:18090 \
 客户端不会再把本地 `graph_path` 原样透传给 runtime；而是先在本地读取图内容，再通过 HTTP 请求把 `graphContent` 发给下游 runtime。这样客户端和 runtime 即使不在同一路径下，也能完全解耦。
 
 ```bash
-cd /mnt/d/gorules/expense_audit
+cd .
 GRAPH_RUNTIME_URL=http://127.0.0.1:8090 \
 .venv/bin/python execute_graph.py --receipt-code REC20260603001
 ```
@@ -97,7 +110,7 @@ GRAPH_RUNTIME_URL=http://127.0.0.1:8090 \
 ### 2. 使用现成 preparedInput 直接执行图
 
 ```bash
-cd /mnt/d/gorules/expense_audit
+cd .
 .venv/bin/python execute_graph.py --prepared-input-path prepared-input.json
 ```
 
@@ -106,7 +119,7 @@ cd /mnt/d/gorules/expense_audit
 导出的 `preparedInput` 会自动把 `operator_city.csv` 装入 `serviceData.telecom_list`，方便在 UI 中直接模拟。
 
 ```bash
-cd /mnt/d/gorules/expense_audit
+cd .
 .venv/bin/python execute_graph.py \
   --receipt-code REC20260603001 \
   --prepare-only \
@@ -200,39 +213,39 @@ AUDIT_SERVICE_RETRY_BACKOFF_SECONDS=0.5
 主链路启动示例：
 
 ```bash
-cd /mnt/d/gorules/expense_audit
+cd .
 set -a && source .env && set +a
 GRAPH_RUNTIME_URL=http://127.0.0.1:18090 \
 .venv/bin/python rabbitmq_worker.py \
   --amqp-url "$RABBITMQ_URL" \
   --audit-service-url https://service-uate-gw.ruijie.com.cn \
-  --graph-path graph-latest-0616-1505.json \
+  --graph-path graph-latest-0727-1900.json \
   --queues audit
 ```
 
 如果你要跑真实主链路，不要用本地 mock 数据地址，直接把 `--audit-service-url` 指向真实网关，例如：
 
 ```bash
-cd /mnt/d/gorules/expense_audit
+cd .
 set -a && source .env && set +a
 GRAPH_RUNTIME_URL=http://127.0.0.1:18090 \
 .venv/bin/python rabbitmq_worker.py \
   --amqp-url "$RABBITMQ_URL" \
   --audit-service-url https://service-uate-gw.ruijie.com.cn \
-  --graph-path graph-latest-0616-1505.json \
+  --graph-path graph-latest-0727-1900.json \
   --queues audit
 ```
 
 如果你需要联调时把准备数据和回写 payload 同时落盘，可再加两个可选参数：
 
 ```bash
-cd /mnt/d/gorules/expense_audit
+cd .
 set -a && source .env && set +a
 GRAPH_RUNTIME_URL=http://127.0.0.1:18090 \
 .venv/bin/python rabbitmq_worker.py \
   --amqp-url "$RABBITMQ_URL" \
   --audit-service-url https://service-uate-gw.ruijie.com.cn \
-  --graph-path graph-latest-0616-1505.json \
+  --graph-path graph-latest-0727-1900.json \
   --queues audit \
   --prepared-output-dir output/worker-debug/prepared \
   --writeback-output-dir output/worker-debug/writeback
@@ -286,7 +299,7 @@ GRAPH_RUNTIME_URL=http://127.0.0.1:18090 \
 2. 先确认拿到的核销单号是不是你预期的那条。
 
 ```bash
-cd /mnt/d/gorules/expense_audit
+cd .
 set -a && source .env && set +a
 .venv/bin/python prepare_from_queue.py \
   --queue audit_ai_verification_queue \
@@ -298,7 +311,7 @@ set -a && source .env && set +a
 > 本仓库已移除 `mock_server.py`，上游统一走真实网关。下面这段保留为历史参考，实际联调请直接用「真实网关」小节的方式，通过 `AUDIT_SERVICE_URL` 或 `--audit-service-url` 指定上游地址。
 
 ```bash
-cd /mnt/d/gorules/expense_audit
+cd .
 set -a && source .env && set +a
 .venv/bin/python prepare_from_queue.py \
   --queue audit_ai_verification_queue \
@@ -313,7 +326,7 @@ set -a && source .env && set +a
 2. 你希望调真实的核销单、发票文件、发票文件详情、费用项发票类型、发票占用信息接口。
 
 ```bash
-cd /mnt/d/gorules/expense_audit
+cd .
 set -a && source .env && set +a
 .venv/bin/python prepare_from_queue.py \
   --queue audit_ai_verification_queue \
@@ -338,7 +351,7 @@ set -a && source .env && set +a
 示例：
 
 ```bash
-cd /mnt/d/gorules/expense_audit
+cd .
 set -a && source .env && set +a
 .venv/bin/python prepare_from_queue.py \
   --queue audit_ai_verification_queue \
@@ -350,7 +363,7 @@ set -a && source .env && set +a
 ### 旧示例：只做数据准备并导出 JSON
 
 ```bash
-cd /mnt/d/gorules/expense_audit
+cd .
 set -a && source .env && set +a
 .venv/bin/python prepare_from_queue.py \
   --queue audit_ai_verification_queue \
@@ -360,7 +373,7 @@ set -a && source .env && set +a
 ### 旧示例：只核对队列里的核销单号，不做数据准备
 
 ```bash
-cd /mnt/d/gorules/expense_audit
+cd .
 set -a && source .env && set +a
 .venv/bin/python prepare_from_queue.py \
   --queue audit_ai_verification_queue \
@@ -381,7 +394,7 @@ set -a && source .env && set +a
 完整链路示例：
 
 ```bash
-cd /mnt/d/gorules/expense_audit
+cd .
 set -a && source .env && set +a
 GRAPH_RUNTIME_URL=http://127.0.0.1:18090 \
 .venv/bin/python rabbitmq_worker.py \
@@ -392,8 +405,8 @@ GRAPH_RUNTIME_URL=http://127.0.0.1:18090 \
 ## 回归测试
 
 ```bash
-cd /mnt/d/gorules/expense_audit
-.venv/bin/python -m unittest test_execute_graph.py test_main.py -v
+cd .
+.venv/bin/python -m unittest tests/unit/test_execute_graph.py tests/unit/test_main.py -v
 ```
 
 

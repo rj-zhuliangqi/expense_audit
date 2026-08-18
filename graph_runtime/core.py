@@ -4,13 +4,12 @@ from collections import OrderedDict
 from collections.abc import Mapping
 from pathlib import Path
 from threading import RLock
+
+from expense_audit_orchestrator.paths import DEFAULT_GRAPH_PATH
 from typing import Any
 
 import zen
 
-
-ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_GRAPH_PATH = ROOT / "graph-latest-0722-1100.json"
 
 _COMPILED_GRAPH_CACHE: OrderedDict[str, zen.ZenDecision] = OrderedDict()
 _COMPILED_GRAPH_CACHE_LOCK = RLock()

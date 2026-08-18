@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
+import argparse
 import csv
 import json
 from pathlib import Path
 from typing import Any
 
-from expense_audit_orchestrator.paths import DEFAULT_OPERATOR_CITY_CSV_PATH, PROJECT_ROOT
+from expense_audit_orchestrator.paths import DEFAULT_OPERATOR_CITY_CSV_PATH, PROJECT_ROOT, require_path, resolve_project_path
 
 CSV_PATH = DEFAULT_OPERATOR_CITY_CSV_PATH
 JSON_PATH = PROJECT_ROOT / "prepared-input.json"
 
 
-def build_telecom_list(csv_path: Path) -> list[tuple[str, str]]:
+def build_telecom_list(csv_path: Path | str) -> list[tuple[str, str]]:
+    csv_file = resolve_project_path(csv_path)
+    assert csv_file is not None
+    require_path(csv_file, "telecom operator/city CSV")
     telecom_list: list[tuple[str, str]] = []
 
-    with csv_path.open("r", encoding="utf-8", newline="") as f:
+    with csv_file.open("r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
         if not reader.fieldnames:
             raise ValueError("CSV does not contain headers")
@@ -51,17 +55,31 @@ def inject_into_service_data(node: Any, telecom_list: list[tuple[str, str]]) -> 
     return updated_count
 
 
-def main() -> None:
-    telecom_list = build_telecom_list(CSV_PATH)
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description="Inject telecom operator/city reference data into prepared JSON")
+    parser.add_argument(
+        "--source",
+        type=Path,
+        default=CSV_PATH,
+        help="operator/city CSV source; defaults to resources/reference/operator_city.csv",
+    )
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=JSON_PATH,
+        help="prepared JSON to update",
+    )
+    args = parser.parse_args(argv)
+    telecom_list = build_telecom_list(args.source)
 
-    with JSON_PATH.open("r", encoding="utf-8") as f:
+    with args.input.open("r", encoding="utf-8") as f:
         data = json.load(f)
 
     updated_count = inject_into_service_data(data, telecom_list)
     if updated_count == 0:
         raise ValueError("No serviceData node found in JSON")
 
-    with JSON_PATH.open("w", encoding="utf-8") as f:
+    with args.input.open("w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
         f.write("\n")
 

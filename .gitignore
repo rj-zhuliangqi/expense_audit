@@ -25,7 +25,6 @@ prepared-input.json
 # DEFAULT_GRAPH_PATH graph is tracked; the rest are local experiments.
 graph-latest-* copy.json
 graph-latest-*-*.json
-!graph-latest-0722-1100.json
 # Official expense-audit graphs are source artifacts and must be versioned.
 !graph-latest-0727-1900.json
 !graph-latest-entertainment-0722.json
@@ -34,13 +33,18 @@ graph-latest-*-*.json
 
 # Local requirement spec sheets (not source code)
 *.csv
-!operator_city.csv
+!resources/reference/*.csv
 
 # Empty scaffolding (auto-generated stubs only, no real code)
 gorules/
 
-# Local deploy drafts/outputs are not part of source control
-deploy/
+# Versioned deployment templates and installer; rendered units stay local.
+deploy/*
+!deploy/README.md
+!deploy/install.sh
+!deploy/templates/
+!deploy/templates/*.service
+deploy/systemd-units/
 
 # OS
 .DS_Store
