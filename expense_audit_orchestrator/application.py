@@ -207,9 +207,22 @@ class ReceiptAuditService:
         previous_invoice_numbers: list[str] = []
         gift_count_context = _resolve_gift_count_context(prepared_receipt)
         cumulative_goods_count = 0.0
-
         invoice_preparations = prepared_receipt["invoicePreparations"]
+        # 差旅文档级规则（税额、补贴、场站、自驾等）只在首张发票执行；
+        # 逐张规则仍对每张发票执行。提前汇总全部发票税额，避免首张票只
+        # 比较当前票税额而漏掉后续票。
+        travel_invoice_tax_total = _resolve_travel_invoice_tax_total(invoice_preparations)
+        raised_travel_rule_codes: list[str] = []
+        raised_travel_rule_keys: list[str] = []
+
         for index, invoice_preparation in enumerate(invoice_preparations):
+            _update_travel_invoice_context(
+                invoice_preparation,
+                primary_invoice=(index == 0),
+                raised_rule_codes=raised_travel_rule_codes,
+                raised_rule_keys=raised_travel_rule_keys,
+                invoice_tax_total=travel_invoice_tax_total,
+            )
             if gift_count_context is not None:
                 current_prepared_input = _resolve_prepared_input(invoice_preparation)
                 cumulative_goods_count += _goods_quantity_total(current_prepared_input)
@@ -230,6 +243,22 @@ class ReceiptAuditService:
                 receipt_code, invoice_preparation, graph_path=effective_graph_path,
             )
             invoice_results.append(invoice_result)
+
+            # 文档级异常在后续发票输入中持续传递，流程图据此去重；逐票
+            # 规则（日期、姓名、座位、W37/W39 等）不加入该集合。
+            document_rule_codes, document_rule_keys = _extract_document_rule_context(invoice_result)
+            for rule_code in document_rule_codes:
+                if rule_code not in raised_travel_rule_codes:
+                    raised_travel_rule_codes.append(rule_code)
+            for rule_key in document_rule_keys:
+                if rule_key not in raised_travel_rule_keys:
+                    raised_travel_rule_keys.append(rule_key)
+            _update_receipt_travel_context(
+                prepared_receipt,
+                raised_rule_codes=raised_travel_rule_codes,
+                raised_rule_keys=raised_travel_rule_keys,
+                invoice_tax_total=travel_invoice_tax_total,
+            )
 
             # 收集当前发票号用于后续发票的连号检测
             _collect_invoice_number(invoice_preparation, previous_invoice_numbers)
@@ -861,6 +890,208 @@ def _collect_invoice_number(
     invoice_no = str(invoice_file.get("invoiceNo") or "")
     if invoice_no:
         previous_invoice_numbers.append(invoice_no)
+
+
+_TRAVEL_DOCUMENT_RULE_CODES = frozenset(
+    {
+        "E38",
+        "E23",
+        "E30",
+        "E25",
+        "E31",
+        "E32",
+        "TRAVEL-TAX-001",
+        "TRAVEL-TRAIN-001",
+    }
+)
+
+
+def _travel_audit_from_service_data(service_data: Any) -> dict[str, Any] | None:
+    if not isinstance(service_data, dict):
+        return None
+    travel_audit = service_data.get("travelAudit")
+    if not isinstance(travel_audit, dict):
+        return None
+    return travel_audit
+
+
+def _iter_prepared_travel_audits(
+    invoice_preparations: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    audits: list[dict[str, Any]] = []
+    for preparation in invoice_preparations:
+        if not isinstance(preparation, Mapping):
+            continue
+        prepared_input = preparation.get("preparedInput")
+        if not isinstance(prepared_input, Mapping):
+            continue
+        service_data = prepared_input.get("serviceData")
+        travel_audit = _travel_audit_from_service_data(service_data)
+        if travel_audit is not None:
+            audits.append(travel_audit)
+    return audits
+
+
+def _resolve_travel_invoice_tax_total(
+    invoice_preparations: Sequence[Mapping[str, Any]],
+) -> float | None:
+    total = 0.0
+    found = False
+    for travel_audit in _iter_prepared_travel_audits(invoice_preparations):
+        tax_info = travel_audit.get("taxInfo")
+        if not isinstance(tax_info, Mapping):
+            continue
+        # currentInvoiceDeductibleTax is written by a previous execution pass;
+        # invoiceDeductibleTax is the current invoice value from the enricher.
+        value = tax_info.get("currentInvoiceDeductibleTax")
+        if value is None:
+            value = tax_info.get("invoiceDeductibleTax")
+        number = _coerce_number(value)
+        if number is None:
+            continue
+        total += number
+        found = True
+    return total if found else None
+
+
+def _update_travel_invoice_context(
+    invoice_preparation: Mapping[str, Any],
+    *,
+    primary_invoice: bool,
+    raised_rule_codes: Sequence[str],
+    raised_rule_keys: Sequence[str],
+    invoice_tax_total: float | None,
+) -> None:
+    prepared_input = invoice_preparation.get("preparedInput")
+    if not isinstance(prepared_input, dict):
+        return
+
+    # build_rule_input stores serviceData both at the root and under context;
+    # update both paths because queue/disk fixtures may have them as distinct
+    # dictionaries rather than shared references.
+    containers: list[dict[str, Any]] = [prepared_input]
+    context = prepared_input.get("context")
+    if isinstance(context, dict):
+        containers.append(context)
+    seen: set[int] = set()
+    for container in containers:
+        service_data = container.get("serviceData")
+        if not isinstance(service_data, dict) or id(service_data) in seen:
+            continue
+        seen.add(id(service_data))
+        travel_audit = service_data.get("travelAudit")
+        if not isinstance(travel_audit, dict):
+            continue
+        travel_audit["primaryInvoice"] = primary_invoice
+        travel_audit["raisedRuleCodes"] = list(dict.fromkeys(str(code) for code in raised_rule_codes))
+        travel_audit["raisedRuleKeys"] = list(dict.fromkeys(str(key) for key in raised_rule_keys))
+        if invoice_tax_total is not None:
+            tax_info = travel_audit.get("taxInfo")
+            tax_info = dict(tax_info) if isinstance(tax_info, Mapping) else {}
+            current_tax = tax_info.get("currentInvoiceDeductibleTax")
+            if current_tax is None:
+                current_tax = tax_info.get("invoiceDeductibleTax")
+            if current_tax is not None:
+                tax_info["currentInvoiceDeductibleTax"] = current_tax
+            tax_info["invoiceDeductibleTaxTotal"] = invoice_tax_total
+            travel_audit["taxInfo"] = tax_info
+            form_tax = _coerce_number(tax_info.get("formInputTax"))
+            states = dict(travel_audit.get("ruleStates") or {})
+            states["travel_tax_amount"] = (
+                "missing"
+                if form_tax is None
+                else "pass"
+                if abs(invoice_tax_total - form_tax) <= 0.01
+                else "warning"
+            )
+            travel_audit["ruleStates"] = states
+        service_data["travelAudit"] = travel_audit
+        container["serviceData"] = service_data
+
+
+def _update_receipt_travel_context(
+    prepared_receipt: Mapping[str, Any],
+    *,
+    raised_rule_codes: Sequence[str],
+    raised_rule_keys: Sequence[str],
+    invoice_tax_total: float | None,
+) -> None:
+    service_data = prepared_receipt.get("serviceData")
+    if not isinstance(service_data, dict):
+        return
+    travel_audit = service_data.get("travelAudit")
+    if not isinstance(travel_audit, dict):
+        return
+    travel_audit["raisedRuleCodes"] = list(dict.fromkeys(str(code) for code in raised_rule_codes))
+    travel_audit["raisedRuleKeys"] = list(dict.fromkeys(str(key) for key in raised_rule_keys))
+    if invoice_tax_total is not None:
+        tax_info = travel_audit.get("taxInfo")
+        tax_info = dict(tax_info) if isinstance(tax_info, Mapping) else {}
+        tax_info["invoiceDeductibleTaxTotal"] = invoice_tax_total
+        travel_audit["taxInfo"] = tax_info
+    service_data["travelAudit"] = travel_audit
+
+
+_TRAVEL_DOCUMENT_RULE_KEYS = frozenset(
+    {
+        "e38_city_transport_amount",
+        "e23_role_city_transport",
+        "e30_station_vehicle",
+        "e25_meal_meeting_subsidy",
+        "e31_subsidy_amount",
+        "self_driving_amount",
+        "e31_other_transport_amount",
+        "e31_train_amount",
+        "e31_vaccine_amount",
+        "e31_network_card_amount",
+        "e31_refund_change_amount",
+        "e31_baggage_amount",
+        "travel_tax_amount",
+    }
+)
+
+
+def _decision_output_rule_key(output_key: Any) -> str:
+    text = str(output_key or "").strip()
+    if text.startswith("travel_"):
+        text = text[len("travel_"):]
+    if text.endswith("_result"):
+        text = text[:-len("_result")]
+    return text
+
+
+def _extract_document_rule_context(
+    invoice_result: Mapping[str, Any],
+) -> tuple[list[str], list[str]]:
+    decision_output = invoice_result.get("decisionOutput")
+    if not isinstance(decision_output, Mapping):
+        return [], []
+    codes: list[str] = []
+    keys: list[str] = []
+    for output_key, value in decision_output.items():
+        if not isinstance(value, Mapping):
+            continue
+        code = value.get("reason_code") or value.get("reasonCode")
+        result = str(value.get("distinguish_result") or value.get("distinguishResult") or "").upper()
+        normalized_code = str(code or "").strip()
+        if not normalized_code or result in {"", "PASS"}:
+            continue
+        rule_key = _decision_output_rule_key(output_key)
+        if rule_key in _TRAVEL_DOCUMENT_RULE_KEYS:
+            keys.append(rule_key)
+            codes.append(normalized_code)
+        # Fake/legacy runtimes may omit the canonical node output key.  The
+        # tax rule has a unique document-level code, so retain code context;
+        # ambiguous E31/E32 must not be inferred without the rule key.
+        elif normalized_code == "TRAVEL-TAX-001":
+            keys.append("travel_tax_amount")
+            codes.append(normalized_code)
+    return list(dict.fromkeys(codes)), list(dict.fromkeys(keys))
+
+
+def _extract_document_rule_codes(invoice_result: Mapping[str, Any]) -> list[str]:
+    """Backward-compatible code-only view of document-level exceptions."""
+    return _extract_document_rule_context(invoice_result)[0]
 
 
 def _resolve_initial_apply_amount(prepared_receipt: Mapping[str, Any]) -> float | None:
