@@ -1940,7 +1940,7 @@
           {
             "id": "50871993-19cd-4009-ae64-68ad282cb902",
             "key": "isValidInvoiceAmount",
-            "value": "compliance_llm_status == \"success\" ? (compliance_llm_result.finalAmount != null ? \"true\" : \"false\") : \"error\""
+            "value": "compliance_llm_status == \"success\" ? ((compliance_llm_result.finalAmount != null and number(compliance_llm_result.finalAmount) == number(totalAmount ?? 0) and (compliance_llm_result.hitItems ?? \"\") == \"\") ? \"true\" : \"false\") : \"error\""
           }
         ],
         "passThrough": true,
