@@ -4,6 +4,8 @@ import json
 import unittest
 from pathlib import Path
 
+import zen
+
 from graph_runtime.core import load_decision
 
 
@@ -27,6 +29,16 @@ class TelecomE34InvoiceContentGraphTests(unittest.TestCase):
             rule
             for rule in cls.amount_node["content"]["rules"]
             if rule.get("f35ede49-0eae-4dda-b39e-11a11383697a") == '"REJECT"'
+        )
+        cls.postprocess_node = next(
+            node
+            for node in cls.graph["nodes"]
+            if node.get("name") == "发票内容检查后处理"
+        )
+        cls.is_valid_expression = next(
+            expression["value"]
+            for expression in cls.postprocess_node["content"]["expressions"]
+            if expression.get("key") == "isValidInvoiceAmount"
         )
 
     def test_graph_json_and_zen_decision_compile(self) -> None:
@@ -65,6 +77,36 @@ class TelecomE34InvoiceContentGraphTests(unittest.TestCase):
         self.assertIn("detailAmount", self.prompt_source)
         self.assertIn("逐项", self.prompt_source)
         self.assertIn("多个项目使用中文顿号", self.prompt_source)
+
+    def test_amount_gate_rejects_when_llm_reduced_invoice_amount(self) -> None:
+        expression = self.is_valid_expression
+        prohibited = {
+            "compliance_llm_status": "success",
+            "totalAmount": "298.10",
+            "compliance_llm_result": {
+                "finalAmount": 194.49,
+                "hitItems": "*生产生活服务*信息系统服务费、*通信终端设备*终端费",
+            },
+        }
+        self.assertEqual(zen.evaluate_expression(expression, prohibited), "false")
+
+        allowed = {
+            "compliance_llm_status": "success",
+            "totalAmount": "298.10",
+            "compliance_llm_result": {
+                "finalAmount": 298.10,
+                "hitItems": "",
+            },
+        }
+        self.assertEqual(zen.evaluate_expression(expression, allowed), "true")
+
+        # 旧版 LLM 没有 hitItems 时仍然不能因为 finalAmount 存在而放行。
+        legacy_reduced = {
+            "compliance_llm_status": "success",
+            "totalAmount": "298.10",
+            "compliance_llm_result": {"finalAmount": 194.49},
+        }
+        self.assertEqual(zen.evaluate_expression(expression, legacy_reduced), "false")
 
     def test_reject_message_uses_invoice_number_and_llm_hit_items(self) -> None:
         message_expression = self.reject_rule[
