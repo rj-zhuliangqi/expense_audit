@@ -75,7 +75,9 @@ _MAX_DIGEST_LINES = 30
 
 _logger = get_logger("overall_advice")
 
-ROOT = Path(__file__).resolve().parent.parent
+from expense_audit_orchestrator.paths import PROJECT_ROOT
+
+ROOT = PROJECT_ROOT
 
 
 def _load_project_env() -> None:

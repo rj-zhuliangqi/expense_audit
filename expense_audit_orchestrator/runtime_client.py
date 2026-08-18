@@ -7,8 +7,9 @@ from typing import Any, Protocol
 import httpx
 
 
-ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_GRAPH_PATH = ROOT / "graph-latest-0722-1100.json"
+from expense_audit_orchestrator.paths import DEFAULT_GRAPH_PATH, PROJECT_ROOT
+
+ROOT = PROJECT_ROOT
 DEFAULT_GRAPH_RUNTIME_URL = "http://127.0.0.1:8090"
 DEFAULT_GRAPH_RUNTIME_MAX_RETRIES = 2
 DEFAULT_GRAPH_RUNTIME_RETRY_BACKOFF_SECONDS = 0.5
