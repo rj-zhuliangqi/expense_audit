@@ -1029,14 +1029,24 @@ def build_entertainment_graph() -> dict:
     # 业务招待费禁止：增值税专用发票、增值税电子专用发票、电子发票（增值税专用发票）、海关专用缴款书
     for node in nodes:
         if node["id"] == "invoice_type_check":
-            rules = node["content"]["rules"]
-            # False 规则（不通过）的 message 和 suggestion
+            content = node["content"]
+            # 决策表输入必须接收预处理产生的布尔值，而不是原始票种编码。
+            for input_def in content.get("inputs", []):
+                if input_def.get("id") == INPUT_FIELD_ID:
+                    input_def["field"] = "isInvoicType"
+            rules = content["rules"]
+            # Zen 决策表布尔条件使用小写字面量；同时修正拒绝分支的表达式字符串。
             for rule in rules:
-                if rule.get(INPUT_FIELD_ID) == "False":
+                condition = rule.get(INPUT_FIELD_ID)
+                if condition in {"True", "true"}:
+                    rule[INPUT_FIELD_ID] = "true"
+                elif condition in {"False", "false"}:
+                    rule[INPUT_FIELD_ID] = "false"
                     rule["509fd9ba-3996-4e4a-9021-df6513ed6807"] = (
-                        '"票据\\""+(invoiceNo??"")+"\\",票据种类为\\""+(invoiceType??"")+\\"\\",'
-                        '不属于业务招待费报销允许的票种范围，不允许使用增值税专用发票、'
-                        '增值税电子专用发票、电子发票（增值税专用发票）、海关专用缴款书报销"'
+                        '"票据 发票号 " + (invoiceNo ?? "") + '
+                        '" 的票据类型为 “" + (invoiceType ?? "") + '
+                        '"”，不属于业务招待费报销允许的票种范围，不允许使用增值税专用发票、'
+                        '增值税电子专用发票、电子发票（增值税专用发票）、海关专用缴款书报销。"'
                     )
                     rule["a1b2c3d4-0000-0000-0000-regulation0"] = (
                         '"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范"'

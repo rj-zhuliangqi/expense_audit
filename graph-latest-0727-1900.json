@@ -33,7 +33,7 @@
           {
             "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
             "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "True",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E35\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
@@ -52,7 +52,7 @@
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
             "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "False",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E35\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
@@ -73,7 +73,7 @@
           {
             "id": "dea9a1bc-66ae-47b3-885f-9e9a1bb07571",
             "name": "票据类型",
-            "field": "invoiceType"
+            "field": "isInvoicType"
           }
         ],
         "outputs": [
