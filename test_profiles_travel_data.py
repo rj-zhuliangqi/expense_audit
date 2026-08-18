@@ -33,7 +33,7 @@ class TravelApiClientTests(unittest.TestCase):
         TravelApiClient(request_list=request).fetch_other_expenses("INS-1")
         self.assertEqual(calls, ["/api/audit-service/audit/travel-other-expenses/INS-1"])
 
-    def test_one_endpoint_failure_is_fail_open(self) -> None:
+    def test_one_endpoint_failure_requires_manual_review(self) -> None:
         def request(path, description, timeout):
             if path.endswith("/train-tickets/INS-1"):
                 raise RuntimeError("connection refused")
@@ -42,7 +42,8 @@ class TravelApiClientTests(unittest.TestCase):
         result = TravelApiClient(request_list=request).fetch_all("INS-1")
         self.assertEqual(result["trainTickets"], [])
         self.assertEqual(result["sourceStatus"]["trainTickets"]["status"], "NOT_READY")
-        self.assertIn("按通过处理", result["sourceStatus"]["trainTickets"]["message"])
+        self.assertIn("人工复核", result["sourceStatus"]["trainTickets"]["message"])
+        self.assertNotIn("按通过处理", result["sourceStatus"]["trainTickets"]["message"])
         self.assertEqual(result["journeys"], [{"id": "ok"}])
 
 

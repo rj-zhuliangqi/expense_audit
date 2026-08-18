@@ -61,7 +61,7 @@ class TravelGraphBuildTests(unittest.TestCase):
             self.assertIn(definition["name"], names)
         self.assertEqual(len(rows), len(build_travel_graph.RULE_DEFINITIONS))
 
-    def test_missing_travel_data_is_fail_open(self) -> None:
+    def test_missing_travel_data_requires_manual_review(self) -> None:
         decision = load_decision(GRAPH_PATH)
         result = evaluate_prepared_input(
             decision,
@@ -73,17 +73,17 @@ class TravelGraphBuildTests(unittest.TestCase):
             },
             trace=False,
         )
-        self.assertEqual(result["checkStatus"], "passed")
+        self.assertEqual(result["checkStatus"], "warning")
         travel_results = [
             value
             for value in result["decisionOutput"].values()
             if isinstance(value, dict) and str(value.get("reason_code", "")).startswith(("E", "W", "sys", "TRAVEL"))
         ]
         self.assertEqual(len(travel_results), 32)
-        self.assertTrue(all(value["distinguish_result"] == "PASS" for value in travel_results))
+        self.assertTrue(all(value["distinguish_result"] == "WARNING" for value in travel_results))
         self.assertTrue(any(
-            "待接入" in value.get("message", "")
-            or "待接入" in value.get("distinguish_content", "")
+            "人工复核" in value.get("message", "")
+            or "人工复核" in value.get("distinguish_content", "")
             for value in travel_results
         ))
 
@@ -139,7 +139,7 @@ class TravelGraphBuildTests(unittest.TestCase):
     def test_content_scene_warning_and_tax_warning(self) -> None:
         result = self._evaluate(
             {
-                "invoiceScene": "warning",
+                "ruleStates": {"w39_travel_scene": "warning"},
                 "taxInfo": {"invoiceDeductibleTax": 10, "formInputTax": 20},
             }
         )
@@ -246,12 +246,42 @@ class TravelGraphBuildTests(unittest.TestCase):
                 self.assertTrue(reachable(input_id, node["id"]), node["name"])
                 self.assertTrue(reachable(node["id"], output_id), node["name"])
 
-    def test_monthly_train_reject_and_primary_invoice_dedup(self) -> None:
+    def test_monthly_train_is_checked_for_each_invoice(self) -> None:
         result = self._evaluate({"selfBoughtMonthlyTrain": True})
         self.assertEqual(self._rule(result, "TRAVEL-TRAIN-001")["distinguish_result"], "REJECT")
 
-        deduped = self._evaluate({"selfBoughtMonthlyTrain": True, "primaryInvoice": False})
-        self.assertEqual(self._rule(deduped, "TRAVEL-TRAIN-001")["distinguish_result"], "PASS")
+        # Row 32 is explicitly a per-ticket rule in the CSV.  A non-primary
+        # invoice must not be suppressed by document-level dedup metadata.
+        still_checked = self._evaluate({
+            "selfBoughtMonthlyTrain": True,
+            "primaryInvoice": False,
+            "raisedRuleCodes": ["TRAVEL-TRAIN-001"],
+        })
+        self.assertEqual(self._rule(still_checked, "TRAVEL-TRAIN-001")["distinguish_result"], "REJECT")
+
+    def test_multi_invoice_tax_total_is_evaluated_by_the_graph(self) -> None:
+        passed = self._evaluate({
+            "primaryInvoice": True,
+            "taxInfo": {"invoiceDeductibleTaxTotal": 3, "formInputTax": 3},
+            "ruleStates": {"travel_tax_amount": "pass"},
+        })
+        self.assertEqual(self._rule(passed, "TRAVEL-TAX-001")["distinguish_result"], "PASS")
+
+        warning = self._evaluate({
+            "primaryInvoice": True,
+            "taxInfo": {"invoiceDeductibleTaxTotal": 3, "formInputTax": 4},
+            "ruleStates": {"travel_tax_amount": "warning"},
+        })
+        self.assertEqual(self._rule(warning, "TRAVEL-TAX-001")["distinguish_result"], "WARNING")
+
+        deduped = self._evaluate({
+            "primaryInvoice": False,
+            "raisedRuleCodes": ["TRAVEL-TAX-001"],
+            "raisedRuleKeys": ["travel_tax_amount"],
+            "taxInfo": {"invoiceDeductibleTaxTotal": 3, "formInputTax": 4},
+            "ruleStates": {"travel_tax_amount": "warning"},
+        })
+        self.assertEqual(self._rule(deduped, "TRAVEL-TAX-001")["distinguish_result"], "PASS")
 
 
 if __name__ == "__main__":

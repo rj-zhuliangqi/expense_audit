@@ -143,7 +143,11 @@ def _build_travel_profile(
         build_travel_receipt_enricher,
         travel_invoice_enricher,
     )
-    from .travel.writeback import travel_audit_travels_builder, travel_compliance_rule
+    from .travel.writeback import (
+        travel_audit_travels_builder,
+        travel_compliance_rule,
+        travel_form_invoice_tax_views_builder,
+    )
 
     return ExpenseProfile(
         name="travel",
@@ -154,6 +158,7 @@ def _build_travel_profile(
         invoice_enrichers={"travelAudit": travel_invoice_enricher},
         compliance_rule=travel_compliance_rule,
         audit_travels_builder=travel_audit_travels_builder,
+        form_invoice_tax_views_builder=travel_form_invoice_tax_views_builder,
         writeback_save_path=AUDIT_INFO_SAVE_PATH,
     )
 

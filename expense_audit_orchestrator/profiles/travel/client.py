@@ -105,13 +105,15 @@ class TravelApiClient:
     def fetch_all(self, instance_code: str) -> dict[str, Any]:
         """获取全部差旅数据，单个接口失败时只降级对应数据。"""
         result: dict[str, Any] = {key: [] for key in _ENDPOINTS}
-        source_status: dict[str, dict[str, str]] = {}
+        source_status: dict[str, dict[str, Any]] = {}
         for key in _ENDPOINTS:
             endpoint = f"{TRAVEL_API_PREFIX}/{_ENDPOINTS[key]}/{{instanceCode}}"
             try:
                 result[key] = self._request(key, instance_code)
                 source_status[key] = {
                     "status": "READY",
+                    "blocking": False,
+                    "severity": "INFO",
                     "endpoint": endpoint,
                     "message": "",
                 }
@@ -119,8 +121,10 @@ class TravelApiClient:
                 result[key] = []
                 source_status[key] = {
                     "status": "NOT_READY",
+                    "blocking": True,
+                    "severity": "WARNING",
                     "endpoint": endpoint,
-                    "message": f"接口调用失败，当前规则按通过处理：{exc}",
+                    "message": f"接口调用失败，无法完成对应稽核，需人工复核：{exc}",
                 }
                 _logger.warning(
                     "差旅接口调用失败，降级为空列表",

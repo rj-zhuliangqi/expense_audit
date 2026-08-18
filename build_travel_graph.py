@@ -2,9 +2,8 @@
 
 The graph is intentionally data-contract-first: common invoice checks remain
 compatible with the existing GoRules output shape, while travel-specific data
-is read from ``serviceData.travelAudit``.  Missing travel data is fail-open and
-is reported as a PASS with a pending-data note so the graph can be wired before
-all upstream interfaces are available.
+is read from ``serviceData.travelAudit``.  Missing travel data is reported as a
+WARNING requiring manual review; it must never be silently treated as PASS.
 
 Usage::
 
@@ -76,29 +75,29 @@ def _load_csv_rows() -> list[dict[str, str]]:
 # The CSV is the source of truth for display text and policy metadata.  The
 # key/behavior fields below are the executable graph mapping for each row.
 RULE_DEFINITIONS: list[dict[str, Any]] = [
-    {"row": 1, "key": "e38_city_transport_amount", "name": "市内交通费及场站用车金额检查", "codes": ["E38"], "mode": "reject", "formula": "e38"},
-    {"row": 2, "key": "e23_role_city_transport", "name": "特定岗位市内交通费检查", "codes": ["E23"], "mode": "reject", "formula": "e23"},
+    {"row": 1, "key": "e38_city_transport_amount", "name": "市内交通费及场站用车金额检查", "codes": ["E38"], "mode": "reject", "formula": "e38", "document_level": True},
+    {"row": 2, "key": "e23_role_city_transport", "name": "特定岗位市内交通费检查", "codes": ["E23"], "mode": "reject", "formula": "e23", "document_level": True},
     {"row": 3, "key": "e20_city_transport_date", "name": "市内交通票据日期检查", "codes": ["E20"], "mode": "reject"},
-    {"row": 4, "key": "e30_station_vehicle", "name": "场站用车报销标准检查", "codes": ["E30"], "mode": "reject", "formula": "e30"},
-    {"row": 5, "key": "e25_meal_meeting_subsidy", "name": "含餐会议公杂补贴检查", "codes": ["E25"], "mode": "reject", "formula": "e25"},
-    {"row": 6, "key": "e31_subsidy_amount", "name": "公杂补贴金额检查", "codes": ["E31"], "mode": "reject", "formula": "e31_subsidy"},
+    {"row": 4, "key": "e30_station_vehicle", "name": "场站用车报销标准检查", "codes": ["E30"], "mode": "reject", "formula": "e30", "document_level": True},
+    {"row": 5, "key": "e25_meal_meeting_subsidy", "name": "含餐会议公杂补贴检查", "codes": ["E25"], "mode": "reject", "formula": "e25", "document_level": True},
+    {"row": 6, "key": "e31_subsidy_amount", "name": "公杂补贴金额检查", "codes": ["E31"], "mode": "reject", "formula": "e31_subsidy", "document_level": True},
     {"row": 7, "key": "e20_self_driving_date", "name": "自驾车票据日期检查", "codes": ["E20"], "mode": "reject"},
-    {"row": 8, "key": "self_driving_amount", "name": "自驾车费用金额检查", "codes": ["E32", "E31"], "mode": "multi_reject", "formula": "self_driving_amount"},
+    {"row": 8, "key": "self_driving_amount", "name": "自驾车费用金额检查", "codes": ["E32", "E31"], "mode": "multi_reject", "formula": "self_driving_amount", "document_level": True},
     {"row": 9, "key": "e29_other_transport_passenger", "name": "轮船客车旅客姓名检查", "codes": ["E29"], "mode": "reject"},
     {"row": 10, "key": "e20_other_transport_date", "name": "轮船客车票据日期检查", "codes": ["E20"], "mode": "reject"},
-    {"row": 11, "key": "e31_other_transport_amount", "name": "轮船客车金额检查", "codes": ["E31"], "mode": "reject"},
+    {"row": 11, "key": "e31_other_transport_amount", "name": "轮船客车金额检查", "codes": ["E31"], "mode": "reject", "document_level": True},
     {"row": 12, "key": "e29_train_passenger", "name": "火车票旅客姓名检查", "codes": ["E29"], "mode": "reject"},
     {"row": 13, "key": "e20_train_date", "name": "火车票行程日期检查", "codes": ["E20"], "mode": "reject"},
     {"row": 14, "key": "e32_train_seat", "name": "火车票座位等级检查", "codes": ["E32"], "mode": "reject"},
-    {"row": 15, "key": "e31_train_amount", "name": "火车票金额检查", "codes": ["E31"], "mode": "reject"},
+    {"row": 15, "key": "e31_train_amount", "name": "火车票金额检查", "codes": ["E31"], "mode": "reject", "document_level": True},
     {"row": 16, "key": "e20_flight_date", "name": "机票行程日期检查", "codes": ["E20"], "mode": "reject"},
-    {"row": 17, "key": "e31_vaccine_amount", "name": "疫苗检查费金额检查", "codes": ["E31"], "mode": "reject"},
-    {"row": 18, "key": "e31_network_card_amount", "name": "网络电话卡费金额检查", "codes": ["E31"], "mode": "reject"},
-    {"row": 19, "key": "e31_refund_change_amount", "name": "退改签金额检查", "codes": ["E31"], "mode": "reject"},
+    {"row": 17, "key": "e31_vaccine_amount", "name": "疫苗检查费金额检查", "codes": ["E31"], "mode": "reject", "document_level": True},
+    {"row": 18, "key": "e31_network_card_amount", "name": "网络电话卡费金额检查", "codes": ["E31"], "mode": "reject", "document_level": True},
+    {"row": 19, "key": "e31_refund_change_amount", "name": "退改签金额检查", "codes": ["E31"], "mode": "reject", "document_level": True},
     {"row": 20, "key": "w37_baggage_airline", "name": "行李托运航司检查", "codes": ["W37"], "mode": "warning"},
     {"row": 21, "key": "w35_baggage_date", "name": "行李托运日期检查", "codes": ["W35"], "mode": "warning"},
     {"row": 22, "key": "w38_baggage_weight", "name": "行李托运重量检查", "codes": ["W38"], "mode": "warning"},
-    {"row": 23, "key": "e31_baggage_amount", "name": "行李托运费金额检查", "codes": ["E31"], "mode": "reject"},
+    {"row": 23, "key": "e31_baggage_amount", "name": "行李托运费金额检查", "codes": ["E31"], "mode": "reject", "document_level": True},
     {"row": 24, "key": "e17_recharge_card", "name": "差旅充值卡发票检查", "codes": ["E17"], "mode": "reject", "formula": "e17"},
     {"row": 25, "key": "sys001_authenticity", "name": "发票真伪检查", "codes": ["sys-001"], "mode": "reject", "formula": "sys001"},
     {"row": 26, "key": "e09_saler_blacklist", "name": "销方黑名单检查", "codes": ["E09"], "mode": "reject", "formula": "e09"},
@@ -106,14 +105,15 @@ RULE_DEFINITIONS: list[dict[str, Any]] = [
     {"row": 28, "key": "sys004_red_flush", "name": "发票红冲检查", "codes": ["sys-004"], "mode": "reject"},
     {"row": 29, "key": "e05_duplicate", "name": "发票重复使用检查", "codes": ["E05"], "mode": "reject", "formula": "e05"},
     {"row": 30, "key": "w39_travel_scene", "name": "差旅发票业务场景检查", "codes": ["W39"], "mode": "warning", "content_classifier": True},
-    {"row": 31, "key": "travel_tax_amount", "name": "发票可抵扣税额检查", "codes": ["TRAVEL-TAX-001"], "mode": "warning", "formula": "tax"},
+    {"row": 31, "key": "travel_tax_amount", "name": "发票可抵扣税额检查", "codes": ["TRAVEL-TAX-001"], "mode": "warning", "formula": "tax", "document_level": True},
     {"row": 32, "key": "travel_monthly_train", "name": "自行报销月结火车票检查", "codes": ["TRAVEL-TRAIN-001"], "mode": "reject", "formula": "monthly_train"},
 ]
 
 
 # These checks use the existing invoice-level inputs and must remain runnable
-# even before the travel-specific interface is connected.  The other rows are
-# intentionally gated by serviceData.travelAudit and fail open when it is absent.
+# even before the travel-specific interface is connected.  Travel-specific rows
+# are gated by serviceData.travelAudit; absent data produces WARNING/manual review,
+# never an automatic PASS.
 COMMON_RULE_KEYS = {
     "e17_recharge_card",
     "sys001_authenticity",
@@ -139,11 +139,16 @@ def _rule_state_expression(definition: dict[str, Any]) -> str:
         base = evaluated
     else:
         base = f'($.travelDataPresent ? {evaluated} : "missing")'
-    if "仅报错一次" in definition.get("audit_category", "") or definition["row"] in {1, 2, 4, 5, 6, 8, 11, 15, 17, 18, 19, 23, 31, 32}:
-        # The CSV marks these as document-level checks.  ``raisedRuleCodes``
-        # is optional and defaults to an empty list.  Dedup is only meaningful
-        # when the optional travel document-level metadata is available.
-        already = f'(serviceData.travelAudit != null and (serviceData.travelAudit.primaryInvoice == false or some((serviceData.travelAudit.raisedRuleCodes ?? []) as c, c == {_literal(code)})))'
+    if definition.get("document_level"):
+        # ``raisedRuleKeys`` prevents a same-code collision (E32 is both the
+        # self-driving amount rule and the per-ticket train-seat rule).  Keep
+        # the code fallback for the historical document-level E31/amount
+        # semantics and for callers that only provide raisedRuleCodes.
+        key_match = f'some((serviceData.travelAudit.raisedRuleKeys ?? []) as c, c == {_literal(key)})'
+        code_match = "false"
+        if code in {"E38", "E23", "E30", "E25", "E31", "TRAVEL-TAX-001"}:
+            code_match = f'some((serviceData.travelAudit.raisedRuleCodes ?? []) as c, c == {_literal(code)})'
+        already = f'(serviceData.travelAudit != null and (serviceData.travelAudit.primaryInvoice == false or {key_match} or {code_match}))'
         base = f'({already} ? "dedup" : ({base}))'
     return base
 
@@ -171,14 +176,14 @@ def _formula_expression(formula: str | None, key: str, code: str) -> str:
     if formula == "e05":
         return 'invoiceNo == null or serviceData.invoiceUsageHistory == null ? "missing" : (invoiceNo not in map(serviceData.invoiceUsageHistory as c, c.chequeNo) ? "pass" : "reject")'
     if formula == "tax":
-        return '(serviceData.travelAudit.taxInfo.invoiceDeductibleTax ?? "") == "" or (serviceData.travelAudit.taxInfo.formInputTax ?? "") == "" ? "missing" : (number(serviceData.travelAudit.taxInfo.invoiceDeductibleTax) == number(serviceData.travelAudit.taxInfo.formInputTax) ? "pass" : "warning")'
+        return '((serviceData.travelAudit.taxInfo.invoiceDeductibleTaxTotal ?? serviceData.travelAudit.taxInfo.invoiceDeductibleTax ?? "") == "" or (serviceData.travelAudit.taxInfo.formInputTax ?? "") == "") ? "missing" : (number(serviceData.travelAudit.taxInfo.invoiceDeductibleTaxTotal ?? serviceData.travelAudit.taxInfo.invoiceDeductibleTax) == number(serviceData.travelAudit.taxInfo.formInputTax) ? "pass" : "warning")'
     if formula == "monthly_train":
         return 'serviceData.travelAudit.selfBoughtMonthlyTrain == null ? "missing" : (serviceData.travelAudit.selfBoughtMonthlyTrain == true ? "reject" : "pass")'
     return '"missing"'
 
 
 def _pending_message(name: str) -> str:
-    return f"{name}所需差旅接口数据尚未接入，当前按通过处理。"
+    return f"{name}所需差旅接口数据缺失或未就绪，无法完成自动稽核，需人工复核。"
 
 
 def _rule_content(row: dict[str, str], definition: dict[str, Any]) -> str:
@@ -265,10 +270,10 @@ def _make_decision_node(
     rules: list[dict[str, str]] = []
 
     rules.append(_rule_row(
-        state="missing", code=definition["codes"][0], result="PASS",
+        state="missing", code=definition["codes"][0], result="WARNING",
         audit_content=audit_content, audit_type=audit_type,
         message=pending, policy=policy, suggestion="",
-        distinguish_content="差旅接口数据待接入，当前按通过处理",
+        distinguish_content="差旅接口数据缺失或未就绪，无法完成自动稽核，需人工复核",
     ))
     rules[-1][input_id] = _literal("missing")
     rules.append(_rule_row(
@@ -372,10 +377,10 @@ def _make_content_nodes() -> list[dict[str, Any]]:
         """export const handler = async (input) => ({\n  travelContentPrompt: '判断发票内容是否属于差旅费允许报销业务场景。',\n  travelContentText: String(input?.goodsName ?? '')\n});\n""",
         {"x": 650, "y": 3120},
     )
-    llm = _function_node(
+    classifier = _function_node(
         "travel_content_classification_llm",
-        "差旅业务场景分类调用占位",
-        """export const handler = async (input) => ({\n  // 接入 node_gateway 后替换为真实 AI 调用。\n  llm_status: 'not_configured',\n  llm_result: {},\n  travelContentText: input?.travelContentText || ''\n});\n""",
+        "差旅业务场景分类（确定性关键词/未知转人工）",
+        """export const handler = async (input) => {\n  const text = String(input?.travelContentText ?? '').replace(/[\\s\\u3000\\-_/·,.，。()（）]/g, '').toLowerCase();\n  if (!text) return { travelContentState: 'missing', travelContentClassification: 'missing' };\n  const forbidden = ['保险', '餐饮', '餐费', '签证', '快递'];\n  const allowed = ['机票', '航空', '飞机', '铁路', '火车', '高铁', '动车', '船票', '轮船', '大巴', '客车', '通行', '租赁', '乘车', '出租', '滴滴', '住宿', '房费', '酒店', '宾馆', '运输服务', '行李', '托运', '诊疗', '疫苗', '电信服务', '电话卡', '上网卡', '退票', '退改', '改期'];\n  if (forbidden.some((keyword) => text.includes(keyword))) return { travelContentState: 'warning', travelContentClassification: 'forbidden' };\n  if (allowed.some((keyword) => text.includes(keyword))) return { travelContentState: 'pass', travelContentClassification: 'allowed' };\n  return { travelContentState: 'warning', travelContentClassification: 'unknown' };\n};\n""",
         {"x": 920, "y": 3120},
     )
     postprocess = {
@@ -385,7 +390,7 @@ def _make_content_nodes() -> list[dict[str, Any]]:
             "expressions": [{
                 "id": _stable_id("expr:travelContentState"),
                 "key": "travelContentState",
-                "value": '(serviceData.travelAudit != null and serviceData.travelAudit.ruleStates.w39_travel_scene != null) ? serviceData.travelAudit.ruleStates.w39_travel_scene : ((serviceData.travelAudit != null and serviceData.travelAudit.invoiceScene != null) ? ((serviceData.travelAudit.invoiceScene == true or serviceData.travelAudit.invoiceScene == "pass") ? "pass" : "warning") : "missing")',
+                "value": '(serviceData.travelAudit != null and serviceData.travelAudit.ruleStates.w39_travel_scene != null) ? serviceData.travelAudit.ruleStates.w39_travel_scene : (travelContentState ?? "missing")',
             }],
             "passThrough": True,
             "inputField": None,
@@ -395,7 +400,7 @@ def _make_content_nodes() -> list[dict[str, Any]]:
         "name": "差旅业务场景分类后处理",
         "position": {"x": 1180, "y": 3120},
     }
-    return [prompt, llm, postprocess]
+    return [prompt, classifier, postprocess]
 
 
 def _make_content_decision_node(row: dict[str, str], definition: dict[str, Any]) -> dict[str, Any]:
