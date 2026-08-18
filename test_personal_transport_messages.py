@@ -7,6 +7,7 @@ from pathlib import Path
 
 from graph_runtime.application import evaluate_prepared_input
 from graph_runtime.core import load_decision
+from expense_audit_orchestrator.writeback import assemble_result_audit_info
 from expense_audit_orchestrator.profiles.personal_transport.data import (
     build_taxi_invoice_serial_enricher,
     is_taxi_invoice,
@@ -44,7 +45,7 @@ class PersonalTransportMessageTests(unittest.TestCase):
                     if value != '""':
                         self.assertIn("+", value, node["name"])
                         dynamic_count += 1
-        self.assertEqual(dynamic_count, 16)
+        self.assertEqual(dynamic_count, 17)
 
     def _base_input(self) -> dict:
         return {
@@ -447,6 +448,254 @@ class PersonalTransportMessageTests(unittest.TestCase):
         self.assertEqual(failed["historyNumbers"], [])
         self.assertFalse(failed["historyHit"])
         self.assertTrue(failed["lookupFailed"])
+
+    def _e39_rule(self, prepared: dict) -> dict:
+        result = evaluate_prepared_input(self.decision, prepared, trace=False)
+        return self._rule(result, "E39")
+
+    def test_e39_supported_invoice_types_use_configured_amount_field(self) -> None:
+        cases = [
+            ("15", "14", None, "taxAmount", "11"),
+            ("1", "12", None, "taxAmount", "12"),
+            ("26", "12", None, "taxAmount", "13"),
+            ("29", "24", None, "totalAmount", "14"),
+            ("28", "25", "1", "totalAmount", "15"),
+            ("4", None, None, "taxAmount", "16"),
+            ("2", None, None, "taxAmount", "17"),
+            ("27", None, None, "taxAmount", "18"),
+        ]
+        for invoice_type, special_mark, international_flag, compare_field, amount in cases:
+            with self.subTest(invoice_type=invoice_type):
+                prepared = self._base_input()
+                prepared.update(
+                    {
+                        "invoiceType": invoice_type,
+                        "specialTypeMark": special_mark,
+                        "effectiveTaxAmount": f"{amount}.00",
+                        "taxAmount": "999",
+                        "totalAmount": "999",
+                    }
+                )
+                if international_flag is not None:
+                    prepared["internationalFlag"] = international_flag
+                prepared[compare_field] = amount
+                rule = self._e39_rule(prepared)
+                self.assertEqual(rule["distinguish_result"], "PASS")
+                self.assertEqual(rule["reason_code"], "E39")
+                self.assertEqual(rule["audit_content"], "检查发票可抵扣税额与核销单发票进项税额是否一致")
+                self.assertEqual(rule["audit_type"], "general-rules")
+                self.assertEqual(rule["message"], "")
+                self.assertEqual(rule["problem_category"], "")
+                self.assertEqual(rule["optimization_action_category"], "")
+                self.assertEqual(rule["employeeSuggestionTips"], "")
+
+    def test_e39_code_conditions_use_numeric_semantics_for_string_and_number_values(self) -> None:
+        prepared = self._base_input()
+        prepared.update(
+            {
+                "invoiceType": 1,
+                "specialTypeMark": 12,
+                "taxAmount": "1.00",
+                "effectiveTaxAmount": "1",
+            }
+        )
+        self.assertEqual(self._e39_rule(prepared)["distinguish_result"], "PASS")
+
+        prepared.update(
+            {
+                "invoiceType": "28",
+                "specialTypeMark": 25,
+                "internationalFlag": 1,
+                "totalAmount": "2.00",
+                "effectiveTaxAmount": 2,
+            }
+        )
+        self.assertEqual(self._e39_rule(prepared)["distinguish_result"], "PASS")
+
+    def test_e39_supported_invoice_types_reject_amount_mismatch(self) -> None:
+        cases = [
+            ("15", "14", None, "taxAmount"),
+            ("1", "12", None, "taxAmount"),
+            ("26", "12", None, "taxAmount"),
+            ("29", "24", None, "totalAmount"),
+            ("28", "25", "1", "totalAmount"),
+            ("4", None, None, "taxAmount"),
+            ("2", None, None, "taxAmount"),
+            ("27", None, None, "taxAmount"),
+        ]
+        for invoice_type, special_mark, international_flag, compare_field in cases:
+            with self.subTest(invoice_type=invoice_type):
+                prepared = self._base_input()
+                prepared.update(
+                    {
+                        "invoiceType": invoice_type,
+                        "specialTypeMark": special_mark,
+                        "taxAmount": "10",
+                        "totalAmount": "10",
+                        "effectiveTaxAmount": "11.00",
+                    }
+                )
+                if international_flag is not None:
+                    prepared["internationalFlag"] = international_flag
+                prepared[compare_field] = "10"
+                rule = self._e39_rule(prepared)
+                self.assertEqual(rule["distinguish_result"], "REJECT")
+                self.assertEqual(
+                    rule["message"],
+                    "本次发票可抵扣税额合计为 10 元，与核销单发票进项税额 11.00 元不一致。",
+                )
+                self.assertEqual(rule["problem_category"], "税额不一致")
+                self.assertEqual(rule["optimization_action_category"], "【核对税额】")
+                self.assertEqual(
+                    rule["employeeSuggestionTips"],
+                    "请核对发票税额和表单税额是否录入正确；无法确认的，系统将标记高风险并转财务审核。",
+                )
+                self.assertEqual(rule["policiesIndex"], "无")
+
+    def test_e39_special_type_mismatch_uses_zero(self) -> None:
+        cases = [
+            ("15", "99", None, "taxAmount"),
+            ("1", "99", None, "taxAmount"),
+            ("26", "99", None, "taxAmount"),
+            ("29", "99", None, "totalAmount"),
+            ("28", "25", "0", "totalAmount"),
+        ]
+        for invoice_type, special_mark, international_flag, compare_field in cases:
+            with self.subTest(invoice_type=invoice_type, international_flag=international_flag):
+                prepared = self._base_input()
+                prepared.update(
+                    {
+                        "invoiceType": invoice_type,
+                        "specialTypeMark": special_mark,
+                        "taxAmount": "not-a-number",
+                        "totalAmount": "100",
+                        "effectiveTaxAmount": "0.00",
+                    }
+                )
+                if international_flag is not None:
+                    prepared["internationalFlag"] = international_flag
+                if compare_field == "taxAmount":
+                    prepared[compare_field] = "not-a-number"
+                self.assertEqual(self._e39_rule(prepared)["distinguish_result"], "PASS")
+
+                prepared["effectiveTaxAmount"] = "0.01"
+                rule = self._e39_rule(prepared)
+                self.assertEqual(rule["distinguish_result"], "REJECT")
+                self.assertIn("合计为 0 元", rule["message"])
+
+    def test_e39_air_ticket_requires_special_mark_and_international_flag(self) -> None:
+        for special_mark, international_flag in (("25", "1"), ("25", "0"), ("24", "1"), ("25", None)):
+            with self.subTest(special_mark=special_mark, international_flag=international_flag):
+                prepared = self._base_input()
+                prepared.update(
+                    {
+                        "invoiceType": "28",
+                        "specialTypeMark": special_mark,
+                        "totalAmount": "20",
+                        "taxAmount": "999",
+                        "effectiveTaxAmount": "20",
+                    }
+                )
+                if international_flag is not None:
+                    prepared["internationalFlag"] = international_flag
+                rule = self._e39_rule(prepared)
+                expected = "PASS" if (special_mark, international_flag) == ("25", "1") else "REJECT"
+                self.assertEqual(rule["distinguish_result"], expected)
+
+    def test_e39_non_applicable_invoice_passes_even_with_invalid_amounts(self) -> None:
+        prepared = self._base_input()
+        prepared.update(
+            {
+                "invoiceType": "3",
+                "specialTypeMark": "not-a-number",
+                "taxAmount": "not-a-number",
+                "totalAmount": "100",
+                "effectiveTaxAmount": "not-a-number",
+            }
+        )
+        rule = self._e39_rule(prepared)
+        self.assertEqual(rule["distinguish_result"], "PASS")
+        self.assertEqual(rule["message"], "")
+
+    def test_e39_ignores_amount_format_but_rejects_missing_empty_and_non_numeric_values(self) -> None:
+        formatted = self._base_input()
+        formatted.update(
+            {
+                "invoiceType": "1",
+                "specialTypeMark": "12",
+                "taxAmount": "1.00",
+                "effectiveTaxAmount": 1,
+            }
+        )
+        self.assertEqual(self._e39_rule(formatted)["distinguish_result"], "PASS")
+
+        invalid_cases = [
+            {"invoiceType": "1", "specialTypeMark": "12", "effectiveTaxAmount": "1"},
+            {"invoiceType": "1", "specialTypeMark": "12", "taxAmount": "", "effectiveTaxAmount": "1"},
+            {"invoiceType": "1", "specialTypeMark": "12", "taxAmount": "abc", "effectiveTaxAmount": "1"},
+            {"invoiceType": "1", "specialTypeMark": "12", "taxAmount": "1"},
+            {"invoiceType": "1", "specialTypeMark": "12", "taxAmount": "1", "effectiveTaxAmount": ""},
+            {"invoiceType": "1", "specialTypeMark": "12", "taxAmount": "1", "effectiveTaxAmount": "abc"},
+        ]
+        for changes in invalid_cases:
+            with self.subTest(changes=changes):
+                prepared = self._base_input()
+                prepared.update(changes)
+                self.assertEqual(self._e39_rule(prepared)["distinguish_result"], "REJECT")
+
+    def test_e39_is_written_back_once_per_invoice(self) -> None:
+        prepared_inputs = []
+        invoice_results = []
+        for invoice_key, invoice_type, tax_amount, effective_tax_amount in (
+            ("F-E39-001", "1", "1", "1"),
+            ("F-E39-002", "1", "2", "1"),
+        ):
+            prepared = self._base_input()
+            prepared.update(
+                {
+                    "invoiceType": invoice_type,
+                    "specialTypeMark": "12",
+                    "taxAmount": tax_amount,
+                    "effectiveTaxAmount": effective_tax_amount,
+                    "invoice_file_id": invoice_key,
+                    "invoice_info_id": f"I-{invoice_key}",
+                    "instance_code": "REC-E39-MULTI",
+                }
+            )
+            result = evaluate_prepared_input(self.decision, prepared, trace=False)
+            prepared_inputs.append({"invoiceKey": invoice_key, "preparedInput": prepared})
+            invoice_results.append(
+                {
+                    "invoiceKey": invoice_key,
+                    "preparedInput": prepared,
+                    "decisionOutput": result["decisionOutput"],
+                    "decisionStatus": result["checkStatus"],
+                }
+            )
+
+        payload = assemble_result_audit_info(
+            {
+                "receiptCode": "REC-E39-MULTI",
+                "serviceData": {"auditInfo": {"instanceCode": "REC-E39-MULTI"}},
+                "invoicePreparations": prepared_inputs,
+            },
+            {"receiptCode": "REC-E39-MULTI", "invoiceResults": invoice_results},
+            expense_profile="personal_transport",
+        )
+        e39_logs = [log for log in payload["auditLogs"] if log["reasonCode"] == "E39"]
+        self.assertEqual(len(e39_logs), 2)
+        self.assertEqual(
+            {(log["invoiceFileId"], log["distinguishResult"]) for log in e39_logs},
+            {("F-E39-001", "pass"), ("F-E39-002", "reject")},
+        )
+        self.assertEqual(
+            {log["problemTags"] for log in e39_logs if log["distinguishResult"] == "reject"},
+            {"税额不一致"},
+        )
+        self.assertEqual(
+            {log["suggestionTags"] for log in e39_logs if log["distinguishResult"] == "reject"},
+            {"【核对税额】"},
+        )
 
     def test_e34_uses_history_and_batch_flags_and_ignores_non_taxi(self) -> None:
         cases = [
