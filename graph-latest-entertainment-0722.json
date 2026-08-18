@@ -33,7 +33,7 @@
           {
             "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
             "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "True",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E35\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
@@ -52,7 +52,7 @@
           {
             "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
             "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "False",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E35\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
@@ -61,7 +61,7 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据\\\"\"+(invoiceNo??\"\")+\"\\\",票据种类为\\\"\"+(invoiceType??\"\")+\\\"\\\",不属于业务招待费报销允许的票种范围，不允许使用增值税专用发票、增值税电子专用发票、电子发票（增值税专用发票）、海关专用缴款书报销\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的票据类型为 “\" + (invoiceType ?? \"\") + \"”，不属于业务招待费报销允许的票种范围，不允许使用增值税专用发票、增值税电子专用发票、电子发票（增值税专用发票）、海关专用缴款书报销。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"【删除发票】删除本票据，重新上传业务招待费允许范围内的合规发票\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
@@ -73,7 +73,7 @@
           {
             "id": "dea9a1bc-66ae-47b3-885f-9e9a1bb07571",
             "name": "票据类型",
-            "field": "invoiceType"
+            "field": "isInvoicType"
           }
         ],
         "outputs": [
