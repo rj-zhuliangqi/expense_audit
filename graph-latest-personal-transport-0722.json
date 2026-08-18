@@ -167,7 +167,7 @@
           {
             "id": "c4dda58e-659f-4608-95bc-157b12d83206",
             "key": "isInvoicType",
-            "value": "(serviceData.personalTransportInvoiceTypeCode ?? \"\") in (serviceData.personalTransportAllowedInvoiceTypeCodes ?? [])"
+            "value": "(serviceData.personalTransportInvoiceType.personalTransportInvoiceTypeCode ?? \"\") in (serviceData.personalTransportInvoiceType.personalTransportAllowedInvoiceTypeCodes ?? [])"
           },
           {
             "id": "af675bce-5b08-46e4-b516-e39222576c0d",
@@ -212,7 +212,7 @@
           {
             "id": "7ea832d6-4806-4968-aeff-321e9b736c6d",
             "key": "isPassengerInvoiceType",
-            "value": "((invoiceType ?? \"\") in [\"26\", \"72\"]) or ((serviceData.personalTransportInvoiceTypeCode ?? \"\") in [\"26\", \"72\"])"
+            "value": "((invoiceType ?? \"\") in [\"26\", \"72\"]) or ((serviceData.personalTransportInvoiceType.personalTransportInvoiceTypeCode ?? \"\") in [\"26\", \"72\"])"
           },
           {
             "id": "personal-transport-passenger-content",

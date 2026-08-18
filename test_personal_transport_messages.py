@@ -77,6 +77,11 @@ class PersonalTransportMessageTests(unittest.TestCase):
             },
         }
 
+    def _apply_invoice_type_enricher(self, prepared: dict) -> None:
+        prepared["serviceData"]["personalTransportInvoiceType"] = personal_transport_invoice_type_enricher(
+            "REC-MESSAGE-001", "invoice.pdf", prepared, prepared["serviceData"]
+        )
+
     @staticmethod
     def _rule(result: dict, code: str) -> dict:
         for value in result["decisionOutput"].values():
@@ -222,11 +227,32 @@ class PersonalTransportMessageTests(unittest.TestCase):
                 },
             }
         )
-        prepared["serviceData"].update(
-            personal_transport_invoice_type_enricher(
-                "REC-MESSAGE-001", "invoice.pdf", prepared, prepared["serviceData"]
-            )
+        self._apply_invoice_type_enricher(prepared)
+
+        result = evaluate_prepared_input(self.decision, prepared, trace=False)
+        self.assertEqual(self._rule(result, "E35")["distinguish_result"], "PASS")
+
+    def test_invoice_type_26_passes_when_enricher_is_namespaced_like_production(self) -> None:
+        prepared = self._base_input()
+        prepared.update(
+            {
+                "invoiceNo": "461",
+                "invoiceType": "26",
+                "goodsName": "*交通运输服务*客运服务费",
+                "items": [],
+                "serviceData": {
+                    **prepared["serviceData"],
+                    "expenseInvoiceTypes": [
+                        {
+                            "manufacturerBillCode": "26",
+                            "invoiceType": "RJ-001",
+                            "manufacturerBillName": "数电普票",
+                        }
+                    ],
+                },
+            }
         )
+        self._apply_invoice_type_enricher(prepared)
 
         result = evaluate_prepared_input(self.decision, prepared, trace=False)
         self.assertEqual(self._rule(result, "E35")["distinguish_result"], "PASS")
@@ -252,11 +278,7 @@ class PersonalTransportMessageTests(unittest.TestCase):
                 },
             }
         )
-        prepared["serviceData"].update(
-            personal_transport_invoice_type_enricher(
-                "REC-MESSAGE-001", "invoice.pdf", prepared, prepared["serviceData"]
-            )
-        )
+        self._apply_invoice_type_enricher(prepared)
 
         result = evaluate_prepared_input(self.decision, prepared, trace=False)
         self.assertEqual(self._rule(result, "E35")["distinguish_result"], "REJECT")
@@ -311,11 +333,7 @@ class PersonalTransportMessageTests(unittest.TestCase):
             with self.subTest(label=label):
                 prepared = self._base_input()
                 prepared.update({"invoiceNo": str(offset), **update})
-                prepared["serviceData"].update(
-                    personal_transport_invoice_type_enricher(
-                        "REC-MESSAGE-001", "invoice.pdf", prepared, prepared["serviceData"]
-                    )
-                )
+                self._apply_invoice_type_enricher(prepared)
                 result = evaluate_prepared_input(self.decision, prepared, trace=False)
                 self.assertEqual(self._rule(result, "W29")["distinguish_result"], expected_w29)
                 self.assertEqual(self._rule(result, "E37")["distinguish_result"], expected_e37)
