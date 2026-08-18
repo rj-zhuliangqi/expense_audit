@@ -10,4 +10,4 @@ Run the unit suite via pytest or, as documented in readme.md, via unittest:
     .venv/bin/python -m unittest test_execute_graph.py test_main.py -v
 """
 
-collect_ignore = ["integration_test.py"]
+collect_ignore = ["integration_test.py", "apps/diagnostics/integration_test.py"]
