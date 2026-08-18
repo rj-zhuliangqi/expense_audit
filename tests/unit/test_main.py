@@ -10,8 +10,9 @@ from urllib.request import Request
 
 from fastapi.testclient import TestClient
 
-import main
+import apps.cli.main as main
 from expense_audit_orchestrator import bootstrap as orchestrator_bootstrap
+from expense_audit_orchestrator.paths import PROJECT_ROOT
 from expense_audit_orchestrator.application import ReceiptAuditService
 from expense_audit_orchestrator.bootstrap import create_receipt_audit_service as create_orchestrator_service
 from expense_audit_orchestrator.core import ReceiptDataPreparer as OrchestratorReceiptDataPreparer
@@ -2734,7 +2735,7 @@ class FormalServiceTests(unittest.TestCase):
                 captured["json"] = json
                 return FakeLlmResponse()
 
-        env_path = Path(__file__).resolve().with_name(".env")
+        env_path = PROJECT_ROOT / ".env"
         original_content = env_path.read_text(encoding="utf-8") if env_path.exists() else None
         env_path.write_text(
             "LLM_API_KEY=dotenv-key\n"
@@ -2988,7 +2989,7 @@ class KingdeeOCRProviderTests(unittest.TestCase):
     def test_create_kingdee_ocr_provider_from_env_loads_project_dotenv(self) -> None:
         from expense_audit_orchestrator.kingdee_ocr import create_kingdee_ocr_provider_from_env
 
-        env_path = Path(__file__).resolve().with_name(".env")
+        env_path = PROJECT_ROOT / ".env"
         original_content = env_path.read_text(encoding="utf-8") if env_path.exists() else None
         env_path.write_text(
             "KINGDEE_OCR_BASE_URL=https://dotenv-kingdee.example.com\n"

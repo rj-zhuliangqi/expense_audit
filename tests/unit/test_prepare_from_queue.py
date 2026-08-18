@@ -6,7 +6,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-import prepare_from_queue
+import apps.cli.prepare_from_queue as prepare_from_queue
 from expense_audit_orchestrator.profiles.telecom.writeback import telecom_compliance_rule
 from expense_audit_orchestrator.writeback import assemble_result_audit_info
 

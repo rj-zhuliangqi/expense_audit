@@ -4,7 +4,7 @@ from pathlib import Path
 
 import zen
 
-from build_entertainment_graph import (
+from apps.builders.entertainment_graph import (
     DST_GRAPH,
     ENTERTAINMENT_CONTENT_PROMPT_SOURCE,
     ENTERTAINMENT_PREPROCESS_EXPRESSIONS,

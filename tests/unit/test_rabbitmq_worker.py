@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 from unittest.mock import patch
 from urllib.error import URLError
 
-import rabbitmq_worker
+import apps.workers.rabbitmq_worker as rabbitmq_worker
 
 
 class FakeMethod:

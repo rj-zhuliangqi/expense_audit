@@ -7,7 +7,7 @@ from pathlib import Path
 from graph_runtime.application import evaluate_prepared_input
 from graph_runtime.core import load_decision
 
-ROOT = Path(__file__).resolve().parent
+from expense_audit_orchestrator.paths import PROJECT_ROOT as ROOT
 GRAPH_PATH = ROOT / "graph-latest-entertainment-0722.json"
 
 

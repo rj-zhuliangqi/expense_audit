@@ -15,10 +15,12 @@ import os
 import sys
 from pathlib import Path
 
+from expense_audit_orchestrator.paths import PROJECT_ROOT
+
 # 自动加载 .env（如果安装了 python-dotenv）
 try:
     from dotenv import load_dotenv
-    load_dotenv(Path(__file__).parent / ".env")
+    load_dotenv(PROJECT_ROOT / ".env")
 except ImportError:
     pass
 
@@ -28,7 +30,7 @@ except ImportError:
     print("❌  pika 未安装，请先: pip install pika")
     sys.exit(1)
 
-from rabbitmq_worker import RabbitMQSettings, resolve_amqp_url
+from apps.workers.rabbitmq_worker import RabbitMQSettings, resolve_amqp_url
 
 SETTINGS = RabbitMQSettings(amqp_url=resolve_amqp_url())
 AMQP_URL = SETTINGS.amqp_url

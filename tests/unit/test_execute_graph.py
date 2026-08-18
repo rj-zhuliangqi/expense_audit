@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
-import execute_graph
+import apps.cli.execute_graph as execute_graph
 
 
 class FakeEvaluationService:

@@ -7,7 +7,7 @@ from pathlib import Path
 import zen
 
 
-ROOT = Path(__file__).resolve().parent
+from expense_audit_orchestrator.paths import PROJECT_ROOT as ROOT
 GRAPH_PATH = ROOT / "graph-latest-0727-1900.json"
 INPUT_FIELD_ID = "dea9a1bc-66ae-47b3-885f-9e9a1bb07571"
 OUTPUT_RESULT_ID = "f35ede49-0eae-4dda-b39e-11a11383697a"

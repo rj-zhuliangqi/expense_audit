@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import httpx
 
+from expense_audit_orchestrator.paths import PROMPTS_ROOT
 from expense_audit_orchestrator.overall_advice import (
     LlmOverallAdviceProvider,
     NoopOverallAdviceProvider,
@@ -15,7 +16,7 @@ from expense_audit_orchestrator.overall_advice import (
     resolve_node_gateway_url,
 )
 
-PROMPT_DIR = Path(__file__).resolve().parent / "expense_audit_orchestrator" / "prompts"
+PROMPT_DIR = PROMPTS_ROOT
 
 
 def _make_provider(handler, *, model="gpt-4o-mini", prompt_dir=PROMPT_DIR, timeout=5.0):

@@ -3,12 +3,12 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from build_entertainment_graph import build_entertainment_graph
+from apps.builders.entertainment_graph import build_entertainment_graph
 from graph_runtime.application import evaluate_prepared_input
 from graph_runtime.core import load_decision
 
 
-ROOT = Path(__file__).resolve().parent
+from expense_audit_orchestrator.paths import PROJECT_ROOT as ROOT
 GRAPH_PATHS = (
     ROOT / "graph-latest-0727-1900.json",
     ROOT / "graph-latest-entertainment-0722.json",
