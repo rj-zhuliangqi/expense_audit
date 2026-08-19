@@ -240,9 +240,31 @@ class PersonalTransportMessageTests(unittest.TestCase):
         self.assertIn("同义词", sources["充值卡检查prompt"])
         self.assertIn("无法确定时返回 true", sources["充值卡检查prompt"])
         self.assertIn("严禁因为没有发票内容而拒绝", sources["发票合规prompt"])
+
+        # E36 的交通费允许清单必须覆盖最新的经营租赁/共享出行场景，
+        # 避免模型将共享单车发票误判为普通非交通租赁服务。
+        for fragment in (
+            "代驾", "停车", "电费", "供电", "充电", "客运", "车位管理费",
+            "通行费", "代订车", "信息系统增值服务", "车辆停放", "运输服务",
+            "停车占道费", "*经营租赁*租赁服务", "共享单车", "共享电单车", "扫码骑行"
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, sources["发票合规prompt"])
         self.assertIn("skipLlm", sources["充值卡检查prompt"])
         self.assertIn("skipLlm", sources["发票合规prompt"])
         self.assertIn("直接返回，不调用远端 LLM", sources["调用llm"])
+
+        e36_node = next(
+            node for node in self.graph["nodes"] if node.get("id") == "travel_e36_content_project_check"
+        )
+        e36_reject = next(
+            rule for rule in e36_node["content"]["rules"]
+            if rule.get("f35ede49-0eae-4dda-b39e-11a11383697a") == '"REJECT"'
+        )
+        e36_message = e36_reject[MESSAGE_FIELD_ID]
+        for fragment in ("*经营租赁*租赁服务", "共享单车", "共享电单车", "停车占道费"):
+            with self.subTest(message_fragment=fragment):
+                self.assertIn(fragment, e36_message)
 
         # LLM 只负责返回 passed；E17/E36 决策表还需要原始发票号、内容和主键。
         for node in self.graph["nodes"]:
