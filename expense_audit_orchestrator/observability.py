@@ -23,7 +23,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parent.parent
+from expense_audit_orchestrator.paths import PROJECT_ROOT
+
+ROOT = PROJECT_ROOT
 DEFAULT_LOG_DIR = ROOT / "output" / "logs"
 
 # 会被 logger.info(..., extra={...}) 设置到 LogRecord 上的关联字段。

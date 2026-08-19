@@ -16,8 +16,8 @@ from expense_audit_orchestrator.profiles.personal_transport.data import (
 )
 
 
-ROOT = Path(__file__).resolve().parent
-GRAPH_PATH = ROOT / "graph-latest-personal-transport-0722.json"
+from expense_audit_orchestrator.paths import OFFICIAL_GRAPH_PATHS
+GRAPH_PATH = OFFICIAL_GRAPH_PATHS["personal_transport"]
 MESSAGE_FIELD_ID = "509fd9ba-3996-4e4a-9021-df6513ed6807"
 
 

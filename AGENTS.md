@@ -4,12 +4,12 @@
 
 ## 流程图版本管理
 
-以下正式流程图是源代码的一部分，**必须纳入 Git 版本跟踪，不得通过 `.gitignore` 忽略**：
+以下正式流程图是源代码的一部分，统一存放在 `resources/graphs/`，**必须纳入 Git 版本跟踪，不得通过 `.gitignore` 忽略**：
 
-- `graph-latest-0727-1900.json`
-- `graph-latest-entertainment-0722.json`
-- `graph-latest-personal-transport-0722.json`
-- `graph-latest-travel-0807.json`
+- `resources/graphs/graph-latest-0727-1900.json`
+- `resources/graphs/graph-latest-entertainment-0722.json`
+- `resources/graphs/graph-latest-personal-transport-0722.json`
+- `resources/graphs/graph-latest-travel-0807.json`
 
 其他临时导出、编辑器快照或本地实验图可以忽略，但不能借此忽略上面列出的正式流程图。
 

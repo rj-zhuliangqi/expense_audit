@@ -33,7 +33,7 @@ prepare_invoice_input 做单张发票输入构造。
 不要把 runtime 循环或入库逻辑下沉到这里。
 先串行执行，但预留执行策略抽象。第一版为了正确性和可观测性，建议串行；
 但在应用层把“单张发票执行”包成可替换策略，后面再平滑切到并发。
-用现有测试收紧行为边界。重点补 test_main.py、test_rabbitmq_worker.py、test_prepare_from_queue.py：
+用现有测试收紧行为边界。重点补 tests/unit/test_main.py、tests/unit/test_rabbitmq_worker.py、tests/unit/test_prepare_from_queue.py：
 混合成功/警告/失败的多发票场景；
 单张发票异常但整单继续；
 每张结果的 sink 回调顺序；

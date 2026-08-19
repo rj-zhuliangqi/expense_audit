@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 from unittest.mock import patch
 from urllib.error import URLError
 
-import rabbitmq_worker
+import apps.workers.rabbitmq_worker as rabbitmq_worker
 
 
 class FakeMethod:
@@ -180,7 +180,7 @@ class RabbitMQWorkerTests(unittest.TestCase):
 
         self.assertEqual(resolved, "https://service-uate-gw.ruijie.com.cn")
 
-    @patch("rabbitmq_worker.create_worker")
+    @patch("apps.workers.rabbitmq_worker.create_worker")
     def test_main_cli_requires_explicit_real_audit_service_url(self, mock_create_worker: MagicMock) -> None:
         with patch.dict("os.environ", {"RABBITMQ_URL": "amqp://guest:guest@example:5672/%2F"}, clear=True):
             with self.assertRaises(ValueError) as context:
@@ -189,7 +189,7 @@ class RabbitMQWorkerTests(unittest.TestCase):
         self.assertIn("不允许使用本地 mock", str(context.exception))
         mock_create_worker.assert_not_called()
 
-    @patch("rabbitmq_worker.create_worker")
+    @patch("apps.workers.rabbitmq_worker.create_worker")
     def test_main_cli_can_bypass_task_gate(self, mock_create_worker: MagicMock) -> None:
         fake_worker = MagicMock()
         mock_create_worker.return_value = fake_worker
@@ -209,7 +209,7 @@ class RabbitMQWorkerTests(unittest.TestCase):
         self.assertTrue(mock_create_worker.call_args.kwargs["bypass_task_gate"])
         fake_worker.run_forever.assert_called_once_with()
 
-    @patch("rabbitmq_worker.create_receipt_audit_service")
+    @patch("apps.workers.rabbitmq_worker.create_receipt_audit_service")
     def test_create_worker_enables_writeback_in_main_chain(self, mock_create_service) -> None:
         service = FakeTwoStageReceiptService()
         mock_create_service.return_value = service
@@ -766,7 +766,7 @@ class UnknownExpenseTypeRoutingTests(unittest.TestCase):
         self.assertEqual(called_kwargs["new_status"], 2)
         self.assertEqual(called_kwargs["system_identifier"], 4)
 
-    @patch("rabbitmq_worker.create_worker")
+    @patch("apps.workers.rabbitmq_worker.create_worker")
     def test_main_cli_enables_dynamic_routing_with_ei_code_map_path(self, mock_create_worker: MagicMock) -> None:
         import json
         import tempfile
@@ -800,7 +800,7 @@ class UnknownExpenseTypeRoutingTests(unittest.TestCase):
         self.assertIsNotNone(mock_create_worker.call_args.kwargs["profile_resolver"])
         fake_worker.run_forever.assert_called_once_with()
 
-    @patch("rabbitmq_worker.create_worker")
+    @patch("apps.workers.rabbitmq_worker.create_worker")
     def test_main_cli_rejects_ei_code_map_path_with_profile(self, mock_create_worker: MagicMock) -> None:
         import json
         import tempfile

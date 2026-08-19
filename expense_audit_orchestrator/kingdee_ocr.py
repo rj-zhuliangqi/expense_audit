@@ -11,7 +11,7 @@ import httpx
 from dotenv import load_dotenv
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+from expense_audit_orchestrator.paths import PROJECT_ROOT
 DEFAULT_KINGDEE_OCR_USER_TYPE = "UserName"
 DEFAULT_KINGDEE_OCR_LANGUAGE = "zh-CN"
 DEFAULT_KINGDEE_OCR_BILL_TYPE = "er_dailyreimbursebill"

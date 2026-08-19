@@ -4,13 +4,13 @@ import json
 import unittest
 from pathlib import Path
 
-import build_travel_graph
+import apps.builders.travel_graph as build_travel_graph
 from graph_runtime.application import evaluate_prepared_input
 from graph_runtime.core import load_decision
 
 
-ROOT = Path(__file__).resolve().parent
-GRAPH_PATH = ROOT / "graph-latest-travel-0807.json"
+from expense_audit_orchestrator.paths import OFFICIAL_GRAPH_PATHS
+GRAPH_PATH = OFFICIAL_GRAPH_PATHS["travel"]
 
 
 class TravelGraphBuildTests(unittest.TestCase):
@@ -18,7 +18,7 @@ class TravelGraphBuildTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         # Keep the checked-in artifact and the generator synchronized for local
         # and CI runs, without changing any data-preparation code.
-        build_travel_graph.main()
+        build_travel_graph.main([])
         cls.graph = json.loads(GRAPH_PATH.read_text(encoding="utf-8"))
 
     def test_graph_shape_and_standard_outputs(self) -> None:

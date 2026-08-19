@@ -15,8 +15,9 @@ from expense_audit_orchestrator import audit_client
 from expense_audit_orchestrator.observability import get_logger
 
 
-ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_OCR_PATH = ROOT / "input.json"
+from expense_audit_orchestrator.paths import DEFAULT_OCR_PATH, PROJECT_ROOT
+
+ROOT = PROJECT_ROOT
 
 _logger = get_logger("data_prep")
 

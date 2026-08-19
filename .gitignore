@@ -21,26 +21,31 @@ expense_audit_orchestrator/CLAUDE.md
 output/
 prepared-input.json
 
-# Scrap / scratch graph snapshots (editor dumps). Only the pinned
-# DEFAULT_GRAPH_PATH graph is tracked; the rest are local experiments.
+# Scrap / scratch graph snapshots (editor dumps). Official graphs under
+# resources/graphs/ are source artifacts and must be versioned.
 graph-latest-* copy.json
 graph-latest-*-*.json
-!graph-latest-0722-1100.json
-# Official expense-audit graphs are source artifacts and must be versioned.
-!graph-latest-0727-1900.json
-!graph-latest-entertainment-0722.json
-!graph-latest-personal-transport-0722.json
-!graph-latest-travel-0807.json
+!resources/graphs/
+!resources/graphs/graph-latest-0727-1900.json
+!resources/graphs/graph-latest-entertainment-0722.json
+!resources/graphs/graph-latest-personal-transport-0722.json
+!resources/graphs/graph-latest-travel-0807.json
 
 # Local requirement spec sheets (not source code)
 *.csv
-!operator_city.csv
+!resources/reference/*.csv
 
 # Empty scaffolding (auto-generated stubs only, no real code)
 gorules/
 
-# Local deploy drafts/outputs are not part of source control
-deploy/
+# Versioned deployment templates and installer; rendered units stay local.
+deploy/*
+!deploy/README.md
+!deploy/install.sh
+!deploy/start_all_services.sh
+!deploy/templates/
+!deploy/templates/*.service
+deploy/systemd-units/
 
 # OS
 .DS_Store

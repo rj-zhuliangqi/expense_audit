@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
-import execute_graph
+import apps.cli.execute_graph as execute_graph
 
 
 class FakeEvaluationService:
@@ -51,7 +51,7 @@ class FakeGraphRuntimeClient:
 
 
 class ExecuteGraphCliTests(unittest.TestCase):
-    @patch("execute_graph.create_receipt_audit_service")
+    @patch("apps.cli.execute_graph.create_receipt_audit_service")
     def test_main_cli_runs_selected_graph_and_exports_prepared_input(self, mock_create_service) -> None:
         prepared_input = {
             "receipt": {
@@ -117,7 +117,7 @@ class ExecuteGraphCliTests(unittest.TestCase):
             execute_graph.DEFAULT_AUDIT_SERVICE_URL,
         )
 
-    @patch("execute_graph.create_receipt_audit_service")
+    @patch("apps.cli.execute_graph.create_receipt_audit_service")
     def test_main_cli_can_export_prepared_input_without_runtime_execution(self, mock_create_service) -> None:
         prepared_input = {
             "receipt": {
@@ -163,9 +163,9 @@ class ExecuteGraphCliTests(unittest.TestCase):
         self.assertEqual(Path(fake_service.prepare_calls[0][1]), execute_graph.DEFAULT_OCR_PATH)
         self.assertEqual(fake_service.calls, [])
 
-    @patch("execute_graph.ensure_audit_service_url")
-    @patch("execute_graph.create_receipt_audit_service")
-    @patch("execute_graph.create_graph_runtime_client")
+    @patch("apps.cli.execute_graph.ensure_audit_service_url")
+    @patch("apps.cli.execute_graph.create_receipt_audit_service")
+    @patch("apps.cli.execute_graph.create_graph_runtime_client")
     def test_main_cli_can_execute_graph_from_prepared_input_json(
         self,
         mock_create_graph_runtime_client,
@@ -220,9 +220,9 @@ class ExecuteGraphCliTests(unittest.TestCase):
         mock_create_service.assert_not_called()
         mock_ensure_audit_service.assert_not_called()
 
-    @patch("execute_graph.ensure_audit_service_url")
-    @patch("execute_graph.create_receipt_audit_service")
-    @patch("execute_graph.create_graph_runtime_client")
+    @patch("apps.cli.execute_graph.ensure_audit_service_url")
+    @patch("apps.cli.execute_graph.create_receipt_audit_service")
+    @patch("apps.cli.execute_graph.create_graph_runtime_client")
     def test_main_cli_can_execute_graph_from_wrapped_prepared_receipt_json(
         self,
         mock_create_graph_runtime_client,

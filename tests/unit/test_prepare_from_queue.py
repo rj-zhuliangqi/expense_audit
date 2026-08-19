@@ -6,7 +6,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-import prepare_from_queue
+import apps.cli.prepare_from_queue as prepare_from_queue
 from expense_audit_orchestrator.profiles.telecom.writeback import telecom_compliance_rule
 from expense_audit_orchestrator.writeback import assemble_result_audit_info
 
@@ -72,8 +72,8 @@ class FakeFullProcessService(FakePrepareService):
 
 
 class PrepareFromQueueCliTests(unittest.TestCase):
-    @patch("prepare_from_queue.create_receipt_audit_service")
-    @patch("prepare_from_queue.create_blocking_connection")
+    @patch("apps.cli.prepare_from_queue.create_receipt_audit_service")
+    @patch("apps.cli.prepare_from_queue.create_blocking_connection")
     def test_main_cli_consumes_one_message_and_requeues_by_default(
         self,
         mock_create_blocking_connection,
@@ -117,8 +117,8 @@ class PrepareFromQueueCliTests(unittest.TestCase):
         self.assertEqual(channel.nacked_tags, [(7, True)])
         self.assertTrue(connection.closed)
 
-    @patch("prepare_from_queue.create_receipt_audit_service")
-    @patch("prepare_from_queue.create_blocking_connection")
+    @patch("apps.cli.prepare_from_queue.create_receipt_audit_service")
+    @patch("apps.cli.prepare_from_queue.create_blocking_connection")
     def test_main_cli_acks_message_when_requested(
         self,
         mock_create_blocking_connection,
@@ -149,8 +149,8 @@ class PrepareFromQueueCliTests(unittest.TestCase):
         self.assertEqual(channel.acked_tags, [9])
         self.assertEqual(channel.nacked_tags, [])
 
-    @patch("prepare_from_queue.create_receipt_audit_service")
-    @patch("prepare_from_queue.create_blocking_connection")
+    @patch("apps.cli.prepare_from_queue.create_receipt_audit_service")
+    @patch("apps.cli.prepare_from_queue.create_blocking_connection")
     def test_main_cli_can_print_receipt_code_only_without_preparing(
         self,
         mock_create_blocking_connection,
@@ -176,8 +176,8 @@ class PrepareFromQueueCliTests(unittest.TestCase):
         self.assertEqual(channel.nacked_tags, [(13, True)])
         mock_create_service.assert_not_called()
 
-    @patch("prepare_from_queue.create_receipt_audit_service")
-    @patch("prepare_from_queue.create_blocking_connection")
+    @patch("apps.cli.prepare_from_queue.create_receipt_audit_service")
+    @patch("apps.cli.prepare_from_queue.create_blocking_connection")
     def test_main_cli_can_export_writeback_payload_without_real_callback(
         self,
         mock_create_blocking_connection,

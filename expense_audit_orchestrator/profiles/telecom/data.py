@@ -6,10 +6,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from ...core import ROOT
-
-
-DEFAULT_OPERATOR_CITY_CSV_PATH = ROOT / "operator_city.csv"
+from ...paths import DEFAULT_OPERATOR_CITY_CSV_PATH
 
 
 def resolve_telecom_csv_path(asset_dir: Path | str | None = None) -> Path:

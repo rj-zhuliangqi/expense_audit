@@ -1,0 +1,18 @@
+[Unit]
+Description=Expense Audit - Graph Runtime Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{DEPLOY_USER}}
+WorkingDirectory={{DEPLOY_DIR}}
+Environment=GRAPH_RUNTIME_HOST=127.0.0.1
+Environment=GRAPH_RUNTIME_PORT=8090
+EnvironmentFile={{DEPLOY_DIR}}/.env
+ExecStart={{DEPLOY_DIR}}/.venv/bin/python -m uvicorn graph_runtime.api:create_app --factory --host ${GRAPH_RUNTIME_HOST} --port ${GRAPH_RUNTIME_PORT}
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

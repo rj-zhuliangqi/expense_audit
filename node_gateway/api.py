@@ -11,7 +11,7 @@ from fastapi import FastAPI, Request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+from expense_audit_orchestrator.paths import PROJECT_ROOT
 NODE_GATEWAY_LLM_EVALUATE_PATH = "/api/v1/node-gateway/llm/evaluate"
 
 

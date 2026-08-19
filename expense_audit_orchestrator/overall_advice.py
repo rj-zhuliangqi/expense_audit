@@ -24,6 +24,7 @@ import httpx
 from dotenv import load_dotenv
 
 from .observability import get_logger, new_run_id, run_context
+from .paths import PROMPTS_ROOT
 from .writeback import _extract_rule_results, _normalize_rule_distinguish_result
 
 
@@ -32,7 +33,7 @@ from .writeback import _extract_rule_results, _normalize_rule_distinguish_result
 DEFAULT_OVERALL_ADVICE_TIMEOUT = 30.0
 DEFAULT_OVERALL_ADVICE_MAX_RETRIES = 2
 DEFAULT_OVERALL_ADVICE_RETRY_BACKOFF_SECONDS = 0.5
-DEFAULT_PROMPT_DIR: Path = Path(__file__).resolve().parent / "prompts"
+DEFAULT_PROMPT_DIR: Path = PROMPTS_ROOT
 SYSTEM_PROMPT_FILENAME = "receipt_overall_advice.system.md"
 USER_PROMPT_FILENAME = "receipt_overall_advice.user.md"
 NODE_GATEWAY_LLM_EVALUATE_PATH = "/api/v1/node-gateway/llm/evaluate"
@@ -75,7 +76,9 @@ _MAX_DIGEST_LINES = 30
 
 _logger = get_logger("overall_advice")
 
-ROOT = Path(__file__).resolve().parent.parent
+from expense_audit_orchestrator.paths import PROJECT_ROOT
+
+ROOT = PROJECT_ROOT
 
 
 def _load_project_env() -> None:

@@ -4,6 +4,8 @@ from typing import Any, Protocol
 
 import httpx
 
+from expense_audit_orchestrator.paths import resolve_project_path
+
 from .application import evaluate_prepared_input
 from .core import DEFAULT_GRAPH_PATH, load_decision, load_decision_from_content
 
@@ -33,7 +35,12 @@ def _normalize_graph_source(
     if graph_path is None and graph_content is None:
         return DEFAULT_GRAPH_PATH, None
 
-    return graph_path, graph_content
+    resolved_path = (
+        resolve_project_path(graph_path, DEFAULT_GRAPH_PATH)
+        if graph_path is not None
+        else None
+    )
+    return resolved_path, graph_content
 
 
 class LocalGraphRuntimeClient:
