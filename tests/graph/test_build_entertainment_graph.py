@@ -18,6 +18,7 @@ from apps.builders.entertainment_graph import (
     build_entertainment_graph,
 )
 from expense_audit_orchestrator.core import ReceiptDataPreparer, _lookup_enterprise_info
+from expense_audit_orchestrator.paths import OFFICIAL_GRAPH_PATHS
 
 
 def _is_recently_registered_expression() -> str:
@@ -66,6 +67,31 @@ def _is_gift_count_reasonable_expression() -> str:
         for expression in ENTERTAINMENT_PREPROCESS_EXPRESSIONS
         if expression["key"] == "isGiftCountReasonable"
     )
+
+
+class EntertainmentContentGraphWiringTests(unittest.TestCase):
+    def test_content_decision_tables_wait_for_llm_postprocess(self) -> None:
+        request_id = "9948bfb0-d9fb-416d-b9a2-b22a875094f0"
+        postprocess_id = "ent-content-compliance-postprocess"
+
+        # Check both the generated graph and the checked-in runtime graph. The
+        # latter is what production loads, so keeping only the builder test
+        # would allow the two graph artifacts to drift apart.
+        graphs = [
+            build_entertainment_graph(),
+            json.loads(
+                OFFICIAL_GRAPH_PATHS["entertainment"].read_text(encoding="utf-8")
+            ),
+        ]
+        for graph in graphs:
+            edges = {(edge["sourceId"], edge["targetId"]) for edge in graph["edges"]}
+
+            # The request edge is intentionally kept only for the pass-through
+            # postprocess node, which supplies invoice context to the decision tables.
+            self.assertIn((request_id, postprocess_id), edges)
+            for check_id in ("ent-content-compliance-check", "ent-recharge-card-check"):
+                self.assertIn((postprocess_id, check_id), edges)
+                self.assertNotIn((request_id, check_id), edges)
 
 
 class CompanyHeaderExpressionTests(unittest.TestCase):

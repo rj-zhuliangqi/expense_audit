@@ -2423,12 +2423,6 @@
       "type": "edge"
     },
     {
-      "id": "332ee18a-99e4-4efa-ba6e-6fd2103829a8",
-      "sourceId": "9948bfb0-d9fb-416d-b9a2-b22a875094f0",
-      "targetId": "ent-content-compliance-check",
-      "type": "edge"
-    },
-    {
       "id": "c9fd6e44-9787-4511-81b0-6859e8d4dc9c",
       "sourceId": "ent-content-compliance-check",
       "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
@@ -2437,12 +2431,6 @@
     {
       "id": "f9ad7433-2ba3-4543-9793-c23ccb1d9f85",
       "sourceId": "ent-content-compliance-postprocess",
-      "targetId": "ent-recharge-card-check",
-      "type": "edge"
-    },
-    {
-      "id": "50a5f9ae-63f1-42b6-a421-9d18b8d73d12",
-      "sourceId": "9948bfb0-d9fb-416d-b9a2-b22a875094f0",
       "targetId": "ent-recharge-card-check",
       "type": "edge"
     },

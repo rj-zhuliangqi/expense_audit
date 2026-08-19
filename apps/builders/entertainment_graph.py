@@ -1166,14 +1166,14 @@ def build_entertainment_graph(source_path: Path | str | None = None) -> dict:
     new_edges.append(_edge(REQUEST_ID, CONTENT_PROMPT))
     new_edges.append(_edge(CONTENT_PROMPT, CONTENT_LLM))
     new_edges.append(_edge(CONTENT_LLM, CONTENT_POSTPROCESS))
-    # request 也需要连到后处理（提供原始数据如 invoiceNo, goodsName）
+    # request 也需要连到后处理（提供原始数据如 invoiceNo, goodsName）。
+    # 两个决策表只能从后处理节点取 contentCheckResult；不能再直接从 request
+    # 触发，否则 GoRules 会在 LLM 返回前先执行一次空输入，随后不再重跑，
+    # 最终表现为 E36/E17 缺失或错误地回写 PASS。
     new_edges.append(_edge(REQUEST_ID, CONTENT_POSTPROCESS))
     new_edges.append(_edge(CONTENT_POSTPROCESS, CONTENT_CHECK))
-    # 决策表直接读取 request 中的数据准备结果 goodsName。
-    new_edges.append(_edge(REQUEST_ID, CONTENT_CHECK))
     new_edges.append(_edge(CONTENT_CHECK, RESPONSE_ID))
     new_edges.append(_edge(CONTENT_POSTPROCESS, RECHARGE_CARD_CHECK))
-    new_edges.append(_edge(REQUEST_ID, RECHARGE_CARD_CHECK))
     new_edges.append(_edge(RECHARGE_CARD_CHECK, RESPONSE_ID))
 
     # 分支4: request → 虚开发票预警预处理 → 地址检查prompt → 调用llm → 后处理 → 预警检查 → response
