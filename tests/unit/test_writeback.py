@@ -146,15 +146,7 @@ class WritebackAssemblerTests(unittest.TestCase):
             "INV-001",
         )
         self.assertTrue(payload["auditTruthCheckLogs"][0]["atclid"])
-        self.assertEqual(len(payload["auditTruthCheckResultBills"]), 1)
-        self.assertEqual(
-            payload["auditTruthCheckResultBills"][0]["code"],
-            "goodsName",
-        )
-        self.assertEqual(
-            payload["auditTruthCheckResultBills"][0]["value"],
-            "*电信服务*通信服务费",
-        )
+        self.assertEqual(payload["auditTruthCheckResultBills"], [])
         self.assertEqual(payload["auditTruthCheckResultItems"], [])
         self.assertEqual(payload["auditTruthCheckResultItemCols"], [])
         self.assertEqual(payload["auditInvoiceInfos"][0]["aiiid"], "AIIID-001")
@@ -624,22 +616,22 @@ class WritebackAssemblerTests(unittest.TestCase):
 
         self.assertEqual(payload["auditInvoiceInfos"][0]["atcrid"], "ATCRID-001")
         self.assertEqual(payload["auditInvoiceInfoContents"][0]["atcrId"], "ATCRID-001")
-        self.assertEqual(len(payload["auditTruthCheckResultBills"]), 3)
+        self.assertEqual(len(payload["auditTruthCheckResultBills"]), 2)
         self.assertEqual(
             [item["name"] for item in payload["auditTruthCheckResultBills"]],
-            ["发票号码", "发票号码-重复", "商品名称"],
+            ["发票号码", "发票号码-重复"],
         )
         self.assertEqual(
             [item["code"] for item in payload["auditTruthCheckResultBills"]],
-            ["invoiceNo", "invoiceNo", "goodsName"],
+            ["invoiceNo", "invoiceNo"],
         )
         self.assertEqual(
             [item["value"] for item in payload["auditTruthCheckResultBills"]],
-            ["INV-001", "INV-001", "*电信服务*通信服务费、*电信服务*违约金"],
+            ["INV-001", "INV-001"],
         )
         self.assertEqual(
             len({item["atcrbid"] for item in payload["auditTruthCheckResultBills"]}),
-            3,
+            2,
         )
         self.assertEqual(len(payload["auditTruthCheckResultItems"]), 2)
         self.assertEqual(

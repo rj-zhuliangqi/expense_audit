@@ -138,14 +138,10 @@ class WritebackClientTests(unittest.TestCase):
                 [c["compliance"] for c in payload["auditInvoiceInfoContents"]],
                 [True, False],
             )
-            self.assertEqual(len(payload["auditTruthCheckResultBills"]), 2)
+            self.assertEqual(len(payload["auditTruthCheckResultBills"]), 1)
             self.assertEqual(
                 [row["code"] for row in payload["auditTruthCheckResultBills"]],
-                ["invoiceNo", "goodsName"],
-            )
-            self.assertEqual(
-                payload["auditTruthCheckResultBills"][1]["value"],
-                "*电信服务*通信服务费、*电信服务*违约金",
+                ["invoiceNo"],
             )
             self.assertEqual(len(payload["auditTruthCheckResultItems"]), 1)
             self.assertEqual(len(payload["auditTruthCheckResultItemCols"]), 1)

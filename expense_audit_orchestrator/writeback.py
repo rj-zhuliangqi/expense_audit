@@ -12,6 +12,9 @@ AuditTravelsBuilder = Callable[[list[tuple[dict[str, Any], dict[str, Any]]], Map
 FormBuilder = Callable[[list[tuple[dict[str, Any], dict[str, Any]]], Mapping[str, Any]], list[dict[str, Any]]]
 AuditRuleCatalog = Mapping[str, Mapping[str, Any]]
 
+# goodsName 仅供内部审核规则和明细合规判断使用，不再作为回写结果字段返回。
+_EXCLUDED_TRUTHCHECK_FIELD_NAMES = frozenset({"goodsName"})
+
 
 # E31（表单发票金额不足）对应 docs/更新通讯费.csv 的最新回写内容。
 # 制度列 CSV 为 "/"（空），故 E31 policiesIndex 恒为空。
@@ -745,7 +748,11 @@ def _build_audit_truthcheck_result_bills(
         for invoice_record in _extract_truthcheck_invoice_records(prepared_input):
             for field_mapping in _resolve_truthcheck_field_mappings(prepared_input, "bill"):
                 field_name = _get_string_value(field_mapping, "fieldName")
-                if field_name is None or field_name not in invoice_record:
+                if (
+                    field_name is None
+                    or field_name in _EXCLUDED_TRUTHCHECK_FIELD_NAMES
+                    or field_name not in invoice_record
+                ):
                     continue
                 rows.append(
                     {
@@ -762,26 +769,6 @@ def _build_audit_truthcheck_result_bills(
                     }
                 )
 
-        # goodsName 属于 OCR 明细字段，但回写接口要求将其作为发票
-        # 级别的 auditTruthCheckResultBills 结果回写。数据准备阶段已经把
-        # items[*].goodsName 汇总到单据级 goodsName；回写只读取该字段，
-        # 不再从 contents、items 或其他字段回退，避免掩盖数据准备问题。
-        goods_name = _get_string_value(prepared_input, "goodsName")
-        if goods_name:
-            rows.append(
-                {
-                    "atcrbid": str(uuid4()),
-                    "miInstanceCode": instance_code,
-                    "fid": current_audit_invoice_file.get("fid"),
-                    "name": _resolve_goods_name_label(prepared_input),
-                    "code": "goodsName",
-                    "value": goods_name,
-                    "atcrId": current_invoice_info.get("atcrid"),
-                    "createTime": create_time,
-                    "id": current_audit_invoice_file.get("fid"),
-                    "aiid": current_audit_invoice_file.get("aiid"),
-                }
-            )
     return rows
 
 
@@ -798,7 +785,11 @@ def _build_audit_truthcheck_result_items(
         for invoice_record in _extract_truthcheck_invoice_records(prepared_input):
             for field_mapping in _resolve_truthcheck_field_mappings(prepared_input, "item"):
                 field_name = _get_string_value(field_mapping, "fieldName")
-                if field_name is None or field_name not in invoice_record:
+                if (
+                    field_name is None
+                    or field_name in _EXCLUDED_TRUTHCHECK_FIELD_NAMES
+                    or field_name not in invoice_record
+                ):
                     continue
                 rows.append(
                     {
@@ -831,7 +822,11 @@ def _build_audit_truthcheck_result_item_cols(
         for invoice_record in _extract_truthcheck_invoice_records(prepared_input):
             for field_mapping in _resolve_truthcheck_field_mappings(prepared_input, "item"):
                 field_name = _get_string_value(field_mapping, "fieldName")
-                if field_name is None or field_name not in invoice_record:
+                if (
+                    field_name is None
+                    or field_name in _EXCLUDED_TRUTHCHECK_FIELD_NAMES
+                    or field_name not in invoice_record
+                ):
                     continue
                 rows.append(
                     {
@@ -847,14 +842,6 @@ def _build_audit_truthcheck_result_item_cols(
                     }
                 )
     return rows
-
-
-def _resolve_goods_name_label(prepared_input: Mapping[str, Any]) -> str:
-    """从 item 字段映射读取 goodsName 的中文名称。"""
-    for field_mapping in _resolve_truthcheck_field_mappings(prepared_input, "item"):
-        if _get_string_value(field_mapping, "fieldName") == "goodsName":
-            return _get_string_value(field_mapping, "fieldLable") or "商品名称"
-    return "商品名称"
 
 
 def _resolve_truthcheck_field_mappings(
