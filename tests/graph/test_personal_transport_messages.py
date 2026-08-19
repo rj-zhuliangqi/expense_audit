@@ -119,6 +119,13 @@ class PersonalTransportMessageTests(unittest.TestCase):
             self.assertEqual(actual, message, code)
             self.assertNotRegex(actual, r"\{[^{}]+\}", code)
 
+    def test_e01_header_mismatch_is_rejected(self) -> None:
+        prepared = self._base_input()
+
+        result = evaluate_prepared_input(self.decision, prepared, trace=False)
+
+        self.assertEqual(self._rule(result, "E01")["distinguish_result"], "REJECT")
+
     def test_e31_uses_tax_inclusive_total_amount_and_final_amount(self) -> None:
         prepared = self._base_input()
         prepared.update(
