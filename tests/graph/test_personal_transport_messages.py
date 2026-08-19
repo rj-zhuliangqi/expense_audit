@@ -105,8 +105,8 @@ class PersonalTransportMessageTests(unittest.TestCase):
         result = evaluate_prepared_input(self.decision, prepared, trace=False)
         expected = {
             "E35": "票据 发票号 123 的票据类型为“增值税专用发票”，不属于交通费允许票种范围。交通费仅支持数电普票、电子普票、过路过桥费发票、火车票、客运车票、出租车票、财政收据、数电铁路等票据。",
-            "E01": "票据 发票号 123 的购货方信息为“错误公司”，与核销单所属公司“正确公司”不一致。",
-            "E02": "票据 发票号 123 的购货方纳税人识别号为“BAD-TAX”，与所属公司正确纳税人识别号“GOOD-TAX”不一致。",
+            "E01": "",
+            "E02": "",
             "E31": "本次交通费报销金额为 150 元，当前有效发票金额为 100 元，待补充 50 元。可用发票金额不足，暂不能提交。",
             "E09": "票据 发票号 123 的销货方“风险销方”命中公司或税务高风险/黑名单企业。",
             "E05": "票据 发票号 123 已在核销单 REC-OLD-001 中使用，不能重复报销。",
@@ -119,8 +119,9 @@ class PersonalTransportMessageTests(unittest.TestCase):
             self.assertEqual(actual, message, code)
             self.assertNotRegex(actual, r"\{[^{}]+\}", code)
 
-    def test_e01_header_mismatch_is_rejected(self) -> None:
+    def test_e01_header_mismatch_is_rejected_for_applicable_invoice_type(self) -> None:
         prepared = self._base_input()
+        prepared["invoiceType"] = "1"
 
         result = evaluate_prepared_input(self.decision, prepared, trace=False)
 
