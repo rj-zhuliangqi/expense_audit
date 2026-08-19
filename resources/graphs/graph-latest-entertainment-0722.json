@@ -172,7 +172,7 @@
           {
             "id": "3113c6c8-3665-40c8-9bd9-ad666ca556d7",
             "key": "isCompanyExists",
-            "value": "(orgNumber ?? \"\") != \"\" and some((serviceData.companyList ?? []) as c, (c.ccode ?? c.cCode ?? c.accountingCode ?? \"\") != \"\" and (c.ccode ?? c.cCode ?? c.accountingCode ?? \"\") == (orgNumber ?? \"\") and (orgName ?? buyerName ?? \"\") != \"\" and (orgName ?? buyerName ?? \"\") == (c.companyName ?? c.cName ?? c.cname ?? \"\"))"
+            "value": "(instanceComCode ?? \"\") != \"\" and some((serviceData.companyList ?? []) as c, (c.ccode ?? c.cCode ?? c.accountingCode ?? \"\") != \"\" and (c.ccode ?? c.cCode ?? c.accountingCode ?? \"\") == (instanceComCode ?? \"\") and (orgName ?? buyerName ?? \"\") != \"\" and (orgName ?? buyerName ?? \"\") == (c.companyName ?? c.cName ?? c.cname ?? \"\"))"
           },
           {
             "id": "15da20c0-9871-4b41-a5ff-9ae74a68a361",
@@ -182,7 +182,7 @@
           {
             "id": "89ecf386-8736-4a73-8882-6d1c11d095d5",
             "key": "isTaxExists",
-            "value": "((endsWith((buyerName ?? orgName ?? \"\"), \"公司\") or endsWith((buyerName ?? orgName ?? \"\"), \"企业\") or endsWith((buyerName ?? orgName ?? \"\"), \"集团\") or endsWith((buyerName ?? orgName ?? \"\"), \"事务所\") or endsWith((buyerName ?? orgName ?? \"\"), \"商行\") or endsWith((buyerName ?? orgName ?? \"\"), \"合作社\")) == false) or ((buyerTaxNo ?? buyerTaxNO ?? \"\") != \"\" and (orgNumber ?? \"\") != \"\" and some((serviceData.companyList ?? []) as c, (c.ccode ?? c.cCode ?? c.accountingCode ?? \"\") == (orgNumber ?? \"\") and (buyerTaxNo ?? buyerTaxNO ?? \"\") == (c.companyTax ?? c.taxNo ?? c.taxpayerIdentificationNumber ?? \"\")))"
+            "value": "((endsWith((buyerName ?? orgName ?? \"\"), \"公司\") or endsWith((buyerName ?? orgName ?? \"\"), \"企业\") or endsWith((buyerName ?? orgName ?? \"\"), \"集团\") or endsWith((buyerName ?? orgName ?? \"\"), \"事务所\") or endsWith((buyerName ?? orgName ?? \"\"), \"商行\") or endsWith((buyerName ?? orgName ?? \"\"), \"合作社\")) == false) or ((buyerTaxNo ?? buyerTaxNO ?? \"\") != \"\" and (instanceComCode ?? \"\") != \"\" and some((serviceData.companyList ?? []) as c, (c.ccode ?? c.cCode ?? c.accountingCode ?? \"\") == (instanceComCode ?? \"\") and (buyerTaxNo ?? buyerTaxNO ?? \"\") == (c.companyTax ?? c.taxNo ?? c.taxpayerIdentificationNumber ?? \"\")))"
           },
           {
             "id": "3c3b4039-5ca7-452d-9fa2-3b258fdd964a",
@@ -1011,7 +1011,7 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票号【\"+(invoiceNo??\"\")+\"】✗ 发票抬头公司【\"+(orgName??buyerName??\"\")+\"】未与核销单财务体系公司匹配（组织编码【\"+(orgNumber??\"\")+\"】），✓ 发票购买方公司名称必须与核销单财务体系映射公司一致\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票号【\"+(invoiceNo??\"\")+\"】✗ 发票抬头公司【\"+(orgName??buyerName??\"\")+\"】未与核销单财务体系公司匹配（组织编码【\"+(instanceComCode??\"\")+\"】），✓ 发票购买方公司名称必须与核销单财务体系映射公司一致\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2.1.1 员工需要确保票据中公司信息的准确性。\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"【重新开票】请按核销单财务体系映射的公司名称和组织编码重新开具发票，并重新上传\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
@@ -1132,7 +1132,7 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票号【\"+(invoiceNo??\"\")+\"】✗ 发票购买方【\"+(buyerName??orgName??\"\")+\"】按公司抬头处理，但纳税人识别号【\"+(buyerTaxNo??buyerTaxNO??\"\")+\"】未与组织编码【\"+(orgNumber??\"\")+\"】对应的财务体系公司纳税人识别号一致，✓ 公司抬头发票必须使用核销单财务体系映射公司的纳税人识别号\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票号【\"+(invoiceNo??\"\")+\"】✗ 发票购买方【\"+(buyerName??orgName??\"\")+\"】按公司抬头处理，但纳税人识别号【\"+(buyerTaxNo??buyerTaxNO??\"\")+\"】未与组织编码【\"+(instanceComCode??\"\")+\"】对应的财务体系公司纳税人识别号一致，✓ 公司抬头发票必须使用核销单财务体系映射公司的纳税人识别号\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2.1.1 员工需要确保票据中公司信息的准确性。\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"【重新开票】请按核销单财务体系映射公司的正确抬头和纳税人识别号重新开具发票，并重新上传\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"

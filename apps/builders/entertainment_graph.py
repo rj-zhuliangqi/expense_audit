@@ -156,9 +156,9 @@ ENTERTAINMENT_PREPROCESS_EXPRESSIONS = [
     {
         "id": _new_uuid(),
         "key": "isCompanyExists",
-        # 先用发票 orgNumber 匹配财务体系公司编码 ccode，再比较发票抬头公司名称。
-        # 必须同时满足组织编码和公司名称一致，避免仅因公司名称存在于全量 companyList 而误通过。
-        "value": '(orgNumber ?? "") != "" and some((serviceData.companyList ?? []) as c, (c.ccode ?? c.cCode ?? c.accountingCode ?? "") != "" and (c.ccode ?? c.cCode ?? c.accountingCode ?? "") == (orgNumber ?? "") and (orgName ?? buyerName ?? "") != "" and (orgName ?? buyerName ?? "") == (c.companyName ?? c.cName ?? c.cname ?? ""))',
+        # 必须按核销单所属财务体系 instanceComCode 选定公司，再比较发票抬头。
+        # 不能使用发票自身的 orgNumber，否则异属公司的发票会用自己的组织编码匹配到全量 companyList 而误通过。
+        "value": '(instanceComCode ?? "") != "" and some((serviceData.companyList ?? []) as c, (c.ccode ?? c.cCode ?? c.accountingCode ?? "") != "" and (c.ccode ?? c.cCode ?? c.accountingCode ?? "") == (instanceComCode ?? "") and (orgName ?? buyerName ?? "") != "" and (orgName ?? buyerName ?? "") == (c.companyName ?? c.cName ?? c.cname ?? ""))',
     },
     {
         "id": _new_uuid(),
@@ -170,9 +170,9 @@ ENTERTAINMENT_PREPROCESS_EXPRESSIONS = [
     {
         "id": _new_uuid(),
         "key": "isTaxExists",
-        # 公司抬头必须有税号且与 orgNumber 对应的财务体系公司税号一致；
+        # 公司抬头必须有税号且与核销单所属 instanceComCode 对应的财务体系公司税号一致；
         # 非公司抬头按员工号处理，直接通过 E02。
-        "value": '((endsWith((buyerName ?? orgName ?? ""), "公司") or endsWith((buyerName ?? orgName ?? ""), "企业") or endsWith((buyerName ?? orgName ?? ""), "集团") or endsWith((buyerName ?? orgName ?? ""), "事务所") or endsWith((buyerName ?? orgName ?? ""), "商行") or endsWith((buyerName ?? orgName ?? ""), "合作社")) == false) or ((buyerTaxNo ?? buyerTaxNO ?? "") != "" and (orgNumber ?? "") != "" and some((serviceData.companyList ?? []) as c, (c.ccode ?? c.cCode ?? c.accountingCode ?? "") == (orgNumber ?? "") and (buyerTaxNo ?? buyerTaxNO ?? "") == (c.companyTax ?? c.taxNo ?? c.taxpayerIdentificationNumber ?? "")))',
+        "value": '((endsWith((buyerName ?? orgName ?? ""), "公司") or endsWith((buyerName ?? orgName ?? ""), "企业") or endsWith((buyerName ?? orgName ?? ""), "集团") or endsWith((buyerName ?? orgName ?? ""), "事务所") or endsWith((buyerName ?? orgName ?? ""), "商行") or endsWith((buyerName ?? orgName ?? ""), "合作社")) == false) or ((buyerTaxNo ?? buyerTaxNO ?? "") != "" and (instanceComCode ?? "") != "" and some((serviceData.companyList ?? []) as c, (c.ccode ?? c.cCode ?? c.accountingCode ?? "") == (instanceComCode ?? "") and (buyerTaxNo ?? buyerTaxNO ?? "") == (c.companyTax ?? c.taxNo ?? c.taxpayerIdentificationNumber ?? "")))',
     },
     {
         "id": _new_uuid(),
@@ -253,7 +253,7 @@ def _build_company_header_check_node() -> dict:
             distinguish_result="REJECT",
             audit_content="检查发票购买方公司名称与核销单财务体系映射公司名称是否一致",
             audit_type="general-rules",
-            message='"发票号【"+(invoiceNo??"")+"】✗ 发票抬头公司【"+(orgName??buyerName??"")+"】未与核销单财务体系公司匹配（组织编码【"+(orgNumber??"")+"】），✓ 发票购买方公司名称必须与核销单财务体系映射公司一致"',
+            message='"发票号【"+(invoiceNo??"")+"】✗ 发票抬头公司【"+(orgName??buyerName??"")+"】未与核销单财务体系公司匹配（组织编码【"+(instanceComCode??"")+"】），✓ 发票购买方公司名称必须与核销单财务体系映射公司一致"',
             policies_index='"《锐捷网络员工费用管理与报销制度》\n5.2.1.1 员工需要确保票据中公司信息的准确性。"',
             suggestion='"【重新开票】请按核销单财务体系映射的公司名称和组织编码重新开具发票，并重新上传"',
         ),
@@ -290,7 +290,7 @@ def _build_tax_number_check_node() -> dict:
             distinguish_result="REJECT",
             audit_content=audit_content,
             audit_type="general-rules",
-            message='"发票号【"+(invoiceNo??"")+"】✗ 发票购买方【"+(buyerName??orgName??"")+"】按公司抬头处理，但纳税人识别号【"+(buyerTaxNo??buyerTaxNO??"")+"】未与组织编码【"+(orgNumber??"")+"】对应的财务体系公司纳税人识别号一致，✓ 公司抬头发票必须使用核销单财务体系映射公司的纳税人识别号"',
+            message='"发票号【"+(invoiceNo??"")+"】✗ 发票购买方【"+(buyerName??orgName??"")+"】按公司抬头处理，但纳税人识别号【"+(buyerTaxNo??buyerTaxNO??"")+"】未与组织编码【"+(instanceComCode??"")+"】对应的财务体系公司纳税人识别号一致，✓ 公司抬头发票必须使用核销单财务体系映射公司的纳税人识别号"',
             policies_index='"《锐捷网络员工费用管理与报销制度》\n5.2.1.1 员工需要确保票据中公司信息的准确性。"',
             suggestion='"【重新开票】请按核销单财务体系映射公司的正确抬头和纳税人识别号重新开具发票，并重新上传"',
         ),

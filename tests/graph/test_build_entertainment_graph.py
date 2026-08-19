@@ -69,7 +69,7 @@ def _is_gift_count_reasonable_expression() -> str:
 
 
 class CompanyHeaderExpressionTests(unittest.TestCase):
-    def test_requires_org_number_and_matching_company_name(self) -> None:
+    def test_requires_receipt_company_code_and_matching_company_name(self) -> None:
         expression = _is_company_exists_expression()
         company_list = [
             {"ccode": "111", "companyName": "福建公司"},
@@ -80,7 +80,8 @@ class CompanyHeaderExpressionTests(unittest.TestCase):
             zen.evaluate_expression(
                 expression,
                 {
-                    "orgNumber": "112",
+                    "instanceComCode": "112",
+                    "orgNumber": "111",
                     "orgName": "北京公司",
                     "serviceData": {"companyList": company_list},
                 },
@@ -90,6 +91,7 @@ class CompanyHeaderExpressionTests(unittest.TestCase):
             zen.evaluate_expression(
                 expression,
                 {
+                    "instanceComCode": "112",
                     "orgNumber": "112",
                     "orgName": "福建公司",
                     "serviceData": {"companyList": company_list},
@@ -97,13 +99,14 @@ class CompanyHeaderExpressionTests(unittest.TestCase):
             )
         )
 
-    def test_does_not_match_company_name_from_another_org(self) -> None:
+    def test_does_not_match_company_name_from_receipt_company(self) -> None:
         expression = _is_company_exists_expression()
         self.assertFalse(
             zen.evaluate_expression(
                 expression,
                 {
-                    "orgNumber": "112",
+                    "instanceComCode": "112",
+                    "orgNumber": "111",
                     "orgName": "福建公司",
                     "serviceData": {
                         "companyList": [
@@ -121,7 +124,8 @@ class CompanyHeaderExpressionTests(unittest.TestCase):
             zen.evaluate_expression(
                 expression,
                 {
-                    "orgNumber": "112",
+                    "instanceComCode": "112",
+                    "orgNumber": "111",
                     "buyerName": "北京公司",
                     "serviceData": {
                         "companyList": [{"ccode": "112", "cname": "北京公司"}]
@@ -129,6 +133,21 @@ class CompanyHeaderExpressionTests(unittest.TestCase):
                 },
             )
         )
+
+    def test_invoice_org_number_cannot_override_receipt_company(self) -> None:
+        expression = _is_company_exists_expression()
+        context = {
+            "instanceComCode": "111",
+            "orgNumber": "112",
+            "orgName": "北京公司",
+            "serviceData": {
+                "companyList": [
+                    {"ccode": "111", "companyName": "福建公司"},
+                    {"ccode": "112", "companyName": "北京公司"},
+                ]
+            },
+        }
+        self.assertFalse(zen.evaluate_expression(expression, context))
 
     def test_graph_maps_e01_to_pass_and_reject(self) -> None:
         node = _build_company_header_check_node()
@@ -180,11 +199,12 @@ class TaxNumberExpressionTests(unittest.TestCase):
         self.assertTrue(zen.evaluate_expression(expression, {"buyerName": "某某事务所"}))
         self.assertFalse(zen.evaluate_expression(expression, {"buyerName": "张三"}))
 
-    def test_company_buyer_tax_number_must_match_org_number_company(self) -> None:
+    def test_company_buyer_tax_number_must_match_receipt_company(self) -> None:
         expression = _is_tax_exists_expression()
         base = {
             "buyerName": "北京星网锐捷网络技术有限公司",
-            "orgNumber": "112",
+            "instanceComCode": "112",
+            "orgNumber": "111",
             "serviceData": {
                 "companyList": [
                     {"ccode": "111", "companyTax": "TAX-FJ"},
@@ -197,12 +217,29 @@ class TaxNumberExpressionTests(unittest.TestCase):
         self.assertFalse(zen.evaluate_expression(expression, {**base, "buyerTaxNo": "TAX-FJ"}))
         self.assertFalse(zen.evaluate_expression(expression, {**base, "buyerTaxNo": ""}))
 
+    def test_invoice_org_number_cannot_override_receipt_company_tax(self) -> None:
+        expression = _is_tax_exists_expression()
+        context = {
+            "buyerName": "北京星网锐捷网络技术有限公司",
+            "buyerTaxNo": "91110108668444162H",
+            "instanceComCode": "111",
+            "orgNumber": "112",
+            "serviceData": {
+                "companyList": [
+                    {"ccode": "111", "companyTax": "913500007549617646"},
+                    {"ccode": "112", "companyTax": "91110108668444162H"},
+                ]
+            },
+        }
+        self.assertFalse(zen.evaluate_expression(expression, context))
+
     def test_employee_buyer_name_skips_tax_number_comparison(self) -> None:
         expression = _is_tax_exists_expression()
         context = {
             "buyerName": "张三",
             "buyerTaxNo": "WRONG-TAX",
-            "orgNumber": "112",
+            "instanceComCode": "112",
+            "orgNumber": "111",
             "serviceData": {"companyList": [{"ccode": "112", "companyTax": "TAX-BJ"}]},
         }
         self.assertTrue(zen.evaluate_expression(expression, context))
