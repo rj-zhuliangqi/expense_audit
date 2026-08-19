@@ -180,11 +180,21 @@ class PersonalTransportMessageTests(unittest.TestCase):
             "invoiceNo": "788",
             "goodsName": "某某储值账户服务",
             "items": [{"goodsName": "某某储值账户服务", "detailAmount": "100"}],
+            "instance_code": "REC-788",
+            "invoice_file_id": "FILE-788",
+            "invoice_info_id": "INFO-788",
         })
 
         result = evaluate_prepared_input(self.decision, prepared, trace=True)
-        self.assertEqual(self._rule(result, "E17")["distinguish_result"], "REJECT")
-        self.assertIn("储值账户", self._rule(result, "E17")["message"])
+        e17 = self._rule(result, "E17")
+        self.assertEqual(e17["distinguish_result"], "REJECT")
+        self.assertEqual(
+            e17["message"],
+            "票据 发票号 788 的明细中包含“某某储值账户服务”，属于预付、充值、预存类内容，不符合交通费报销要求。",
+        )
+        self.assertEqual(e17["instance_code"], "REC-788")
+        self.assertEqual(e17["invoice_file_id"], "FILE-788")
+        self.assertEqual(e17["invoice_info_id"], "INFO-788")
 
         e17_llm = next(
             value for value in (result["trace"] or {}).values()
@@ -193,6 +203,32 @@ class PersonalTransportMessageTests(unittest.TestCase):
             and value.get("output", {}).get("llm_result", {}).get("passed") is False
         )
         self.assertTrue(e17_llm["output"].get("skipped"))
+        self.assertEqual(e17_llm["output"]["invoiceNo"], "788")
+        self.assertEqual(e17_llm["output"]["goodsName"], "某某储值账户服务")
+
+    def test_e36_llm_failure_keeps_invoice_context_for_writeback(self) -> None:
+        prepared = self._base_input()
+        prepared.update({
+            "invoiceNo": "E36-FAIL",
+            "goodsName": "金徽章",
+            "items": [{"goodsName": "金徽章"}],
+            "instance_code": "REC-E36-FAIL",
+            "invoice_file_id": "FILE-E36-FAIL",
+            "invoice_info_id": "INFO-E36-FAIL",
+        })
+
+        # 测试环境不配置 LLM 网关，E36 会进入 FAILED；即使 LLM 调用失败，
+        # 决策表仍必须保留原始发票主键，避免回写成 null。
+        result = evaluate_prepared_input(self.decision, prepared, trace=True)
+        e36 = self._rule(result, "E36")
+        self.assertEqual(e36["distinguish_result"], "FAILED")
+        self.assertEqual(e36["instance_code"], "REC-E36-FAIL")
+        self.assertEqual(e36["invoice_file_id"], "FILE-E36-FAIL")
+        self.assertEqual(e36["invoice_info_id"], "INFO-E36-FAIL")
+
+        e36_llm = (result["trace"] or {})["514e15db-3657-4fa3-9228-88b750ea08f8"]
+        self.assertEqual(e36_llm["output"]["invoiceNo"], "E36-FAIL")
+        self.assertEqual(e36_llm["output"]["goodsName"], "金徽章")
 
     def test_prompts_keep_model_generalization_and_empty_content_guard(self) -> None:
         sources = {
@@ -207,6 +243,16 @@ class PersonalTransportMessageTests(unittest.TestCase):
         self.assertIn("skipLlm", sources["充值卡检查prompt"])
         self.assertIn("skipLlm", sources["发票合规prompt"])
         self.assertIn("直接返回，不调用远端 LLM", sources["调用llm"])
+
+        # LLM 只负责返回 passed；E17/E36 决策表还需要原始发票号、内容和主键。
+        for node in self.graph["nodes"]:
+            if node.get("type") != "functionNode":
+                continue
+            if node.get("name") in {"充值卡检查prompt", "发票合规prompt", "调用llm"}:
+                source = node["content"]["source"]
+                self.assertIn("invoiceContext", source, node["name"])
+                self.assertIn("invoiceNo: input?.invoiceNo", source, node["name"])
+                self.assertIn("invoice_file_id: input?.invoice_file_id", source, node["name"])
 
     def test_invoice_type_72_matches_electronic_ordinary_invoice_mapping(self) -> None:
         prepared = self._base_input()
