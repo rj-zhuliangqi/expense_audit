@@ -1,10 +1,12 @@
 import unittest
+from unittest.mock import patch
 
 from expense_audit_orchestrator.profiles.entertainment.client import EntertainmentApiClient
 from expense_audit_orchestrator.profiles.entertainment.data import (
     build_e15_invoice_type_enricher,
-    build_entertainment_invoice_serial_enricher,
     build_entertainment_receipt_enricher,
+    build_entertainment_taxi_invoice_serial_enricher,
+    build_w34_invoice_serial_enricher,
     load_e15_invoice_type_map,
     normalize_invoice_serial_prefix,
 )
@@ -99,14 +101,19 @@ class EntertainmentDataTests(unittest.TestCase):
             {},
         )
 
-    def test_taxi_invoice_serial_enricher_queries_history_with_expected_arguments(self) -> None:
+    def test_w34_enricher_queries_history_with_expected_arguments_and_filters_self(self) -> None:
         calls = []
 
         def provider(cheque_no, instance_code, accounting_code):
             calls.append((cheque_no, instance_code, accounting_code))
-            return ["12345699", {"invoiceNo": "12345698"}, {"unknown": "ignored"}]
+            return [
+                "12345601",
+                "12345611",
+                {"invoiceNo": "12345612"},
+                {"unknown": "ignored"},
+            ]
 
-        enricher = build_entertainment_invoice_serial_enricher(
+        enricher = build_w34_invoice_serial_enricher(
             service_url="https://service.example",
             provider=provider,
         )
@@ -115,7 +122,7 @@ class EntertainmentDataTests(unittest.TestCase):
             "invoice.pdf",
             {
                 "chequeNo": "12345601",
-                "invoiceType": "8",
+                "invoiceType": "RJ-001",
                 "accountingCode": "AC-001",
             },
             {"auditInfo": {"instanceCode": "INSTANCE-001"}},
@@ -123,75 +130,71 @@ class EntertainmentDataTests(unittest.TestCase):
 
         self.assertEqual(calls, [("12345601", "INSTANCE-001", "AC-001")])
         self.assertEqual(result["invoiceNo"], "12345601")
-        self.assertEqual(result["currentPrefix"], "123456")
-        self.assertEqual(result["historyNumbers"], ["12345699", "12345698"])
+        self.assertTrue(result["isApplicable"])
+        self.assertEqual(result["historyNumbers"], ["12345611", "12345612"])
         self.assertTrue(result["historyHit"])
-        self.assertTrue(result["isTaxiInvoice"])
         self.assertFalse(result["lookupFailed"])
 
-    def test_taxi_invoice_serial_enricher_uses_invoice_number_fallback_order(self) -> None:
+    def test_w34_applies_to_the_three_configured_invoice_type_codes(self) -> None:
         calls = []
 
         def provider(cheque_no, instance_code, accounting_code):
-            calls.append((cheque_no, instance_code, accounting_code))
+            calls.append(cheque_no)
             return []
 
-        enricher = build_entertainment_invoice_serial_enricher(provider=provider)
-        result = enricher(
-            "RECEIPT-002",
-            "invoice.pdf",
-            {
-                "chequeNo": "",
-                "invoiceNo": "0012345601",
-                "serialNo": "99999999",
-                "invoiceTypeName": "出租车票",
-            },
-            {"auditInfo": {"instanceCode": "INSTANCE-002", "accountingCode": "AC-002"}},
-        )
+        enricher = build_w34_invoice_serial_enricher(provider=provider)
+        for invoice_type in ("RJ-001", "1-003", "1-002"):
+            with self.subTest(invoice_type=invoice_type):
+                result = enricher(
+                    "RECEIPT-002",
+                    "invoice.pdf",
+                    {"chequeNo": "12345601", "invoiceType": invoice_type},
+                    {"auditInfo": {"instanceCode": "INSTANCE-002"}},
+                )
+                self.assertTrue(result["isApplicable"])
+        self.assertEqual(calls, ["12345601", "12345601", "12345601"])
 
-        self.assertEqual(calls, [("0012345601", "INSTANCE-002", "AC-002")])
-        self.assertEqual(result["invoiceNo"], "0012345601")
-        self.assertEqual(result["currentPrefix"], "001234")
-        self.assertFalse(result["historyHit"])
-
-    def test_non_taxi_entertainment_invoice_does_not_query_history(self) -> None:
+    def test_w34_non_applicable_invoice_does_not_query_history(self) -> None:
         def provider(*args):
-            raise AssertionError(f"history lookup should not run: {args}")
+            raise AssertionError(f"W34 history lookup should not run: {args}")
 
-        result = build_entertainment_invoice_serial_enricher(provider=provider)(
+        result = build_w34_invoice_serial_enricher(provider=provider)(
             "RECEIPT-003",
             "invoice.pdf",
-            {"chequeNo": "12345601", "invoiceType": "餐饮服务"},
+            {"chequeNo": "12345601", "invoiceType": "8"},
             {"auditInfo": {"instanceCode": "INSTANCE-003"}},
         )
 
-        self.assertFalse(result["isTaxiInvoice"])
+        self.assertFalse(result["isApplicable"])
         self.assertEqual(result["historyNumbers"], [])
         self.assertFalse(result["historyHit"])
 
-    def test_short_taxi_invoice_number_does_not_query_history(self) -> None:
-        def provider(*args):
-            raise AssertionError(f"short invoice number must not be looked up: {args}")
-
-        result = build_entertainment_invoice_serial_enricher(provider=provider)(
-            "RECEIPT-004",
-            "invoice.pdf",
-            {"chequeNo": "1234567", "invoiceType": "8"},
-            {"auditInfo": {"instanceCode": "INSTANCE-004"}},
-        )
+    def test_e34_taxi_enricher_never_queries_w34_history_interface(self) -> None:
+        with patch(
+            "expense_audit_orchestrator.audit_client.fetch_invoice_serial_numbers",
+            side_effect=AssertionError("E34 must not query W34 history interface"),
+        ):
+            result = build_entertainment_taxi_invoice_serial_enricher()(
+                "RECEIPT-004",
+                "invoice.pdf",
+                {"chequeNo": "1234567", "invoiceType": "8"},
+                {"auditInfo": {"instanceCode": "INSTANCE-004"}},
+            )
 
         self.assertTrue(result["isTaxiInvoice"])
         self.assertIsNone(result["currentPrefix"])
+        self.assertEqual(result["historyNumbers"], [])
         self.assertFalse(result["historyHit"])
+        self.assertFalse(result["lookupFailed"])
 
-    def test_history_lookup_failure_degrades_without_blocking(self) -> None:
+    def test_w34_history_lookup_failure_degrades_without_blocking(self) -> None:
         def provider(*args):
             raise RuntimeError("service unavailable")
 
-        result = build_entertainment_invoice_serial_enricher(provider=provider)(
+        result = build_w34_invoice_serial_enricher(provider=provider)(
             "RECEIPT-005",
             "invoice.pdf",
-            {"chequeNo": "12345601", "invoiceType": "8"},
+            {"chequeNo": "12345601", "invoiceType": "1-003"},
             {"auditInfo": {"instanceCode": "INSTANCE-005"}},
         )
 
@@ -225,4 +228,5 @@ class EntertainmentServiceUrlBindingTests(unittest.TestCase):
 
         profile = get_profile("entertainment", service_url="https://service.example")
 
+        self.assertIn("w34InvoiceSerial", profile.invoice_enrichers)
         self.assertIn("entertainmentInvoiceSerial", profile.invoice_enrichers)

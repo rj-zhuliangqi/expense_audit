@@ -201,8 +201,9 @@ def _build_entertainment_profile(
 ) -> ExpenseProfile:
     from .entertainment.data import (
         build_e15_invoice_type_enricher,
-        build_entertainment_invoice_serial_enricher,
         build_entertainment_receipt_enricher,
+        build_entertainment_taxi_invoice_serial_enricher,
+        build_w34_invoice_serial_enricher,
     )
     from .entertainment.writeback import entertainment_compliance_rule
     from .entertainment.writeback import entertainment_audit_rule_catalog
@@ -215,9 +216,11 @@ def _build_entertainment_profile(
         },
         invoice_enrichers={
             "e15InvoiceType": build_e15_invoice_type_enricher(),
-            "entertainmentInvoiceSerial": build_entertainment_invoice_serial_enricher(
+            # W34 使用跨核销单发票连号接口；E34 仅使用本核销单出租车连号数据。
+            "w34InvoiceSerial": build_w34_invoice_serial_enricher(
                 service_url=service_url,
             ),
+            "entertainmentInvoiceSerial": build_entertainment_taxi_invoice_serial_enricher(),
         },
         compliance_rule=entertainment_compliance_rule,
         audit_rule_catalog=entertainment_audit_rule_catalog,
