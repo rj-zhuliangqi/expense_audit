@@ -15,6 +15,7 @@ from apps.builders.entertainment_graph import (
     _build_company_header_check_node,
     _build_tax_number_check_node,
     _build_fraud_address_llm_node,
+    _build_invoice_number_check_node,
     build_entertainment_graph,
 )
 from expense_audit_orchestrator.core import ReceiptDataPreparer, _lookup_enterprise_info
@@ -66,6 +67,14 @@ def _is_gift_count_reasonable_expression() -> str:
         expression["value"]
         for expression in ENTERTAINMENT_PREPROCESS_EXPRESSIONS
         if expression["key"] == "isGiftCountReasonable"
+    )
+
+
+def _is_invoice_number_continuous_expression() -> str:
+    return next(
+        expression["value"]
+        for expression in ENTERTAINMENT_PREPROCESS_EXPRESSIONS
+        if expression["key"] == "isInvoiceNumberContinuous"
     )
 
 
@@ -357,6 +366,55 @@ class GiftCountExpressionTests(unittest.TestCase):
                 "serviceData": {"entertainment_data": {"giftReceptionCount": 10}},
             },
         ))
+
+
+class InvoiceNumberContinuityTests(unittest.TestCase):
+    def test_flags_same_receipt_invoice_numbers_with_difference_at_most_ten(self) -> None:
+        expression = _is_invoice_number_continuous_expression()
+
+        self.assertTrue(
+            zen.evaluate_expression(
+                expression,
+                {"invoiceNo": "100010", "previousInvoiceNumbers": ["100000"]},
+            )
+        )
+        self.assertTrue(
+            zen.evaluate_expression(
+                expression,
+                {"invoiceNo": "100001", "previousInvoiceNumbers": ["100000"]},
+            )
+        )
+        self.assertFalse(
+            zen.evaluate_expression(
+                expression,
+                {"invoiceNo": "100011", "previousInvoiceNumbers": ["100000"]},
+            )
+        )
+
+    def test_first_or_missing_invoice_number_is_safe(self) -> None:
+        expression = _is_invoice_number_continuous_expression()
+        self.assertFalse(zen.evaluate_expression(expression, {"invoiceNo": "100000"}))
+        self.assertFalse(
+            zen.evaluate_expression(
+                expression,
+                {"invoiceNo": "", "previousInvoiceNumbers": ["100000"]},
+            )
+        )
+
+    def test_w34_warns_only_when_continuity_risk_is_true(self) -> None:
+        node = _build_invoice_number_check_node()
+        results_by_input = {
+            rule["dea9a1bc-66ae-47b3-885f-9e9a1bb07571"]: rule[
+                "f35ede49-0eae-4dda-b39e-11a11383697a"
+            ]
+            for rule in node["content"]["rules"]
+        }
+        self.assertEqual(results_by_input["true"], '"WARNING"')
+        self.assertEqual(results_by_input["false"], '"PASS"')
+        self.assertEqual(
+            node["content"]["inputs"][0]["field"],
+            "isInvoiceNumberContinuous",
+        )
 
 
 class ContentComplianceLlmTests(unittest.TestCase):

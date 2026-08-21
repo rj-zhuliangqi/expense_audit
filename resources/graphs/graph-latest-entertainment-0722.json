@@ -217,7 +217,7 @@
           {
             "id": "ba10acfd-3689-45bf-82e0-a6aa7970fca2",
             "key": "isInvoiceNumberContinuous",
-            "value": "(previousInvoiceNumbers ?? []).length == 0 or invoiceNo == \"\" or some((previousInvoiceNumbers ?? []) as prev, abs(number(invoiceNo) - number(prev)) == 1)"
+            "value": "some((previousInvoiceNumbers ?? []) as prev, (invoiceNo ?? \"\") != \"\" and (prev ?? \"\") != \"\" and abs(number(invoiceNo) - number(prev)) <= 10)"
           },
           {
             "id": "b7589756-18b6-4947-9824-4d8982dd3e34",
@@ -1472,15 +1472,15 @@
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"W34\"",
-            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查同一核销单内发票号码是否连续\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"WARNING\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查同一核销单内发票号码是否连续或近似（差值≤10）\"",
             "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
-            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票号【\"+(invoiceNo??\"\")+\"】与本核销单其他发票号码连续或近似（差值≤10），存在发票连号风险\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【补充确认】请核对本核销单发票号码是否存在连续或近似情况，并说明业务合理性\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
@@ -1489,22 +1489,22 @@
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"W34\"",
-            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"WARNING\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查同一核销单内发票号码是否连续\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查同一核销单内发票号码是否连续或近似（差值≤10）\"",
             "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票号【\"+(invoiceNo??\"\")+\"】与本核销单其他发票号码不连续，存在发票缺失风险\"",
-            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【补充确认】请核对本核销单发票号码是否完整连续，并补充缺失票据或说明原因\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           }
         ],
         "inputs": [
           {
             "id": "dea9a1bc-66ae-47b3-885f-9e9a1bb07571",
-            "name": "发票号码是否连续",
+            "name": "发票号码是否连续或近似",
             "field": "isInvoiceNumberContinuous"
           }
         ],

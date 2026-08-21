@@ -4,7 +4,7 @@
 基于通讯费 `resources/graphs/graph-latest-0727-1900.json` 的结构，为业务招待费生成新的 graph：
 - 复用通用稽核节点（E35/E31/E33/sys-001-004/E09/E05/E17）
 - 删除通讯费旧版节点，并重建业务招待费所需的 E01 抬头检查
-- 新增业务招待费特有节点（E36 禁止内容、E15 员工本人费用、W33 礼品数量、W34 原有发票连续性、E34 出租车发票连号、W31 虚开发票预警）
+- 新增业务招待费特有节点（E36 禁止内容、E15 员工本人费用、W33 礼品数量、W34 发票连续或近似、E34 出租车发票连号、W31 虚开发票预警）
 - 泛化判断用 LLM+prompt 解决，不用规则
 
 用法:
@@ -214,10 +214,12 @@ ENTERTAINMENT_PREPROCESS_EXPRESSIONS = [
         "value": '((isLastInvoice ?? true) == false) or (serviceData.entertainment_data.hasGiftItem ?? false) == false or number(serviceData.entertainment_data.giftReceptionCount ?? 0) <= number(totalGoodsCount ?? sum(map((items ?? []) as i, number(i.num ?? i.quantity ?? 0))))',
     },
     {
-        # W34：保留业务招待费原有的同核销单发票号码连续性检查。
+        # W34：同一核销单内，当前发票号与任一前序发票号差值 <= 10，
+        # 定义为连续或近似发票，命中后由决策表输出 WARNING。
+        # 首张发票、发票号缺失或前序号码缺失时没有可比较对象，按安全通过处理。
         "id": _new_uuid(),
         "key": "isInvoiceNumberContinuous",
-        "value": '(previousInvoiceNumbers ?? []).length == 0 or invoiceNo == "" or some((previousInvoiceNumbers ?? []) as prev, abs(number(invoiceNo) - number(prev)) == 1)',
+        "value": 'some((previousInvoiceNumbers ?? []) as prev, (invoiceNo ?? "") != "" and (prev ?? "") != "" and abs(number(invoiceNo) - number(prev)) <= 10)',
     },
     {
         # E34：出租车发票去掉后两位后，前六位一致即视为连号。
@@ -380,35 +382,35 @@ def _build_gift_count_check_node() -> dict:
 
 
 def _build_invoice_number_check_node() -> dict:
-    """发票号码连续性检查 W34（保留原有规则）。"""
+    """发票号码连续或近似检查 W34（同一核销单内，差值 <= 10）。"""
     node_id = "ent-invoice-number-check"
     rules = [
         _std_rule_row(
             input_value="true",
             reason_code="W34",
-            distinguish_result="PASS",
-            audit_content="检查同一核销单内发票号码是否连续",
+            distinguish_result="WARNING",
+            audit_content="检查同一核销单内发票号码是否连续或近似（差值≤10）",
             audit_type="general-rules",
-            message='""',
-            policies_index='""',
-            suggestion='""',
+            message='"发票号【"+(invoiceNo??"")+"】与本核销单其他发票号码连续或近似（差值≤10），存在发票连号风险"',
+            policies_index='"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范"',
+            suggestion='"【补充确认】请核对本核销单发票号码是否存在连续或近似情况，并说明业务合理性"',
         ),
         _std_rule_row(
             input_value="false",
             reason_code="W34",
-            distinguish_result="WARNING",
-            audit_content="检查同一核销单内发票号码是否连续",
+            distinguish_result="PASS",
+            audit_content="检查同一核销单内发票号码是否连续或近似（差值≤10）",
             audit_type="general-rules",
-            message='"发票号【"+(invoiceNo??"")+"】与本核销单其他发票号码不连续，存在发票缺失风险"',
-            policies_index='"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范"',
-            suggestion='"【补充确认】请核对本核销单发票号码是否完整连续，并补充缺失票据或说明原因"',
+            message='""',
+            policies_index='""',
+            suggestion='""',
         ),
     ]
     return _make_decision_table(
         node_id=node_id,
         name="发票号码连续性检查",
         input_field="isInvoiceNumberContinuous",
-        input_name="发票号码是否连续",
+        input_name="发票号码是否连续或近似",
         rules=rules,
         output_path="invoice_number_result",
         position={"x": 660, "y": 1180},
