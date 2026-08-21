@@ -369,35 +369,100 @@ class GiftCountExpressionTests(unittest.TestCase):
 
 
 class InvoiceNumberContinuityTests(unittest.TestCase):
+    @staticmethod
+    def _w34_data(*, applicable: bool = True, batch_hit: bool = False, history_numbers=None):
+        return {
+            "w34InvoiceSerial": {
+                "isApplicable": applicable,
+                "batchHit": batch_hit,
+                "historyNumbers": history_numbers or [],
+            }
+        }
+
     def test_flags_same_receipt_invoice_numbers_with_difference_at_most_ten(self) -> None:
         expression = _is_invoice_number_continuous_expression()
 
         self.assertTrue(
             zen.evaluate_expression(
                 expression,
-                {"invoiceNo": "100010", "previousInvoiceNumbers": ["100000"]},
+                {
+                    "invoiceNo": "100010",
+                    "previousW34InvoiceNumbers": ["100000"],
+                    "serviceData": self._w34_data(),
+                },
             )
         )
         self.assertTrue(
             zen.evaluate_expression(
                 expression,
-                {"invoiceNo": "100001", "previousInvoiceNumbers": ["100000"]},
+                {
+                    "invoiceNo": "100001",
+                    "previousW34InvoiceNumbers": ["100000"],
+                    "serviceData": self._w34_data(),
+                },
             )
         )
         self.assertFalse(
             zen.evaluate_expression(
                 expression,
-                {"invoiceNo": "100011", "previousInvoiceNumbers": ["100000"]},
+                {
+                    "invoiceNo": "100011",
+                    "previousW34InvoiceNumbers": ["100000"],
+                    "serviceData": self._w34_data(),
+                },
+            )
+        )
+
+    def test_flags_cross_receipt_history_numbers_with_difference_at_most_ten(self) -> None:
+        expression = _is_invoice_number_continuous_expression()
+        self.assertTrue(
+            zen.evaluate_expression(
+                expression,
+                {
+                    "invoiceNo": "200010",
+                    "serviceData": self._w34_data(history_numbers=["200000"]),
+                },
+            )
+        )
+        self.assertFalse(
+            zen.evaluate_expression(
+                expression,
+                {
+                    "invoiceNo": "200011",
+                    "serviceData": self._w34_data(history_numbers=["200000"]),
+                },
+            )
+        )
+
+    def test_non_w34_invoice_type_is_not_checked(self) -> None:
+        expression = _is_invoice_number_continuous_expression()
+        self.assertFalse(
+            zen.evaluate_expression(
+                expression,
+                {
+                    "invoiceNo": "100001",
+                    "previousW34InvoiceNumbers": ["100000"],
+                    "serviceData": self._w34_data(applicable=False, batch_hit=True),
+                },
             )
         )
 
     def test_first_or_missing_invoice_number_is_safe(self) -> None:
         expression = _is_invoice_number_continuous_expression()
-        self.assertFalse(zen.evaluate_expression(expression, {"invoiceNo": "100000"}))
         self.assertFalse(
             zen.evaluate_expression(
                 expression,
-                {"invoiceNo": "", "previousInvoiceNumbers": ["100000"]},
+                {"invoiceNo": "100000", "serviceData": self._w34_data()},
+            )
+        )
+        self.assertFalse(
+            zen.evaluate_expression(
+                expression,
+                {
+                    "invoiceNo": "",
+                    "previousW34InvoiceNumbers": ["100000"],
+                    "serviceData": self._w34_data(),
+                },
             )
         )
 

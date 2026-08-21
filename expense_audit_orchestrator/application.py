@@ -146,7 +146,7 @@ class ReceiptAuditService:
         # 先为兼容未进入核销单循环的调用方注入整单总量；正式核销单执行时，
         # process_prepared_receipt() 会按发票顺序改写为当前累计商品数量，最后一张即整单总量。
         _inject_total_goods_count(prepared_receipt)
-        # 所有发票完成数据准备后一次性计算本单出租车连票关系，供需要在执行前
+        # 所有发票完成数据准备后一次性计算本单发票连号关系，供需要在执行前
         # 读取 prepared receipt 的调用方使用；process_prepared_receipt() 会幂等重算一次，
         # 兼容从队列/磁盘加载的既有 prepared receipt。
         _inject_invoice_serial_batch_context(prepared_receipt)
@@ -193,8 +193,8 @@ class ReceiptAuditService:
         receipt_code = str(prepared_receipt.get("receiptCode") or "")
         # 兼容从磁盘/队列加载、尚未经过 prepare_receipt 聚合的 prepared receipt。
         _inject_total_goods_count(prepared_receipt)
-        # 所有发票已完成数据准备后一次性计算本单出租车连票关系，确保连票组中的
-        # 第一张发票也能命中 E34，不受发票执行顺序影响。
+        # 所有发票已完成数据准备后一次性计算本单发票连号关系，确保同一
+        # 连号组中的每张发票都能命中，不受发票执行顺序影响。
         _inject_invoice_serial_batch_context(prepared_receipt)
         remaining_apply_amount = _resolve_initial_apply_amount(prepared_receipt)
 
@@ -205,6 +205,7 @@ class ReceiptAuditService:
             effective_graph_path = resolved_profile.default_graph_path
 
         previous_invoice_numbers: list[str] = []
+        previous_w34_invoice_numbers: list[str] = []
         gift_count_context = _resolve_gift_count_context(prepared_receipt)
         cumulative_goods_count = 0.0
         invoice_preparations = prepared_receipt["invoicePreparations"]
@@ -236,8 +237,11 @@ class ReceiptAuditService:
             if remaining_apply_amount is not None:
                 _update_preparation_apply_amount(invoice_preparation, remaining_apply_amount)
 
-            # 出租车连票检测：保留旧的前序发票号字段，E34 实际读取整单关系上下文。
+            # 保留旧的前序发票号字段；W34 另注入只包含适用票种的前序号码。
             _inject_previous_invoice_numbers(invoice_preparation, previous_invoice_numbers)
+            _inject_previous_w34_invoice_numbers(
+                invoice_preparation, previous_w34_invoice_numbers
+            )
 
             invoice_result = self._process_invoice_preparation(
                 receipt_code, invoice_preparation, graph_path=effective_graph_path,
@@ -260,8 +264,9 @@ class ReceiptAuditService:
                 invoice_tax_total=travel_invoice_tax_total,
             )
 
-            # 收集当前发票号用于后续发票的连号检测
+            # 收集当前发票号用于后续发票的连号检测。W34 只收集三类适用票种。
             _collect_invoice_number(invoice_preparation, previous_invoice_numbers)
+            _collect_w34_invoice_number(invoice_preparation, previous_w34_invoice_numbers)
 
             used_amount = _extract_invoice_final_amount(invoice_result)
             if used_amount is not None and remaining_apply_amount is not None:
@@ -677,6 +682,108 @@ def _inject_invoice_serial_batch_context(prepared_receipt: Mapping[str, Any]) ->
         applicable_key="isTaxiInvoice",
         default_subject="出租车发票",
     )
+    _inject_w34_invoice_batch_context(prepared_receipt)
+
+
+def _inject_w34_invoice_batch_context(prepared_receipt: Mapping[str, Any]) -> None:
+    """按发票号码差值为 W34 计算本核销单内的连续/近似关系。
+
+    W34 不使用出租车前缀规则；仅对 W34 enricher 标记的适用票种，
+    将任意两张发票号码差值不大于 10 的关系写入 batchHit。
+    """
+    invoice_preparations = prepared_receipt.get("invoicePreparations")
+    if not isinstance(invoice_preparations, list):
+        return
+
+    candidates: list[tuple[dict[str, Any], dict[str, Any], str, int | None]] = []
+    for item in invoice_preparations:
+        if not isinstance(item, dict):
+            continue
+        prepared_input = item.get("preparedInput")
+        if not isinstance(prepared_input, dict):
+            continue
+        service_data = prepared_input.get("serviceData")
+        if not isinstance(service_data, dict):
+            context = prepared_input.get("context")
+            context_service_data = (
+                context.get("serviceData") if isinstance(context, dict) else None
+            )
+            if not isinstance(context_service_data, dict):
+                continue
+            service_data = context_service_data
+            prepared_input["serviceData"] = service_data
+        serial_data = service_data.get("w34InvoiceSerial")
+        if not isinstance(serial_data, dict):
+            continue
+
+        invoice_no = str(
+            serial_data.get("invoiceNo") or prepared_input.get("invoiceNo") or ""
+        ).strip()
+        serial_data["invoiceNo"] = invoice_no
+        candidates.append(
+            (
+                prepared_input,
+                serial_data,
+                invoice_no,
+                _parse_numeric_invoice_number(invoice_no),
+            )
+        )
+
+    for prepared_input, serial_data, invoice_no, invoice_number in candidates:
+        peer_invoice_numbers: list[str] = []
+        if serial_data.get("isApplicable") and invoice_number is not None:
+            peer_invoice_numbers = [
+                other_invoice_no
+                for other_prepared_input, other_serial_data, other_invoice_no, other_number in candidates
+                if (
+                    other_prepared_input is not prepared_input
+                    and other_serial_data.get("isApplicable")
+                    and other_invoice_no
+                    and other_number is not None
+                    and abs(invoice_number - other_number) <= 10
+                )
+            ]
+
+        history_numbers = _normalize_invoice_number_list(serial_data.get("historyNumbers"))
+        # 接口返回当前发票自身时不能把自身作为连号依据。
+        history_numbers = [number for number in history_numbers if number != invoice_no]
+        serial_data["historyNumbers"] = history_numbers
+        serial_data["historyHit"] = bool(history_numbers)
+        serial_data["batchPeerInvoiceNumbers"] = peer_invoice_numbers
+        serial_data["batchHit"] = bool(peer_invoice_numbers)
+        history_peer_numbers = list(history_numbers)
+        related_numbers = _merge_invoice_number_lists(
+            peer_invoice_numbers, history_peer_numbers
+        )
+        serial_data["historyPeerInvoiceNumbers"] = history_peer_numbers
+        serial_data["relatedInvoiceNumbers"] = related_numbers
+        serial_data["relatedInvoiceNumbersText"] = "、".join(related_numbers)
+        serial_data["relationDescription"] = _build_invoice_serial_relation_description(
+            peer_invoice_numbers,
+            history_peer_numbers,
+            subject=str(serial_data.get("relationSubject") or "发票"),
+        )
+
+        service_data = prepared_input.get("serviceData")
+        if not isinstance(service_data, dict):
+            continue
+        service_data["w34InvoiceSerial"] = serial_data
+        prepared_input["serviceData"] = service_data
+        context = prepared_input.get("context")
+        if not isinstance(context, dict):
+            context = {}
+            prepared_input["context"] = context
+        context["serviceData"] = service_data
+
+
+def _parse_numeric_invoice_number(value: Any) -> int | None:
+    normalized = str(value or "").strip()
+    if not normalized or not normalized.isdecimal():
+        return None
+    try:
+        return int(normalized)
+    except (TypeError, ValueError):
+        return None
 
 
 def _inject_taxi_invoice_batch_context(prepared_receipt: Mapping[str, Any]) -> None:
@@ -877,6 +984,38 @@ def _inject_previous_invoice_numbers(
     if not isinstance(prepared_input, dict):
         return
     prepared_input["previousInvoiceNumbers"] = list(previous_invoice_numbers)
+
+
+def _inject_previous_w34_invoice_numbers(
+    invoice_preparation: Mapping[str, Any],
+    previous_w34_invoice_numbers: list[str],
+) -> None:
+    prepared_input = invoice_preparation.get("preparedInput")
+    if not isinstance(prepared_input, dict):
+        return
+    prepared_input["previousW34InvoiceNumbers"] = list(previous_w34_invoice_numbers)
+
+
+def _collect_w34_invoice_number(
+    invoice_preparation: Mapping[str, Any],
+    previous_w34_invoice_numbers: list[str],
+) -> None:
+    prepared_input = invoice_preparation.get("preparedInput")
+    if not isinstance(prepared_input, Mapping):
+        return
+    service_data = prepared_input.get("serviceData")
+    if not isinstance(service_data, Mapping):
+        context = prepared_input.get("context")
+        context_service_data = (
+            context.get("serviceData") if isinstance(context, Mapping) else None
+        )
+        service_data = context_service_data
+    serial_data = service_data.get("w34InvoiceSerial") if isinstance(service_data, Mapping) else None
+    if not isinstance(serial_data, Mapping) or not serial_data.get("isApplicable"):
+        return
+    invoice_no = str(serial_data.get("invoiceNo") or prepared_input.get("invoiceNo") or "").strip()
+    if invoice_no:
+        previous_w34_invoice_numbers.append(invoice_no)
 
 
 def _collect_invoice_number(

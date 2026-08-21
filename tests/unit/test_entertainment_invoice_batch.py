@@ -3,7 +3,10 @@ from __future__ import annotations
 import unittest
 from typing import Any
 
-from expense_audit_orchestrator.application import _inject_entertainment_invoice_batch_context
+from expense_audit_orchestrator.application import (
+    _inject_entertainment_invoice_batch_context,
+    _inject_w34_invoice_batch_context,
+)
 
 
 class EntertainmentInvoiceBatchContextTests(unittest.TestCase):
@@ -136,6 +139,76 @@ class EntertainmentInvoiceBatchContextTests(unittest.TestCase):
         self.assertEqual([item["currentPrefix"] for item in serials], ["123456", "123456"])
         self.assertEqual([item["batchHit"] for item in serials], [True, True])
         self.assertIn("serviceData", first["preparedInput"])
+
+
+class W34InvoiceBatchContextTests(unittest.TestCase):
+    @staticmethod
+    def _prepared(
+        invoice_no: str,
+        *,
+        applicable: bool = True,
+        history_numbers: list[str] | None = None,
+    ) -> dict[str, Any]:
+        serial_data = {
+            "invoiceNo": invoice_no,
+            "isApplicable": applicable,
+            "historyNumbers": history_numbers or [],
+            "historyHit": bool(history_numbers),
+            "batchHit": False,
+            "relationSubject": "发票",
+            "lookupFailed": False,
+        }
+        return {
+            "preparedInput": {
+                "serviceData": {"w34InvoiceSerial": serial_data},
+                "context": {"serviceData": {"w34InvoiceSerial": dict(serial_data)}},
+            }
+        }
+
+    @staticmethod
+    def _inject(*items: dict[str, Any]) -> list[dict[str, Any]]:
+        prepared_receipt = {"invoicePreparations": list(items)}
+        _inject_w34_invoice_batch_context(prepared_receipt)
+        return [item["preparedInput"]["serviceData"]["w34InvoiceSerial"] for item in items]
+
+    def test_difference_at_most_ten_marks_both_invoices(self) -> None:
+        serials = self._inject(
+            self._prepared("90000000000000000010"),
+            self._prepared("90000000000000000020"),
+        )
+
+        self.assertEqual([item["batchHit"] for item in serials], [True, True])
+        self.assertEqual(
+            [item["batchPeerInvoiceNumbers"] for item in serials],
+            [["90000000000000000020"], ["90000000000000000010"]],
+        )
+
+    def test_difference_greater_than_ten_does_not_hit(self) -> None:
+        serials = self._inject(
+            self._prepared("10000000000000000000"),
+            self._prepared("10000000000000000011"),
+        )
+
+        self.assertEqual([item["batchHit"] for item in serials], [False, False])
+        self.assertEqual([item["batchPeerInvoiceNumbers"] for item in serials], [[], []])
+
+    def test_non_w34_invoice_type_is_not_a_peer(self) -> None:
+        serials = self._inject(
+            self._prepared("1234567890", applicable=True),
+            self._prepared("1234567891", applicable=False),
+        )
+
+        self.assertEqual([item["batchHit"] for item in serials], [False, False])
+        self.assertEqual([item["batchPeerInvoiceNumbers"] for item in serials], [[], []])
+
+    def test_history_numbers_are_preserved_for_cross_receipt_graph_check(self) -> None:
+        serials = self._inject(
+            self._prepared("1234567890", history_numbers=["1234567899"]),
+        )
+
+        self.assertEqual(serials[0]["historyNumbers"], ["1234567899"])
+        self.assertTrue(serials[0]["historyHit"])
+        self.assertEqual(serials[0]["batchPeerInvoiceNumbers"], [])
 
 
 if __name__ == "__main__":

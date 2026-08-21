@@ -73,15 +73,39 @@ def _normalize_invoice_serial_numbers(value: Any) -> list[str]:
     return result
 
 
-def build_entertainment_invoice_serial_enricher(
+W34_INVOICE_TYPE_VALUES = frozenset(
+    {
+        "RJ-001",
+        "电子发票（普通发票）",
+        "电子发票(普通发票)",
+        "1-003",
+        "增值税电子普通发票",
+        "电子普通发票",
+        "1-002",
+        "增值税普通发票",
+        "纸质普通发票",
+    }
+)
+
+
+def _is_w34_invoice_type(
+    ocr_data: Mapping[str, Any],
+    service_data: Mapping[str, Any],
+) -> bool:
+    """判断当前发票是否属于 W34 约定的三类票种。"""
+    return bool(_invoice_type_values(ocr_data, service_data).intersection(W34_INVOICE_TYPE_VALUES))
+
+
+def build_w34_invoice_serial_enricher(
     *,
     service_url: str | None = None,
     provider: InvoiceSerialNumberProvider | None = None,
 ) -> Callable[[str, str, dict[str, Any], dict[str, Any]], dict[str, Any]]:
-    """构造业务招待费出租车发票历史连号查询 enricher。
+    """构造 W34 发票连号查询 enricher。
 
-    业务招待费沿用个人交通费 E34 的出租车识别、历史查询和降级策略，
-    但只对出租车发票查询；普通餐饮、住宿等招待费发票不会调用连号接口。
+    W34 只检查电子发票（普通发票）、增值税电子普通发票和增值税普通发票，
+    并通过 invoice-serial-number 接口查询跨核销单发票号码。接口返回当前
+    发票本身时将其过滤，避免一张发票与自身比较产生误报。
     """
     resolved_service_url = service_url or audit_client.DEFAULT_AUDIT_SERVICE_URL
     invoice_serial_provider = provider or partial(
@@ -97,17 +121,17 @@ def build_entertainment_invoice_serial_enricher(
     ) -> dict[str, Any]:
         del file_path
         ocr = ocr_data if isinstance(ocr_data, Mapping) else {}
+        services = service_data if isinstance(service_data, Mapping) else {}
         invoice_no = (
             _string_value(ocr.get("chequeNo"))
             or _string_value(ocr.get("invoiceNo"))
             or _string_value(ocr.get("serialNo"))
         )
-        taxi_invoice = is_taxi_invoice(ocr)
-        current_prefix = normalize_invoice_serial_prefix(invoice_no)
+        is_applicable = _is_w34_invoice_type(ocr, services)
         history_numbers: list[str] = []
         lookup_failed = False
 
-        audit_info = service_data.get("auditInfo") if isinstance(service_data, Mapping) else {}
+        audit_info = services.get("auditInfo")
         if not isinstance(audit_info, Mapping):
             audit_info = {}
         instance_code = _string_value(audit_info.get("instanceCode")) or receipt_code
@@ -116,18 +140,21 @@ def build_entertainment_invoice_serial_enricher(
             or _string_value(audit_info.get("accountingCode"))
         )
 
-        # 发票号缺失或长度不足 8 位时不调用历史接口，也不进行连号判断。
-        if taxi_invoice and invoice_no and current_prefix:
+        if is_applicable and invoice_no:
             try:
-                history_numbers = _normalize_invoice_serial_numbers(
-                    invoice_serial_provider(invoice_no, instance_code, accounting_code) or []
-                )
+                history_numbers = [
+                    number
+                    for number in _normalize_invoice_serial_numbers(
+                        invoice_serial_provider(invoice_no, instance_code, accounting_code) or []
+                    )
+                    if number != invoice_no
+                ]
             except Exception as exc:
                 lookup_failed = True
                 _logger.warning(
-                    "业务招待费出租车发票历史连号查询失败，降级为空列表",
+                    "业务招待费 W34 发票连号查询失败，降级为空列表",
                     extra={
-                        "event": "data_prep.entertainment_taxi_invoice_serial.fallback",
+                        "event": "data_prep.entertainment_w34_invoice_serial.fallback",
                         "receipt_code": receipt_code,
                         "instance_code": instance_code,
                         "cheque_no": invoice_no,
@@ -138,18 +165,56 @@ def build_entertainment_invoice_serial_enricher(
 
         return {
             "invoiceNo": invoice_no,
-            "currentPrefix": current_prefix,
+            "isApplicable": is_applicable,
             "historyNumbers": history_numbers,
             "historyHit": bool(history_numbers),
-            "batchHit": False,
-            "isTaxiInvoice": taxi_invoice,
-            # 保留兼容字段，便于既有 prepared receipt/外部调用方迁移。
-            "isEntertainmentInvoice": taxi_invoice,
-            "relationSubject": "出租车发票",
             "lookupFailed": lookup_failed,
+            "relationSubject": "发票",
         }
 
     return enricher
+
+
+def build_entertainment_taxi_invoice_serial_enricher() -> Callable[
+    [str, str, dict[str, Any], dict[str, Any]], dict[str, Any]
+]:
+    """构造 E34 的本核销单出租车连号数据准备。
+
+    E34 只检查本核销单内出租车发票的出租车票号前缀，不调用 W34 使用的
+    ``invoice-serial-number`` 历史接口。
+    """
+
+    def enricher(
+        receipt_code: str,
+        file_path: str,
+        ocr_data: dict[str, Any],
+        service_data: dict[str, Any],
+    ) -> dict[str, Any]:
+        del receipt_code, file_path, service_data
+        ocr = ocr_data if isinstance(ocr_data, Mapping) else {}
+        invoice_no = (
+            _string_value(ocr.get("chequeNo"))
+            or _string_value(ocr.get("invoiceNo"))
+            or _string_value(ocr.get("serialNo"))
+        )
+        taxi_invoice = is_taxi_invoice(ocr)
+        return {
+            "invoiceNo": invoice_no,
+            "currentPrefix": normalize_invoice_serial_prefix(invoice_no),
+            "historyNumbers": [],
+            "historyHit": False,
+            "batchHit": False,
+            "isTaxiInvoice": taxi_invoice,
+            "isEntertainmentInvoice": taxi_invoice,
+            "relationSubject": "出租车发票",
+            "lookupFailed": False,
+        }
+
+    return enricher
+
+
+# 兼容已有外部调用方；正式 profile 使用名称更明确的 W34 enricher。
+build_entertainment_invoice_serial_enricher = build_w34_invoice_serial_enricher
 
 
 def _resolve_e15_map_path(path: str | Path | None = None) -> Path:
@@ -352,9 +417,12 @@ def entertainment_receipt_enricher(
 __all__ = [
     "DEFAULT_E15_INVOICE_TYPE_MAP_PATH",
     "E15_INVOICE_TYPE_MAP_PATH_ENV",
+    "W34_INVOICE_TYPE_VALUES",
     "build_e15_invoice_type_enricher",
     "build_entertainment_invoice_serial_enricher",
     "build_entertainment_receipt_enricher",
+    "build_entertainment_taxi_invoice_serial_enricher",
+    "build_w34_invoice_serial_enricher",
     "entertainment_receipt_enricher",
     "load_e15_invoice_type_map",
     "normalize_invoice_serial_prefix",
