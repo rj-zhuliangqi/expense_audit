@@ -72,10 +72,13 @@ class PersonalTransportMessageTests(unittest.TestCase):
                 if not value:
                     continue
                 self.assertNotRegex(value, r"\{[^{}]+\}", node["name"])
-                if node["name"] not in {"发票充值卡检查", "发票内容项目检查"} or "LLM服务调用失败" not in value:
-                    if value != '""':
-                        self.assertIn("+", value, node["name"])
-                        dynamic_count += 1
+                is_llm_failure = (
+                    node["name"] in {"发票充值卡检查", "发票内容项目检查"}
+                    and rule.get(content["inputs"][0]["id"]) == '"error"'
+                )
+                if not is_llm_failure and value != '""':
+                    self.assertIn("+", value, node["name"])
+                    dynamic_count += 1
         self.assertEqual(dynamic_count, 17)
 
     def _base_input(self) -> dict:
@@ -264,6 +267,11 @@ class PersonalTransportMessageTests(unittest.TestCase):
         self.assertEqual(e36["instance_code"], "REC-E36-FAIL")
         self.assertEqual(e36["invoice_file_id"], "FILE-E36-FAIL")
         self.assertEqual(e36["invoice_info_id"], "INFO-E36-FAIL")
+        self.assertEqual(
+            e36["message"],
+            "模型服务暂时异常，当前发票内容项目检查未完成，请联系管理员处理。",
+        )
+        self.assertNotIn("llmGatewayUrl not injected", e36["message"])
 
         e36_llm = (result["trace"] or {})["514e15db-3657-4fa3-9228-88b750ea08f8"]
         self.assertEqual(e36_llm["output"]["invoiceNo"], "E36-FAIL")
