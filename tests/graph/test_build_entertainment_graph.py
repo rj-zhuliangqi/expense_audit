@@ -20,6 +20,8 @@ from apps.builders.entertainment_graph import (
 )
 from expense_audit_orchestrator.core import ReceiptDataPreparer, _lookup_enterprise_info
 from expense_audit_orchestrator.paths import OFFICIAL_GRAPH_PATHS
+from graph_runtime.application import evaluate_prepared_input
+from graph_runtime.core import load_decision_from_content
 
 
 def _is_recently_registered_expression() -> str:
@@ -486,6 +488,7 @@ class ContentComplianceLlmTests(unittest.TestCase):
     def test_prompt_uses_project_name_semantics_not_keyword_matching(self) -> None:
         self.assertIn("JSON.stringify(goodsName)", ENTERTAINMENT_CONTENT_PROMPT_SOURCE)
         self.assertIn("黄金针菇", ENTERTAINMENT_CONTENT_PROMPT_SOURCE)
+        self.assertIn("茅台老树S15干红葡萄酒", ENTERTAINMENT_CONTENT_PROMPT_SOURCE)
         self.assertIn("默认通过", ENTERTAINMENT_CONTENT_PROMPT_SOURCE)
         for prohibited_item in ("黄金", "珠宝", "首饰", "茅台", "五粮液", "礼品卡", "充值卡"):
             self.assertIn(prohibited_item, ENTERTAINMENT_CONTENT_PROMPT_SOURCE)
@@ -506,6 +509,62 @@ class ContentComplianceLlmTests(unittest.TestCase):
             "llm_status": "success",
             "llm_result": {"passed": False, "violationType": "recharge_card"},
         }), "recharge_card")
+
+    def test_prohibited_item_row_returns_e36_reject_for_builder_and_official_graph(self) -> None:
+        request = {
+            "type": "inputNode",
+            "content": {"schema": ""},
+            "id": "request",
+            "name": "request",
+            "position": {"x": 0, "y": 0},
+        }
+        response = {
+            "type": "outputNode",
+            "content": {"schema": ""},
+            "id": "response",
+            "name": "response",
+            "position": {"x": 500, "y": 0},
+        }
+
+        graphs = (
+            ("builder", build_entertainment_graph()),
+            (
+                "official",
+                json.loads(OFFICIAL_GRAPH_PATHS["entertainment"].read_text(encoding="utf-8")),
+            ),
+        )
+        for graph_name, graph in graphs:
+            with self.subTest(graph=graph_name):
+                content_check = next(
+                    node for node in graph["nodes"] if node["id"] == "ent-content-compliance-check"
+                )
+                isolated_graph = {
+                    "contentType": "application/vnd.gorules.decision",
+                    "nodes": [request, content_check, response],
+                    "edges": [
+                        {"id": "edge-request-check", "sourceId": "request", "targetId": content_check["id"], "type": "edge"},
+                        {"id": "edge-check-response", "sourceId": content_check["id"], "targetId": "response", "type": "edge"},
+                    ],
+                }
+                decision = load_decision_from_content(isolated_graph)
+                result = evaluate_prepared_input(
+                    decision,
+                    {
+                        "contentCheckResult": "prohibited_item",
+                        "invoiceNo": "INV-E36-001",
+                        "goodsName": "*酒*茅台老树S15干红葡萄酒",
+                        "invoice_file_id": "file-e36-001",
+                        "invoice_info_id": "info-e36-001",
+                        "instance_code": "INSTANCE-E36-TEST",
+                        "context": {"executionTime": "2026-08-24T00:00:00+00:00"},
+                    },
+                    trace=False,
+                )
+                e36 = result["decisionOutput"]["content_compliance_result"]
+                self.assertEqual(e36["reason_code"], "E36")
+                self.assertEqual(e36["distinguish_result"], "REJECT")
+                self.assertIn("茅台老树S15干红葡萄酒", e36["message"])
+                self.assertIn("厉行节约", e36["message"])
 
     def test_e36_contains_recharge_card_result_row(self) -> None:
         node = _build_content_compliance_check_node()
