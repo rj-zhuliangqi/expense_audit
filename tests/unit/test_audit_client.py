@@ -211,6 +211,51 @@ class AuditClientHeaderTests(unittest.TestCase):
         self.assertNotIn("accountingCode=", request.full_url)
         self.assertNotIn("/invoice-serial-number?", request.full_url)
 
+    @patch("expense_audit_orchestrator.audit_client.time.sleep")
+    @patch("expense_audit_orchestrator.audit_client.urlopen")
+    def test_fetch_taxi_invoice_serial_numbers_retries_service_failure(
+        self,
+        mock_urlopen,
+        mock_sleep,
+    ) -> None:
+        mock_urlopen.side_effect = [
+            FakeHttpResponse({"status": "500", "err": "查询失败", "data": []}),
+            FakeHttpResponse({"status": "200", "err": "操作成功", "data": ["12345699"]}),
+        ]
+        with patch.object(audit_client, "_resolve_retry_backoff_seconds", return_value=0):
+            result = audit_client.fetch_taxi_invoice_serial_numbers(
+                "12345601",
+                "REC-TAXI-RETRY",
+                service_url="https://service.example",
+            )
+
+        self.assertEqual(result, ["12345699"])
+        self.assertEqual(mock_urlopen.call_count, 2)
+        mock_sleep.assert_not_called()
+
+    @patch("expense_audit_orchestrator.audit_client.time.sleep")
+    @patch("expense_audit_orchestrator.audit_client.urlopen")
+    def test_fetch_taxi_invoice_serial_numbers_raises_after_retries_exhausted(
+        self,
+        mock_urlopen,
+        mock_sleep,
+    ) -> None:
+        mock_urlopen.side_effect = [
+            FakeHttpResponse({"status": "500", "err": "查询失败", "data": []}),
+            FakeHttpResponse({"status": "500", "err": "查询失败", "data": []}),
+            FakeHttpResponse({"status": "500", "err": "查询失败", "data": []}),
+        ]
+        with patch.object(audit_client, "_resolve_retry_backoff_seconds", return_value=0):
+            with self.assertRaisesRegex(ValueError, "查询失败"):
+                audit_client.fetch_taxi_invoice_serial_numbers(
+                    "12345601",
+                    "REC-TAXI-RETRY-FAILED",
+                    service_url="https://service.example",
+                )
+
+        self.assertEqual(mock_urlopen.call_count, 3)
+        mock_sleep.assert_not_called()
+
     @patch("expense_audit_orchestrator.audit_client.urlopen")
     def test_fetch_taxi_invoice_serial_numbers_returns_empty_data(self, mock_urlopen) -> None:
         mock_urlopen.return_value = FakeHttpResponse(

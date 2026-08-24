@@ -21,6 +21,7 @@ class E34TaxiInvoiceGraphTests(unittest.TestCase):
         is_taxi: bool,
         history_hit: bool = False,
         batch_hit: bool = False,
+        lookup_failed: bool = False,
         relation_description: str | None = None,
     ) -> dict:
         invoice_no = "12345601"
@@ -64,7 +65,7 @@ class E34TaxiInvoiceGraphTests(unittest.TestCase):
                     "relationDescription": relation_description,
                     "batchHit": batch_hit,
                     "isTaxiInvoice": is_taxi,
-                    "lookupFailed": False,
+                    "lookupFailed": lookup_failed,
                 },
             },
         }
@@ -115,6 +116,17 @@ class E34TaxiInvoiceGraphTests(unittest.TestCase):
             trace=False,
         )
         self.assertEqual(self._e34(result)["distinguish_result"], "PASS")
+
+    def test_history_lookup_failure_rejects_with_retry_failure_message(self) -> None:
+        result = evaluate_prepared_input(
+            self.decision,
+            self._prepared(is_taxi=True, lookup_failed=True),
+            trace=False,
+        )
+        rule = self._e34(result)
+        self.assertEqual(rule["distinguish_result"], "REJECT")
+        self.assertIn("历史连号接口查询失败", rule["message"])
+        self.assertIn("自动重试但仍未成功", rule["message"])
 
     def test_non_taxi_passes_even_if_flags_are_true(self) -> None:
         result = evaluate_prepared_input(

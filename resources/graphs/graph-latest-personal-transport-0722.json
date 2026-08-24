@@ -265,9 +265,14 @@
             "value": "(serviceData.taxiInvoiceSerial.isTaxiInvoice ?? false) and (serviceData.taxiInvoiceSerial.batchHit ?? false)"
           },
           {
+            "id": "personal-transport-e34-serial-lookup-failed",
+            "key": "isTaxiSerialLookupFailed",
+            "value": "(serviceData.taxiInvoiceSerial.isTaxiInvoice ?? false) and (serviceData.taxiInvoiceSerial.lookupFailed ?? false)"
+          },
+          {
             "id": "466d9389-b4a7-4f98-81ad-2e10a6ae993d",
             "key": "isTaxiConsecutive",
-            "value": "not($.isTaxiHistoricalConsecutive or $.isTaxiBatchConsecutive)"
+            "value": "not($.isTaxiSerialLookupFailed or $.isTaxiHistoricalConsecutive or $.isTaxiBatchConsecutive)"
           },
           {
             "id": "e39-invoice-type-code-001",
@@ -2039,7 +2044,7 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"本次报销中存在出租车发票连票，发票号 \" + (invoiceNo ?? \"\") + \" 与\" + (serviceData.taxiInvoiceSerial.relationDescription ?? \"历史库或本次核销单中的其他出租车发票\") + \" 存在连票关系，存在异常报销风险。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "(serviceData.taxiInvoiceSerial.lookupFailed ?? false) ? \"出租车发票历史连号接口查询失败，已自动重试但仍未成功，无法完成 E34 连号稽核，请稍后重试或联系财务处理。\" : (\"本次报销中存在出租车发票连票，发票号 \" + (invoiceNo ?? \"\") + \" 与\"+ (serviceData.taxiInvoiceSerial.relationDescription ?? \"历史库或本次核销单中的其他出租车发票\") + \" 存在连票关系，存在异常报销风险。\")",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范\\n所有费用报销须提供真实、合法、合规的票据。\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"请确认票据是否真实对应本次业务出行。无法说明合理业务原因的，请删除相关票据；保留提交的，系统将记录并转财务复核。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
