@@ -220,9 +220,24 @@
             "value": "(serviceData.w34InvoiceSerial.isApplicable ?? false) and (invoiceNo ?? \"\") != \"\" and ((serviceData.w34InvoiceSerial.batchHit ?? false) or some((previousW34InvoiceNumbers ?? []) as prev, (prev ?? \"\") != \"\" and abs(number(invoiceNo) - number(prev)) <= 10) or some((serviceData.w34InvoiceSerial.historyNumbers ?? []) as prev, (prev ?? \"\") != \"\" and prev != invoiceNo and abs(number(invoiceNo) - number(prev)) <= 10))"
           },
           {
+            "id": "entertainment-e34-history-consecutive",
+            "key": "isEntertainmentTaxiHistoricalConsecutive",
+            "value": "(serviceData.entertainmentInvoiceSerial.isTaxiInvoice ?? false) and (serviceData.entertainmentInvoiceSerial.historyHit ?? false)"
+          },
+          {
+            "id": "entertainment-e34-batch-consecutive",
+            "key": "isEntertainmentTaxiBatchConsecutive",
+            "value": "(serviceData.entertainmentInvoiceSerial.isTaxiInvoice ?? false) and (serviceData.entertainmentInvoiceSerial.batchHit ?? false)"
+          },
+          {
+            "id": "entertainment-e34-serial-lookup-failed",
+            "key": "isEntertainmentTaxiSerialLookupFailed",
+            "value": "(serviceData.entertainmentInvoiceSerial.isTaxiInvoice ?? false) and (serviceData.entertainmentInvoiceSerial.lookupFailed ?? false)"
+          },
+          {
             "id": "b7589756-18b6-4947-9824-4d8982dd3e34",
             "key": "isEntertainmentTaxiInvoiceSerialClean",
-            "value": "not((serviceData.entertainmentInvoiceSerial.isTaxiInvoice ?? false) and ((serviceData.entertainmentInvoiceSerial.historyHit ?? false) or (serviceData.entertainmentInvoiceSerial.batchHit ?? false)))"
+            "value": "not($.isEntertainmentTaxiSerialLookupFailed or $.isEntertainmentTaxiHistoricalConsecutive or $.isEntertainmentTaxiBatchConsecutive)"
           }
         ],
         "passThrough": true,
@@ -2137,7 +2152,7 @@
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E34\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查本核销单内出租车发票号码是否存在连号\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查出租车发票号码是否连续或连票\"",
             "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
@@ -2154,12 +2169,12 @@
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E34\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查本核销单内出租车发票号码是否存在连号\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查出租车发票号码是否连续或连票\"",
             "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"本次报销中存在出租车发票连号，发票号 \" + (invoiceNo ?? \"\") + \" 与\" + (serviceData.entertainmentInvoiceSerial.relationDescription ?? \"本核销单中的其他出租车发票\") + \" 存在连号关系，存在异常报销风险。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "(serviceData.entertainmentInvoiceSerial.lookupFailed ?? false) ? \"出租车发票历史连号接口查询失败，已自动重试但仍未成功，无法完成 E34 连号稽核，请稍后重试或联系财务处理。\" : (\"本次报销中存在出租车发票连号，发票号 \" + (invoiceNo ?? \"\") + \" 与\" + (serviceData.entertainmentInvoiceSerial.relationDescription ?? \"历史库或本次核销单中的其他出租车发票\") + \" 存在连号关系，存在异常报销风险。\")",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范\\n所有费用报销须提供真实、合法、合规的票据。\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"请确认票据是否真实对应本次业务。无法说明合理业务原因的，请删除相关票据；保留提交的，系统将记录并转财务复核。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"

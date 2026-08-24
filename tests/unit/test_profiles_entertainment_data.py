@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch
 
+from expense_audit_orchestrator import audit_client
 from expense_audit_orchestrator.profiles.entertainment.client import EntertainmentApiClient
 from expense_audit_orchestrator.profiles.entertainment.data import (
     build_e15_invoice_type_enricher,
@@ -169,22 +170,70 @@ class EntertainmentDataTests(unittest.TestCase):
         self.assertEqual(result["historyNumbers"], [])
         self.assertFalse(result["historyHit"])
 
-    def test_e34_taxi_enricher_never_queries_w34_history_interface(self) -> None:
-        with patch(
-            "expense_audit_orchestrator.audit_client.fetch_invoice_serial_numbers",
-            side_effect=AssertionError("E34 must not query W34 history interface"),
+    def test_e34_taxi_enricher_uses_taxi_history_interface_by_default(self) -> None:
+        with patch.object(
+            audit_client,
+            "fetch_taxi_invoice_serial_numbers",
+            return_value=["12345699"],
+        ) as taxi_provider, patch.object(
+            audit_client,
+            "fetch_invoice_serial_numbers",
+            side_effect=AssertionError("E34 must not query generic W34 history interface"),
         ):
-            result = build_entertainment_taxi_invoice_serial_enricher()(
+            enricher = build_entertainment_taxi_invoice_serial_enricher(
+                service_url="https://service.example"
+            )
+            result = enricher(
                 "RECEIPT-004",
                 "invoice.pdf",
-                {"chequeNo": "1234567", "invoiceType": "8"},
+                {
+                    "chequeNo": "12345601",
+                    "invoiceType": "8",
+                    "accountingCode": "ACCT-004",
+                },
                 {"auditInfo": {"instanceCode": "INSTANCE-004"}},
             )
 
+        taxi_provider.assert_called_once_with(
+            "12345601",
+            "INSTANCE-004",
+            "ACCT-004",
+            service_url="https://service.example",
+        )
         self.assertTrue(result["isTaxiInvoice"])
-        self.assertIsNone(result["currentPrefix"])
+        self.assertEqual(result["currentPrefix"], "123456")
+        self.assertEqual(result["historyNumbers"], ["12345699"])
+        self.assertTrue(result["historyHit"])
+        self.assertFalse(result["lookupFailed"])
+
+    def test_e34_taxi_enricher_marks_history_lookup_failure(self) -> None:
+        def provider(*args):
+            raise RuntimeError("service unavailable")
+
+        result = build_entertainment_taxi_invoice_serial_enricher(provider=provider)(
+            "RECEIPT-005",
+            "invoice.pdf",
+            {"chequeNo": "12345601", "invoiceType": "8"},
+            {"auditInfo": {"instanceCode": "INSTANCE-005"}},
+        )
+
         self.assertEqual(result["historyNumbers"], [])
         self.assertFalse(result["historyHit"])
+        self.assertTrue(result["lookupFailed"])
+
+    def test_e34_short_taxi_invoice_does_not_query_history(self) -> None:
+        def provider(*args):
+            raise AssertionError(f"short invoice must not query history: {args}")
+
+        result = build_entertainment_taxi_invoice_serial_enricher(provider=provider)(
+            "RECEIPT-006",
+            "invoice.pdf",
+            {"chequeNo": "1234567", "invoiceType": "8"},
+            {"auditInfo": {"instanceCode": "INSTANCE-006"}},
+        )
+
+        self.assertTrue(result["isTaxiInvoice"])
+        self.assertIsNone(result["currentPrefix"])
         self.assertFalse(result["lookupFailed"])
 
     def test_w34_history_lookup_failure_degrades_without_blocking(self) -> None:
