@@ -134,7 +134,7 @@ def build_taxi_invoice_serial_enricher(
     """构造个人交通费出租车历史连票查询 enricher。"""
     resolved_service_url = service_url or audit_client.DEFAULT_AUDIT_SERVICE_URL
     invoice_serial_provider = provider or partial(
-        audit_client.fetch_invoice_serial_numbers,
+        audit_client.fetch_taxi_invoice_serial_numbers,
         service_url=resolved_service_url,
     )
 

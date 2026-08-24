@@ -255,9 +255,19 @@
             "value": "$.isPassengerNameCheckApplicable ? ((passengerName ?? \"\") == \"\" or (passengerName ?? \"\") == (serviceData.auditInfo.verifiUserName ?? \"\")) : true"
           },
           {
+            "id": "personal-transport-e34-history-consecutive",
+            "key": "isTaxiHistoricalConsecutive",
+            "value": "(serviceData.taxiInvoiceSerial.isTaxiInvoice ?? false) and (serviceData.taxiInvoiceSerial.historyHit ?? false)"
+          },
+          {
+            "id": "personal-transport-e34-batch-consecutive",
+            "key": "isTaxiBatchConsecutive",
+            "value": "(serviceData.taxiInvoiceSerial.isTaxiInvoice ?? false) and (serviceData.taxiInvoiceSerial.batchHit ?? false)"
+          },
+          {
             "id": "466d9389-b4a7-4f98-81ad-2e10a6ae993d",
             "key": "isTaxiConsecutive",
-            "value": "not((serviceData.taxiInvoiceSerial.isTaxiInvoice ?? false) and ((serviceData.taxiInvoiceSerial.historyHit ?? false) or (serviceData.taxiInvoiceSerial.batchHit ?? false)))"
+            "value": "not($.isTaxiHistoricalConsecutive or $.isTaxiBatchConsecutive)"
           },
           {
             "id": "e39-invoice-type-code-001",
@@ -2121,7 +2131,7 @@
         "outputPath": "taxi_consecutive_result",
         "executionMode": "single"
       },
-      "id": "travel_w19_taxi_consecutive_check",
+      "id": "travel_e34_taxi_consecutive_check",
       "name": "出租车连号检查",
       "position": {
         "x": 660,
@@ -2699,12 +2709,12 @@
     {
       "id": "ac4c996e-ef57-4802-aa2d-fe962fa8cf76",
       "sourceId": "c67dcb33-2750-4a43-8af7-8346612c04a9",
-      "targetId": "travel_w19_taxi_consecutive_check",
+      "targetId": "travel_e34_taxi_consecutive_check",
       "type": "edge"
     },
     {
       "id": "a10c6408-7665-47fb-9f2b-a9a384efb4e9",
-      "sourceId": "travel_w19_taxi_consecutive_check",
+      "sourceId": "travel_e34_taxi_consecutive_check",
       "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
       "type": "edge"
     },

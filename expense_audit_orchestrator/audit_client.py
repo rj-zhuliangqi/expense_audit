@@ -166,8 +166,39 @@ def fetch_invoice_serial_numbers(
         },
         headers=_build_auth_headers(),
     )
+    return _normalize_invoice_serial_numbers(data, "invoice serial number")
+
+
+def fetch_taxi_invoice_serial_numbers(
+    cheque_no: str,
+    instance_code: str,
+    accounting_code: str | None = None,
+    service_url: str = DEFAULT_AUDIT_SERVICE_URL,
+    timeout: float | None = None,
+) -> list[str]:
+    """查询个人交通费 E34 使用的历史出租车发票连号。
+
+    ``accounting_code`` 仅为兼容发票连号 provider 的调用签名保留，
+    出租车专用接口不接收该查询参数。
+    """
+    del accounting_code
+    data = _fetch_service_data(
+        "/api/audit-service/audit/invoice-serial-number-taxi",
+        service_url=service_url,
+        timeout=timeout,
+        description="出租车发票历史连号信息",
+        query_params={
+            "chequeNo": cheque_no,
+            "instanceCode": instance_code,
+        },
+        headers=_build_auth_headers(),
+    )
+    return _normalize_invoice_serial_numbers(data, "taxi invoice serial number")
+
+
+def _normalize_invoice_serial_numbers(data: Any, service_name: str) -> list[str]:
     if not isinstance(data, list):
-        raise ValueError("invoice serial number service returned invalid payload")
+        raise ValueError(f"{service_name} service returned invalid payload")
 
     result: list[str] = []
     for item in data:
@@ -668,5 +699,6 @@ __all__ = [
     "fetch_field_mappings",
     "fetch_invoice_info",
     "fetch_invoice_serial_numbers",
+    "fetch_taxi_invoice_serial_numbers",
     "update_audit_task_status",
 ]

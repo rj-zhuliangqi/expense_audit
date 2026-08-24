@@ -177,6 +177,55 @@ class AuditClientHeaderTests(unittest.TestCase):
         self.assertIn("accountingCode=111", request.full_url)
 
     @patch("expense_audit_orchestrator.audit_client.urlopen")
+    def test_fetch_taxi_invoice_serial_numbers_uses_taxi_endpoint_and_only_supported_params(
+        self,
+        mock_urlopen,
+    ) -> None:
+        mock_urlopen.return_value = FakeHttpResponse(
+            {
+                "status": "200",
+                "err": "操作成功",
+                "data": [
+                    {"chequeNo": "12345699"},
+                    {"invoiceNo": "12345698"},
+                ],
+            }
+        )
+
+        result = audit_client.fetch_taxi_invoice_serial_numbers(
+            "12345601",
+            "REC-TAXI-001",
+            "ignored-accounting-code",
+            service_url="https://service.example",
+        )
+
+        self.assertEqual(result, ["12345699", "12345698"])
+        request = mock_urlopen.call_args.args[0]
+        self.assertIsInstance(request, Request)
+        self.assertIn(
+            "/api/audit-service/audit/invoice-serial-number-taxi?",
+            request.full_url,
+        )
+        self.assertIn("chequeNo=12345601", request.full_url)
+        self.assertIn("instanceCode=REC-TAXI-001", request.full_url)
+        self.assertNotIn("accountingCode=", request.full_url)
+        self.assertNotIn("/invoice-serial-number?", request.full_url)
+
+    @patch("expense_audit_orchestrator.audit_client.urlopen")
+    def test_fetch_taxi_invoice_serial_numbers_returns_empty_data(self, mock_urlopen) -> None:
+        mock_urlopen.return_value = FakeHttpResponse(
+            {"status": "200", "err": "操作成功", "data": []}
+        )
+
+        result = audit_client.fetch_taxi_invoice_serial_numbers(
+            "12345601",
+            "REC-TAXI-EMPTY",
+            service_url="https://service.example",
+        )
+
+        self.assertEqual(result, [])
+
+    @patch("expense_audit_orchestrator.audit_client.urlopen")
     def test_fetch_invoice_serial_numbers_raises_for_failure_response(self, mock_urlopen) -> None:
         mock_urlopen.return_value = FakeHttpResponse(
             {"status": "500", "err": "查询失败", "data": []}
