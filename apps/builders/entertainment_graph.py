@@ -1,7 +1,7 @@
 """
 构建业务招待费稽核工作流 graph JSON。
 
-基于通讯费 `resources/graphs/graph-latest-0727-1900.json` 的结构，为业务招待费生成新的 graph：
+基于通讯费 `resources/graphs/graph-latest-telecom-0727-1900.json` 的结构，为业务招待费生成新的 graph：
 - 复用通用稽核节点（E35/E31/E33/sys-001-004/E09/E05/E17）
 - 删除通讯费旧版节点，并重建业务招待费所需的 E01 抬头检查
 - 新增业务招待费特有节点（E36 禁止内容、E15 员工本人费用、W33 礼品数量、W34 发票连续或近似、E34 出租车发票连号、W31 虚开发票预警）

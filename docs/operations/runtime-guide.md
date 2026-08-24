@@ -54,7 +54,7 @@ curl -sS http://127.0.0.1:18090/health
 
 curl -sS -X POST http://127.0.0.1:18090/api/v1/graph-runtime/evaluations \
   -H 'Content-Type: application/json' \
-  -d '{"graphPath":"resources/graphs/graph-latest-0727-1900.json","preparedInput":{"context":{"receiptCode":"REC-001"}},"includePreparedInput":true}'
+  -d '{"graphPath":"resources/graphs/graph-latest-telecom-0727-1900.json","preparedInput":{"context":{"receiptCode":"REC-001"}},"includePreparedInput":true}'
 ```
 
 ### 3. 启动节点调用网关
@@ -73,7 +73,7 @@ GRAPH_RUNTIME_URL=http://127.0.0.1:18090 \
 .venv/bin/python rabbitmq_worker.py \
   --amqp-url "$RABBITMQ_URL" \
   --audit-service-url https://service-uate-gw.ruijie.com.cn \
-  --graph-path resources/graphs/graph-latest-0727-1900.json \
+  --graph-path resources/graphs/graph-latest-telecom-0727-1900.json \
   --queues audit \
   --prepared-output-dir output/worker-debug/prepared \
   --writeback-output-dir output/worker-debug/writeback
@@ -219,7 +219,7 @@ GRAPH_RUNTIME_URL=http://127.0.0.1:18090 \
 .venv/bin/python rabbitmq_worker.py \
   --amqp-url "$RABBITMQ_URL" \
   --audit-service-url https://service-uate-gw.ruijie.com.cn \
-  --graph-path resources/graphs/graph-latest-0727-1900.json \
+  --graph-path resources/graphs/graph-latest-telecom-0727-1900.json \
   --queues audit
 ```
 
@@ -232,7 +232,7 @@ GRAPH_RUNTIME_URL=http://127.0.0.1:18090 \
 .venv/bin/python rabbitmq_worker.py \
   --amqp-url "$RABBITMQ_URL" \
   --audit-service-url https://service-uate-gw.ruijie.com.cn \
-  --graph-path resources/graphs/graph-latest-0727-1900.json \
+  --graph-path resources/graphs/graph-latest-telecom-0727-1900.json \
   --queues audit
 ```
 
@@ -245,7 +245,7 @@ GRAPH_RUNTIME_URL=http://127.0.0.1:18090 \
 .venv/bin/python rabbitmq_worker.py \
   --amqp-url "$RABBITMQ_URL" \
   --audit-service-url https://service-uate-gw.ruijie.com.cn \
-  --graph-path resources/graphs/graph-latest-0727-1900.json \
+  --graph-path resources/graphs/graph-latest-telecom-0727-1900.json \
   --queues audit \
   --prepared-output-dir output/worker-debug/prepared \
   --writeback-output-dir output/worker-debug/writeback

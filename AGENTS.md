@@ -6,10 +6,23 @@
 
 以下正式流程图是源代码的一部分，统一存放在 `resources/graphs/`，**必须纳入 Git 版本跟踪，不得通过 `.gitignore` 忽略**：
 
-- `resources/graphs/graph-latest-0727-1900.json`
+- `resources/graphs/graph-latest-telecom-0727-1900.json`
 - `resources/graphs/graph-latest-entertainment-0722.json`
 - `resources/graphs/graph-latest-personal-transport-0722.json`
 - `resources/graphs/graph-latest-travel-0807.json`
+
+### 费用类型与流程图路径记忆
+
+后续提到费用类型时，按以下映射定位正式执行图：
+
+| 用户常用名称 | profile 标识 | 正式流程图路径 |
+|---|---|---|
+| 通讯费 | `telecom` | `resources/graphs/graph-latest-telecom-0727-1900.json` |
+| 交通费（默认指个人交通费） | `personal_transport` | `resources/graphs/graph-latest-personal-transport-0722.json` |
+| 差旅费 | `travel` | `resources/graphs/graph-latest-travel-0807.json` |
+| 业务招待费 | `entertainment` | `resources/graphs/graph-latest-entertainment-0722.json` |
+
+其中，“交通费”默认对应个人交通费；如明确说“差旅费”或“差旅”，才对应 `travel` 流程图。
 
 其他临时导出、编辑器快照或本地实验图可以忽略，但不能借此忽略上面列出的正式流程图。
 

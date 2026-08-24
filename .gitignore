@@ -26,7 +26,7 @@ prepared-input.json
 graph-latest-* copy.json
 graph-latest-*-*.json
 !resources/graphs/
-!resources/graphs/graph-latest-0727-1900.json
+!resources/graphs/graph-latest-telecom-0727-1900.json
 !resources/graphs/graph-latest-entertainment-0722.json
 !resources/graphs/graph-latest-personal-transport-0722.json
 !resources/graphs/graph-latest-travel-0807.json

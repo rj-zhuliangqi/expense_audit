@@ -35,9 +35,18 @@ class ProjectPathContractTests(unittest.TestCase):
 
     def test_default_graph_is_the_telecom_official_graph(self) -> None:
         self.assertEqual(DEFAULT_GRAPH_PATH, OFFICIAL_GRAPH_PATHS["telecom"])
+        self.assertEqual(DEFAULT_GRAPH_PATH.name, "graph-latest-telecom-0727-1900.json")
 
     def test_relative_paths_are_project_relative(self) -> None:
         self.assertEqual(resolve_project_path("resources/samples/prepare_test.json"), DEFAULT_OCR_PATH)
+        self.assertEqual(
+            resolve_project_path("resources/graphs/graph-latest-telecom-0727-1900.json"),
+            OFFICIAL_GRAPH_PATHS["telecom"],
+        )
+        self.assertEqual(
+            resolve_project_path("graph-latest-telecom-0727-1900.json"),
+            OFFICIAL_GRAPH_PATHS["telecom"],
+        )
         self.assertEqual(resolve_project_path("resources/graphs/graph-latest-travel-0807.json"), OFFICIAL_GRAPH_PATHS["travel"])
         self.assertEqual(resolve_project_path("graph-latest-travel-0807.json"), OFFICIAL_GRAPH_PATHS["travel"])
         self.assertEqual(resolve_project_path("/tmp/custom.json"), Path("/tmp/custom.json"))
