@@ -4,9 +4,11 @@ import json
 import re
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from graph_runtime.application import evaluate_prepared_input
 from graph_runtime.core import load_decision
+from expense_audit_orchestrator import audit_client
 from expense_audit_orchestrator.writeback import assemble_result_audit_info
 from expense_audit_orchestrator.profiles.personal_transport.data import (
     build_taxi_invoice_serial_enricher,
@@ -26,6 +28,35 @@ class PersonalTransportMessageTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.graph = json.loads(GRAPH_PATH.read_text(encoding="utf-8"))
         cls.decision = load_decision(GRAPH_PATH)
+
+    def test_e34_taxi_node_uses_e34_alias_and_explicit_history_gate(self) -> None:
+        graph_text = json.dumps(self.graph, ensure_ascii=False)
+        taxi_nodes = [
+            node
+            for node in self.graph["nodes"]
+            if node.get("name") == "出租车连号检查"
+        ]
+        self.assertEqual(len(taxi_nodes), 1)
+        self.assertEqual(taxi_nodes[0]["id"], "travel_e34_taxi_consecutive_check")
+        self.assertNotIn("w19", graph_text.lower())
+
+        expression_node = next(
+            node
+            for node in self.graph["nodes"]
+            if node.get("type") == "expressionNode"
+            and any(
+                expression.get("key") == "isTaxiConsecutive"
+                for expression in node.get("content", {}).get("expressions", [])
+            )
+        )
+        expressions = {
+            expression["key"]: expression["value"]
+            for expression in expression_node["content"]["expressions"]
+        }
+        self.assertIn("isTaxiHistoricalConsecutive", expressions)
+        self.assertIn("historyHit", expressions["isTaxiHistoricalConsecutive"])
+        self.assertIn("isTaxiHistoricalConsecutive", expressions["isTaxiConsecutive"])
+        self.assertIn("isTaxiBatchConsecutive", expressions["isTaxiConsecutive"])
 
     def test_non_empty_message_templates_have_no_unresolved_placeholders(self) -> None:
         dynamic_count = 0
@@ -487,6 +518,35 @@ class PersonalTransportMessageTests(unittest.TestCase):
         self.assertEqual(non_taxi["currentPrefix"], "123456")
         self.assertIsNone(short_number["currentPrefix"])
         self.assertEqual(calls, [("0012345601", "REC-TAXI-002", "ACCT-02")])
+
+    def test_taxi_serial_enricher_uses_taxi_history_interface_by_default(self) -> None:
+        with patch.object(
+            audit_client,
+            "fetch_taxi_invoice_serial_numbers",
+            return_value=["12345699"],
+        ) as taxi_provider, patch.object(
+            audit_client,
+            "fetch_invoice_serial_numbers",
+            side_effect=AssertionError("personal transport must not use generic serial interface"),
+        ):
+            enricher = build_taxi_invoice_serial_enricher(
+                service_url="https://service.example"
+            )
+            result = enricher(
+                "REC-TAXI-DEFAULT",
+                "invoice.pdf",
+                {"invoiceType": "8", "invoiceNo": "12345601", "accountingCode": "111"},
+                {"auditInfo": {"instanceCode": "REC-TAXI-DEFAULT"}},
+            )
+
+        taxi_provider.assert_called_once_with(
+            "12345601",
+            "REC-TAXI-DEFAULT",
+            "111",
+            service_url="https://service.example",
+        )
+        self.assertEqual(result["historyNumbers"], ["12345699"])
+        self.assertTrue(result["historyHit"])
 
     def test_taxi_serial_enricher_calls_history_provider_and_degrades_on_failure(self) -> None:
         calls: list[tuple[str, str, str | None]] = []

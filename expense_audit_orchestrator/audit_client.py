@@ -166,8 +166,40 @@ def fetch_invoice_serial_numbers(
         },
         headers=_build_auth_headers(),
     )
+    return _normalize_invoice_serial_numbers(data, "invoice serial number")
+
+
+def fetch_taxi_invoice_serial_numbers(
+    cheque_no: str,
+    instance_code: str,
+    accounting_code: str | None = None,
+    service_url: str = DEFAULT_AUDIT_SERVICE_URL,
+    timeout: float | None = None,
+) -> list[str]:
+    """查询个人交通费 E34 使用的历史出租车发票连号。
+
+    ``accounting_code`` 仅为兼容发票连号 provider 的调用签名保留，
+    出租车专用接口不接收该查询参数。
+    """
+    del accounting_code
+    data = _fetch_service_data(
+        "/api/audit-service/audit/invoice-serial-number-taxi",
+        service_url=service_url,
+        timeout=timeout,
+        description="出租车发票历史连号信息",
+        query_params={
+            "chequeNo": cheque_no,
+            "instanceCode": instance_code,
+        },
+        headers=_build_auth_headers(),
+        retry_on_service_error=True,
+    )
+    return _normalize_invoice_serial_numbers(data, "taxi invoice serial number")
+
+
+def _normalize_invoice_serial_numbers(data: Any, service_name: str) -> list[str]:
     if not isinstance(data, list):
-        raise ValueError("invoice serial number service returned invalid payload")
+        raise ValueError(f"{service_name} service returned invalid payload")
 
     result: list[str] = []
     for item in data:
@@ -434,6 +466,7 @@ def _fetch_service_data(
     description: str,
     query_params: Mapping[str, str | int | None] | None = None,
     headers: Mapping[str, str] | None = None,
+    retry_on_service_error: bool = False,
 ) -> Any:
     query_string = ""
     if query_params:
@@ -453,21 +486,45 @@ def _fetch_service_data(
         request = Request(endpoint, headers=dict(headers), method="GET")
 
     resolved_timeout = _resolve_timeout(timeout)
-    with _open_with_retries(
-        request,
-        timeout=resolved_timeout,
-        description=description,
-        endpoint=endpoint,
-    ) as response:
-        payload = json.load(response)
+    service_retry_count = _resolve_max_retries() if retry_on_service_error else 0
+    for service_attempt in range(service_retry_count + 1):
+        try:
+            with _open_with_retries(
+                request,
+                timeout=resolved_timeout,
+                description=description,
+                endpoint=endpoint,
+            ) as response:
+                payload = json.load(response)
 
-    if not _is_success_payload(payload):
-        raise ValueError(_get_service_error_message(payload, description))
+            if not _is_success_payload(payload):
+                raise ValueError(_get_service_error_message(payload, description))
 
-    if "data" not in payload:
-        raise ValueError(f"{description} service returned invalid payload")
+            if "data" not in payload:
+                raise ValueError(f"{description} service returned invalid payload")
 
-    return payload["data"]
+            return payload["data"]
+        except ValueError as exc:
+            if service_attempt >= service_retry_count:
+                raise
+
+            retry_delay = _resolve_retry_backoff_seconds() * (2 ** service_attempt)
+            _logger.warning(
+                "核销单服务返回失败，准备重试",
+                extra={
+                    "event": "audit_client.service_retry",
+                    "description": description,
+                    "endpoint": endpoint,
+                    "attempt": service_attempt + 1,
+                    "max_retries": service_retry_count,
+                    "retry_delay_seconds": retry_delay,
+                    "error": str(exc),
+                },
+            )
+            if retry_delay > 0:
+                time.sleep(retry_delay)
+
+    raise RuntimeError("unreachable")
 
 
 def _post_service_payload(
@@ -668,5 +725,6 @@ __all__ = [
     "fetch_field_mappings",
     "fetch_invoice_info",
     "fetch_invoice_serial_numbers",
+    "fetch_taxi_invoice_serial_numbers",
     "update_audit_task_status",
 ]
