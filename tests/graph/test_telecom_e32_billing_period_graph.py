@@ -7,7 +7,7 @@ from pathlib import Path
 import zen
 
 
-GRAPH_PATH = Path(__file__).parents[2] / "resources" / "graphs" / "graph-latest-0727-1900.json"
+GRAPH_PATH = Path(__file__).parents[2] / "resources" / "graphs" / "graph-latest-telecom-0727-1900.json"
 PROMPT_NODE_ID = "6acb7b84-51a3-4d7d-9556-960d459d518d"
 POSTPROCESS_NODE_ID = "a6e16f2e-1e43-4f71-8895-0ee44210a4c7"
 E32_NODE_ID = "f27969dd-cdcd-43da-9e75-328e4546239c"

@@ -83,7 +83,7 @@ git push origin main
 
 正式流程图是源码的一部分，统一存放在 `resources/graphs/`，以下文件必须纳入 Git 版本跟踪：
 
-- `resources/graphs/graph-latest-0727-1900.json`
+- `resources/graphs/graph-latest-telecom-0727-1900.json`
 - `resources/graphs/graph-latest-entertainment-0722.json`
 - `resources/graphs/graph-latest-personal-transport-0722.json`
 - `resources/graphs/graph-latest-travel-0807.json`

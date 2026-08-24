@@ -20,7 +20,7 @@ REFERENCE_ROOT = RESOURCES_ROOT / "reference"
 PROMPTS_ROOT = PROJECT_ROOT / "expense_audit_orchestrator" / "prompts"
 
 OFFICIAL_GRAPH_PATHS: dict[str, Path] = {
-    "telecom": GRAPHS_ROOT / "graph-latest-0727-1900.json",
+    "telecom": GRAPHS_ROOT / "graph-latest-telecom-0727-1900.json",
     "entertainment": GRAPHS_ROOT / "graph-latest-entertainment-0722.json",
     "personal_transport": GRAPHS_ROOT / "graph-latest-personal-transport-0722.json",
     "travel": GRAPHS_ROOT / "graph-latest-travel-0807.json",

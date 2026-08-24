@@ -58,6 +58,6 @@ sudo systemctl restart expense-graph-runtime expense-node-gateway expense-rabbit
 
 ## 流程图与运行入口
 
-worker 的默认图是 `resources/graphs/graph-latest-0727-1900.json`。四个正式流程图都必须纳入 Git，并保留稳定文件名。worker 的实际实现位于 `apps/workers/rabbitmq_worker.py`，根目录 `rabbitmq_worker.py` 只是兼容启动器；旧命令仍然有效。
+worker 的默认图是 `resources/graphs/graph-latest-telecom-0727-1900.json`。四个正式流程图都必须纳入 Git，并保留稳定文件名。worker 的实际实现位于 `apps/workers/rabbitmq_worker.py`，根目录 `rabbitmq_worker.py` 只是兼容启动器；旧命令仍然有效。
 
 本地调试入口位于 `apps/cli/`、`apps/builders/` 和 `apps/diagnostics/`，生产 systemd 不会启动这些一次性工具。
