@@ -57,6 +57,12 @@ STD_OUTPUTS = [
     ("509fd9ba-3996-4e4a-9021-df6513ed6807", "日志内容", "message"),
     ("a1b2c3d4-0000-0000-0000-regulation0", "制度", "policiesIndex"),
     ("a1b2c3d4-0000-0000-0000-suggestion0", "建议", "employeeSuggestionTips"),
+    ("a1b2c3d4-0000-0000-0000-problemcategory0", "问题分类", "problem_category"),
+    (
+        "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
+        "优化动作分类",
+        "optimization_action_category",
+    ),
     ("a1b2c3d4-0000-0000-0000-createtime0", "创建时间", "create_time"),
 ]
 
@@ -110,7 +116,7 @@ def _new_uuid() -> str:
 
 
 def _std_outputs() -> list[dict]:
-    """生成标准 12 列输出定义。"""
+    """生成标准 14 列输出定义（含问题标签和建议标签）。"""
     return [
         {"id": fid, "name": name, "field": field}
         for fid, name, field in STD_OUTPUTS
@@ -126,8 +132,13 @@ def _std_rule_row(
     message: str,
     policies_index: str,
     suggestion: str,
+    problem_category: str = "",
+    optimization_action_category: str = "",
 ) -> dict:
-    """生成一条决策表规则行（标准 12 字段）。"""
+    """生成一条决策表规则行（标准 14 字段）。
+
+    标签参数默认空字符串，保持通过/无需分类的规则与历史行为一致。
+    """
     return {
         "_id": _new_uuid(),
         "_description": "",
@@ -143,6 +154,10 @@ def _std_rule_row(
         "509fd9ba-3996-4e4a-9021-df6513ed6807": message,
         "a1b2c3d4-0000-0000-0000-regulation0": policies_index,
         "a1b2c3d4-0000-0000-0000-suggestion0": suggestion,
+        "a1b2c3d4-0000-0000-0000-problemcategory0": f'"{problem_category}"',
+        "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": (
+            f'"{optimization_action_category}"'
+        ),
         "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
     }
 
@@ -409,6 +424,8 @@ def _build_self_expense_check_node() -> dict:
             message='"发票号【"+(invoiceNo??"")+"】✗ 票面旅客姓名【"+(passengerName??"")+"】与核销单核销人姓名【"+(serviceData.auditInfo.verifiUserName??"")+"】一致，✓ 业务招待费不得报销核销人本人的交通、住宿等票据"',
             policies_index='"《锐捷网络员工费用管理与报销制度》\\n4.4.2.2 禁止报销：员工本人的差旅费开支"',
             suggestion='"【删除发票】删除本票据，业务招待费不得报销员工本人的费用"',
+            problem_category="员工本人费用",
+            optimization_action_category="【删除发票】",
         ),
     ]
     return _make_decision_table(
@@ -518,6 +535,8 @@ def _build_taxi_invoice_serial_check_node() -> dict:
             message='"本次报销中存在出租车发票连号，发票号 " + (invoiceNo ?? "") + " 与" + (serviceData.entertainmentInvoiceSerial.relationDescription ?? "本核销单中的其他出租车发票") + " 存在连号关系，存在异常报销风险。"',
             policies_index='"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范\\n所有费用报销须提供真实、合法、合规的票据。"',
             suggestion='"请确认票据是否真实对应本次业务。无法说明合理业务原因的，请删除相关票据；保留提交的，系统将记录并转财务复核。"',
+            problem_category="连号票据",
+            optimization_action_category="【删除票据】",
         ),
     ]
     return _make_decision_table(
@@ -714,6 +733,8 @@ def _build_content_compliance_check_node() -> dict:
             "509fd9ba-3996-4e4a-9021-df6513ed6807": '"模型服务暂时异常，当前内容合规检查未完成，请联系管理员处理。"',
             "a1b2c3d4-0000-0000-0000-regulation0": '""',
             "a1b2c3d4-0000-0000-0000-suggestion0": '""',
+            "a1b2c3d4-0000-0000-0000-problemcategory0": '""',
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": '""',
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
         },
         # 通过
@@ -793,6 +814,8 @@ def _build_recharge_card_check_node() -> dict:
             message='"发票号【"+(invoiceNo??"")+"】✗ 发票内容【"+(goodsName??"")+"】包含充值卡/预付卡/预存等公司禁止报销项"',
             policies_index='"《锐捷网络员工费用管理与报销制度》\\n4.2.2.2 禁止报销：预付卡销售、充值卡、成品油(卡)"',
             suggestion='"【删除发票】删除本票据，并提供非充值内容的发票"',
+            problem_category="充值消费",
+            optimization_action_category="【删除发票】【重新开票】",
         ),
     ]
     return _make_decision_table(
