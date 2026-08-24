@@ -585,11 +585,11 @@ class PersonalTransportMessageTests(unittest.TestCase):
         self.assertFalse(failed["historyHit"])
         self.assertTrue(failed["lookupFailed"])
 
-    def _e39_rule(self, prepared: dict) -> dict:
+    def _w36_rule(self, prepared: dict) -> dict:
         result = evaluate_prepared_input(self.decision, prepared, trace=False)
-        return self._rule(result, "E39")
+        return self._rule(result, "W36")
 
-    def test_e39_supported_invoice_types_use_configured_amount_field(self) -> None:
+    def test_w36_supported_invoice_types_use_configured_amount_field(self) -> None:
         cases = [
             ("15", "14", None, "taxAmount", "11"),
             ("1", "12", None, "taxAmount", "12"),
@@ -615,9 +615,9 @@ class PersonalTransportMessageTests(unittest.TestCase):
                 if international_flag is not None:
                     prepared["internationalFlag"] = international_flag
                 prepared[compare_field] = amount
-                rule = self._e39_rule(prepared)
+                rule = self._w36_rule(prepared)
                 self.assertEqual(rule["distinguish_result"], "PASS")
-                self.assertEqual(rule["reason_code"], "E39")
+                self.assertEqual(rule["reason_code"], "W36")
                 self.assertEqual(rule["audit_content"], "检查发票可抵扣税额与核销单发票进项税额是否一致")
                 self.assertEqual(rule["audit_type"], "general-rules")
                 self.assertEqual(rule["message"], "")
@@ -625,7 +625,7 @@ class PersonalTransportMessageTests(unittest.TestCase):
                 self.assertEqual(rule["optimization_action_category"], "")
                 self.assertEqual(rule["employeeSuggestionTips"], "")
 
-    def test_e39_code_conditions_use_numeric_semantics_for_string_and_number_values(self) -> None:
+    def test_w36_code_conditions_use_numeric_semantics_for_string_and_number_values(self) -> None:
         prepared = self._base_input()
         prepared.update(
             {
@@ -635,7 +635,7 @@ class PersonalTransportMessageTests(unittest.TestCase):
                 "effectiveTaxAmount": "1",
             }
         )
-        self.assertEqual(self._e39_rule(prepared)["distinguish_result"], "PASS")
+        self.assertEqual(self._w36_rule(prepared)["distinguish_result"], "PASS")
 
         prepared.update(
             {
@@ -646,9 +646,9 @@ class PersonalTransportMessageTests(unittest.TestCase):
                 "effectiveTaxAmount": 2,
             }
         )
-        self.assertEqual(self._e39_rule(prepared)["distinguish_result"], "PASS")
+        self.assertEqual(self._w36_rule(prepared)["distinguish_result"], "PASS")
 
-    def test_e39_supported_invoice_types_reject_amount_mismatch(self) -> None:
+    def test_w36_supported_invoice_types_reject_amount_mismatch(self) -> None:
         cases = [
             ("15", "14", None, "taxAmount"),
             ("1", "12", None, "taxAmount"),
@@ -674,7 +674,7 @@ class PersonalTransportMessageTests(unittest.TestCase):
                 if international_flag is not None:
                     prepared["internationalFlag"] = international_flag
                 prepared[compare_field] = "10"
-                rule = self._e39_rule(prepared)
+                rule = self._w36_rule(prepared)
                 self.assertEqual(rule["distinguish_result"], "REJECT")
                 self.assertEqual(
                     rule["message"],
@@ -688,7 +688,7 @@ class PersonalTransportMessageTests(unittest.TestCase):
                 )
                 self.assertEqual(rule["policiesIndex"], "无")
 
-    def test_e39_special_type_mismatch_uses_zero(self) -> None:
+    def test_w36_special_type_mismatch_uses_zero(self) -> None:
         cases = [
             ("15", "99", None, "taxAmount"),
             ("1", "99", None, "taxAmount"),
@@ -712,14 +712,14 @@ class PersonalTransportMessageTests(unittest.TestCase):
                     prepared["internationalFlag"] = international_flag
                 if compare_field == "taxAmount":
                     prepared[compare_field] = "not-a-number"
-                self.assertEqual(self._e39_rule(prepared)["distinguish_result"], "PASS")
+                self.assertEqual(self._w36_rule(prepared)["distinguish_result"], "PASS")
 
                 prepared["effectiveTaxAmount"] = "0.01"
-                rule = self._e39_rule(prepared)
+                rule = self._w36_rule(prepared)
                 self.assertEqual(rule["distinguish_result"], "REJECT")
                 self.assertIn("合计为 0 元", rule["message"])
 
-    def test_e39_air_ticket_requires_special_mark_and_international_flag(self) -> None:
+    def test_w36_air_ticket_requires_special_mark_and_international_flag(self) -> None:
         for special_mark, international_flag in (("25", "1"), ("25", "0"), ("24", "1"), ("25", None)):
             with self.subTest(special_mark=special_mark, international_flag=international_flag):
                 prepared = self._base_input()
@@ -734,11 +734,11 @@ class PersonalTransportMessageTests(unittest.TestCase):
                 )
                 if international_flag is not None:
                     prepared["internationalFlag"] = international_flag
-                rule = self._e39_rule(prepared)
+                rule = self._w36_rule(prepared)
                 expected = "PASS" if (special_mark, international_flag) == ("25", "1") else "REJECT"
                 self.assertEqual(rule["distinguish_result"], expected)
 
-    def test_e39_non_applicable_invoice_passes_even_with_invalid_amounts(self) -> None:
+    def test_w36_non_applicable_invoice_passes_even_with_invalid_amounts(self) -> None:
         prepared = self._base_input()
         prepared.update(
             {
@@ -749,11 +749,11 @@ class PersonalTransportMessageTests(unittest.TestCase):
                 "effectiveTaxAmount": "not-a-number",
             }
         )
-        rule = self._e39_rule(prepared)
+        rule = self._w36_rule(prepared)
         self.assertEqual(rule["distinguish_result"], "PASS")
         self.assertEqual(rule["message"], "")
 
-    def test_e39_ignores_amount_format_but_rejects_missing_empty_and_non_numeric_values(self) -> None:
+    def test_w36_ignores_amount_format_but_rejects_missing_empty_and_non_numeric_values(self) -> None:
         formatted = self._base_input()
         formatted.update(
             {
@@ -763,7 +763,7 @@ class PersonalTransportMessageTests(unittest.TestCase):
                 "effectiveTaxAmount": 1,
             }
         )
-        self.assertEqual(self._e39_rule(formatted)["distinguish_result"], "PASS")
+        self.assertEqual(self._w36_rule(formatted)["distinguish_result"], "PASS")
 
         invalid_cases = [
             {"invoiceType": "1", "specialTypeMark": "12", "effectiveTaxAmount": "1"},
@@ -777,14 +777,14 @@ class PersonalTransportMessageTests(unittest.TestCase):
             with self.subTest(changes=changes):
                 prepared = self._base_input()
                 prepared.update(changes)
-                self.assertEqual(self._e39_rule(prepared)["distinguish_result"], "REJECT")
+                self.assertEqual(self._w36_rule(prepared)["distinguish_result"], "REJECT")
 
-    def test_e39_is_written_back_once_per_invoice(self) -> None:
+    def test_w36_is_written_back_once_per_invoice(self) -> None:
         prepared_inputs = []
         invoice_results = []
         for invoice_key, invoice_type, tax_amount, effective_tax_amount in (
-            ("F-E39-001", "1", "1", "1"),
-            ("F-E39-002", "1", "2", "1"),
+            ("F-W36-001", "1", "1", "1"),
+            ("F-W36-002", "1", "2", "1"),
         ):
             prepared = self._base_input()
             prepared.update(
@@ -795,7 +795,7 @@ class PersonalTransportMessageTests(unittest.TestCase):
                     "effectiveTaxAmount": effective_tax_amount,
                     "invoice_file_id": invoice_key,
                     "invoice_info_id": f"I-{invoice_key}",
-                    "instance_code": "REC-E39-MULTI",
+                    "instance_code": "REC-W36-MULTI",
                 }
             )
             result = evaluate_prepared_input(self.decision, prepared, trace=False)
@@ -811,25 +811,25 @@ class PersonalTransportMessageTests(unittest.TestCase):
 
         payload = assemble_result_audit_info(
             {
-                "receiptCode": "REC-E39-MULTI",
-                "serviceData": {"auditInfo": {"instanceCode": "REC-E39-MULTI"}},
+                "receiptCode": "REC-W36-MULTI",
+                "serviceData": {"auditInfo": {"instanceCode": "REC-W36-MULTI"}},
                 "invoicePreparations": prepared_inputs,
             },
-            {"receiptCode": "REC-E39-MULTI", "invoiceResults": invoice_results},
+            {"receiptCode": "REC-W36-MULTI", "invoiceResults": invoice_results},
             expense_profile="personal_transport",
         )
-        e39_logs = [log for log in payload["auditLogs"] if log["reasonCode"] == "E39"]
-        self.assertEqual(len(e39_logs), 2)
+        w36_logs = [log for log in payload["auditLogs"] if log["reasonCode"] == "W36"]
+        self.assertEqual(len(w36_logs), 2)
         self.assertEqual(
-            {(log["invoiceFileId"], log["distinguishResult"]) for log in e39_logs},
-            {("F-E39-001", "pass"), ("F-E39-002", "reject")},
+            {(log["invoiceFileId"], log["distinguishResult"]) for log in w36_logs},
+            {("F-W36-001", "pass"), ("F-W36-002", "reject")},
         )
         self.assertEqual(
-            {log["problemTags"] for log in e39_logs if log["distinguishResult"] == "reject"},
+            {log["problemTags"] for log in w36_logs if log["distinguishResult"] == "reject"},
             {"税额不一致"},
         )
         self.assertEqual(
-            {log["suggestionTags"] for log in e39_logs if log["distinguishResult"] == "reject"},
+            {log["suggestionTags"] for log in w36_logs if log["distinguishResult"] == "reject"},
             {"【核对税额】"},
         )
 
