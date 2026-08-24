@@ -108,6 +108,26 @@ class TelecomE34InvoiceContentGraphTests(unittest.TestCase):
         }
         self.assertEqual(zen.evaluate_expression(expression, legacy_reduced), "false")
 
+    def test_llm_failure_message_includes_error_detail_expression(self) -> None:
+        for node_name in ("发票充值卡检查", "发票内容金额检查"):
+            with self.subTest(node=node_name):
+                node = next(node for node in self.graph["nodes"] if node.get("name") == node_name)
+                content = node["content"]
+                if isinstance(content, str):
+                    content = json.loads(content)
+                output_id = next(
+                    output["id"] for output in content["outputs"] if output["field"] == "message"
+                )
+                failure_rule = next(
+                    rule
+                    for rule in content["rules"]
+                    if rule.get(content["inputs"][0]["id"]) == '"error"'
+                )
+                message_expression = failure_rule[output_id]
+                self.assertIn("LLM服务调用失败", message_expression)
+                self.assertIn("error_message", message_expression)
+                self.assertIn("未返回具体错误", message_expression)
+
     def test_reject_message_uses_invoice_number_and_llm_hit_items(self) -> None:
         message_expression = self.reject_rule[
             "509fd9ba-3996-4e4a-9021-df6513ed6807"

@@ -2894,6 +2894,130 @@ class FormalServiceTests(unittest.TestCase):
         self.assertTrue(response.json()["llmResult"]["passed"])
         self.assertEqual(call_count, 2)
 
+    def test_api_retries_transient_upstream_error_and_returns_attempt_metadata(self) -> None:
+        call_count = 0
+
+        class FakeLlmResponse:
+            def __init__(self, status_code: int, payload: dict[str, Any] | None = None) -> None:
+                self.status_code = status_code
+                self._payload = payload or {"error": {"message": "temporarily unavailable"}}
+                self.text = json.dumps(self._payload, ensure_ascii=False)
+
+            def json(self) -> dict[str, Any]:
+                return self._payload
+
+        class FakeAsyncClient:
+            def __init__(self, *args, **kwargs) -> None:
+                del args, kwargs
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb) -> bool:
+                return False
+
+            async def post(self, url: str, headers=None, json=None):
+                del url, headers, json
+                nonlocal call_count
+                call_count += 1
+                if call_count == 1:
+                    return FakeLlmResponse(503)
+                return FakeLlmResponse(
+                    200,
+                    {"choices": [{"message": {"content": '{"passed": true}'}}]},
+                )
+
+        with patch.dict(
+            "os.environ",
+            {
+                "LLM_API_KEY": "test-key",
+                "LLM_BASE_URL": "https://llm.example/v1",
+                "LLM_MODEL": "audit-model",
+                "LLM_RETRY_BACKOFF_SECONDS": "0",
+            },
+            clear=False,
+        ):
+            with patch("node_gateway.api.httpx.AsyncClient", FakeAsyncClient):
+                client = TestClient(create_node_gateway_app())
+                response = client.post(
+                    NODE_GATEWAY_LLM_EVALUATE_PATH,
+                    json={
+                        "prompt": "请返回审计结论",
+                        "maxRetries": 1,
+                        "runId": "RUN-001",
+                        "receiptCode": "REC-001",
+                        "invoiceKey": "INV-001",
+                    },
+                )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["llmStatus"], "success")
+        self.assertEqual(payload["attempts"], 2)
+        self.assertEqual(payload["maxRetries"], 1)
+        self.assertEqual(call_count, 2)
+
+    def test_api_does_not_retry_non_retryable_upstream_error_and_exposes_context(self) -> None:
+        call_count = 0
+
+        class FakeLlmResponse:
+            status_code = 401
+            text = '{"error":{"message":"invalid api key"}}'
+
+            def json(self) -> dict[str, Any]:
+                return {"error": {"message": "invalid api key"}}
+
+        class FakeAsyncClient:
+            def __init__(self, *args, **kwargs) -> None:
+                del args, kwargs
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb) -> bool:
+                return False
+
+            async def post(self, url: str, headers=None, json=None):
+                del url, headers, json
+                nonlocal call_count
+                call_count += 1
+                return FakeLlmResponse()
+
+        with patch.dict(
+            "os.environ",
+            {
+                "LLM_API_KEY": "test-key",
+                "LLM_BASE_URL": "https://llm.example/v1",
+                "LLM_MODEL": "audit-model",
+                "LLM_RETRY_BACKOFF_SECONDS": "0",
+            },
+            clear=False,
+        ):
+            with patch("node_gateway.api.httpx.AsyncClient", FakeAsyncClient):
+                client = TestClient(create_node_gateway_app())
+                response = client.post(
+                    NODE_GATEWAY_LLM_EVALUATE_PATH,
+                    json={
+                        "prompt": "请返回审计结论",
+                        "maxRetries": 2,
+                        "runId": "RUN-401",
+                        "receiptCode": "REC-401",
+                        "invoiceKey": "INV-401",
+                    },
+                )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["llmStatus"], "error")
+        self.assertEqual(payload["errorType"], "upstream_http_error")
+        self.assertEqual(payload["upstreamStatus"], 401)
+        self.assertEqual(payload["attempts"], 1)
+        self.assertEqual(payload["maxRetries"], 2)
+        self.assertEqual(call_count, 1)
+        self.assertIn("invalid api key", payload["errorMessage"])
+        self.assertIn("receiptCode=REC-401", payload["errorMessage"])
+        self.assertIn("upstream_status=401", payload["errorMessage"])
+
     def test_api_exposes_llm_evaluate_endpoint_returns_error_after_retry_exhausted(self) -> None:
         call_count = 0
 
@@ -2943,6 +3067,8 @@ class FormalServiceTests(unittest.TestCase):
         self.assertEqual(response.json()["llmStatus"], "error")
         self.assertIn("invalid llm result format", response.json()["errorMessage"])
         self.assertIn("retries=1", response.json()["errorMessage"])
+        self.assertEqual(response.json()["errorType"], "invalid_result_format")
+        self.assertEqual(response.json()["attempts"], 2)
         self.assertEqual(call_count, 2)
 
 

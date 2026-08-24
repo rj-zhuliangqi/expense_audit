@@ -264,6 +264,8 @@ class PersonalTransportMessageTests(unittest.TestCase):
         self.assertEqual(e36["instance_code"], "REC-E36-FAIL")
         self.assertEqual(e36["invoice_file_id"], "FILE-E36-FAIL")
         self.assertEqual(e36["invoice_info_id"], "INFO-E36-FAIL")
+        self.assertIn("LLM服务调用失败", e36["message"])
+        self.assertIn("llmGatewayUrl not injected", e36["message"])
 
         e36_llm = (result["trace"] or {})["514e15db-3657-4fa3-9228-88b750ea08f8"]
         self.assertEqual(e36_llm["output"]["invoiceNo"], "E36-FAIL")

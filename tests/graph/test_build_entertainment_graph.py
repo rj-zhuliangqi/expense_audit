@@ -650,6 +650,63 @@ class ContentComplianceLlmTests(unittest.TestCase):
                 self.assertIn("茅台老树S15干红葡萄酒", e36["message"])
                 self.assertIn("厉行节约", e36["message"])
 
+    def test_e36_llm_failure_message_includes_error_detail(self) -> None:
+        request = {
+            "type": "inputNode",
+            "content": {"schema": ""},
+            "id": "request",
+            "name": "request",
+            "position": {"x": 0, "y": 0},
+        }
+        response = {
+            "type": "outputNode",
+            "content": {"schema": ""},
+            "id": "response",
+            "name": "response",
+            "position": {"x": 500, "y": 0},
+        }
+        detail = "error_type=upstream_http_error; attempts=3; upstream_status=503"
+
+        graphs = (
+            ("builder", build_entertainment_graph()),
+            (
+                "official",
+                json.loads(OFFICIAL_GRAPH_PATHS["entertainment"].read_text(encoding="utf-8")),
+            ),
+        )
+        for graph_name, graph in graphs:
+            with self.subTest(graph=graph_name):
+                content_check = next(
+                    node for node in graph["nodes"] if node["id"] == "ent-content-compliance-check"
+                )
+                isolated_graph = {
+                    "contentType": "application/vnd.gorules.decision",
+                    "nodes": [request, content_check, response],
+                    "edges": [
+                        {"id": "edge-request-check", "sourceId": "request", "targetId": content_check["id"], "type": "edge"},
+                        {"id": "edge-check-response", "sourceId": content_check["id"], "targetId": "response", "type": "edge"},
+                    ],
+                }
+                decision = load_decision_from_content(isolated_graph)
+                result = evaluate_prepared_input(
+                    decision,
+                    {
+                        "contentCheckResult": "error",
+                        "error_message": detail,
+                        "invoiceNo": "INV-E36-ERR",
+                        "invoice_file_id": "file-e36-err",
+                        "invoice_info_id": "info-e36-err",
+                        "instance_code": "INSTANCE-E36-ERR",
+                        "context": {"executionTime": "2026-08-24T00:00:00+00:00"},
+                    },
+                    trace=False,
+                )
+                e36 = result["decisionOutput"]["content_compliance_result"]
+                self.assertEqual(e36["reason_code"], "E36")
+                self.assertEqual(e36["distinguish_result"], "FAILED")
+                self.assertIn("LLM服务调用失败", e36["message"])
+                self.assertIn(detail, e36["message"])
+
     def test_e36_contains_recharge_card_result_row(self) -> None:
         node = _build_content_compliance_check_node()
         rules = node["content"]["rules"]
