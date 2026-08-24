@@ -275,39 +275,39 @@
             "value": "not($.isTaxiSerialLookupFailed or $.isTaxiHistoricalConsecutive or $.isTaxiBatchConsecutive)"
           },
           {
-            "id": "e39-invoice-type-code-001",
-            "key": "e39InvoiceTypeCode",
+            "id": "w36-invoice-type-code-001",
+            "key": "w36InvoiceTypeCode",
             "value": "(type(invoiceType) == \"number\") ? invoiceType : ((type(invoiceType) == \"string\" and trim(invoiceType) != \"\" and matches(trim(invoiceType), \"^[+-]?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))([eE][+-]?[0-9]+)?$\")) ? number(trim(invoiceType)) : -1)"
           },
           {
-            "id": "e39-special-type-mark-code-001",
-            "key": "e39SpecialTypeMarkCode",
+            "id": "w36-special-type-mark-code-001",
+            "key": "w36SpecialTypeMarkCode",
             "value": "(type(specialTypeMark) == \"number\") ? specialTypeMark : ((type(specialTypeMark) == \"string\" and trim(specialTypeMark) != \"\" and matches(trim(specialTypeMark), \"^[+-]?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))([eE][+-]?[0-9]+)?$\")) ? number(trim(specialTypeMark)) : -1)"
           },
           {
-            "id": "e39-international-flag-code-001",
-            "key": "e39InternationalFlagCode",
+            "id": "w36-international-flag-code-001",
+            "key": "w36InternationalFlagCode",
             "value": "(type(internationalFlag) == \"number\") ? internationalFlag : ((type(internationalFlag) == \"string\" and trim(internationalFlag) != \"\" and matches(trim(internationalFlag), \"^[+-]?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))([eE][+-]?[0-9]+)?$\")) ? number(trim(internationalFlag)) : -1)"
           },
           {
-            "id": "e39-applicable-001",
-            "key": "e39Applicable",
-            "value": "$.e39InvoiceTypeCode in [15, 1, 26, 29, 28, 4, 2, 27]"
+            "id": "w36-applicable-001",
+            "key": "w36Applicable",
+            "value": "$.w36InvoiceTypeCode in [15, 1, 26, 29, 28, 4, 2, 27]"
           },
           {
-            "id": "e39-deductible-tax-001",
-            "key": "e39InvoiceDeductibleTax",
-            "value": "($.e39InvoiceTypeCode == 15 and $.e39SpecialTypeMarkCode == 14) ? taxAmount : (($.e39InvoiceTypeCode == 1 and $.e39SpecialTypeMarkCode == 12) ? taxAmount : (($.e39InvoiceTypeCode == 26 and $.e39SpecialTypeMarkCode == 12) ? taxAmount : (($.e39InvoiceTypeCode == 29 and $.e39SpecialTypeMarkCode == 24) ? totalAmount : (($.e39InvoiceTypeCode == 28 and $.e39SpecialTypeMarkCode == 25 and $.e39InternationalFlagCode == 1) ? totalAmount : (($.e39InvoiceTypeCode == 4 or $.e39InvoiceTypeCode == 2 or $.e39InvoiceTypeCode == 27) ? taxAmount : 0)))))"
+            "id": "w36-deductible-tax-001",
+            "key": "w36InvoiceDeductibleTax",
+            "value": "($.w36InvoiceTypeCode == 15 and $.w36SpecialTypeMarkCode == 14) ? taxAmount : (($.w36InvoiceTypeCode == 1 and $.w36SpecialTypeMarkCode == 12) ? taxAmount : (($.w36InvoiceTypeCode == 26 and $.w36SpecialTypeMarkCode == 12) ? taxAmount : (($.w36InvoiceTypeCode == 29 and $.w36SpecialTypeMarkCode == 24) ? totalAmount : (($.w36InvoiceTypeCode == 28 and $.w36SpecialTypeMarkCode == 25 and $.w36InternationalFlagCode == 1) ? totalAmount : (($.w36InvoiceTypeCode == 4 or $.w36InvoiceTypeCode == 2 or $.w36InvoiceTypeCode == 27) ? taxAmount : 0)))))"
           },
           {
-            "id": "e39-tax-comparable-001",
-            "key": "e39TaxComparable",
-            "value": "(not($.e39Applicable)) ? true : (((type($.e39InvoiceDeductibleTax) == \"number\") or ((type($.e39InvoiceDeductibleTax) == \"string\") and trim($.e39InvoiceDeductibleTax) != \"\" and matches(trim($.e39InvoiceDeductibleTax), \"^[+-]?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))([eE][+-]?[0-9]+)?$\"))) and ((type(effectiveTaxAmount) == \"number\") or ((type(effectiveTaxAmount) == \"string\") and trim(effectiveTaxAmount) != \"\" and matches(trim(effectiveTaxAmount), \"^[+-]?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))([eE][+-]?[0-9]+)?$\"))))"
+            "id": "w36-tax-comparable-001",
+            "key": "w36TaxComparable",
+            "value": "(not($.w36Applicable)) ? true : (((type($.w36InvoiceDeductibleTax) == \"number\") or ((type($.w36InvoiceDeductibleTax) == \"string\") and trim($.w36InvoiceDeductibleTax) != \"\" and matches(trim($.w36InvoiceDeductibleTax), \"^[+-]?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))([eE][+-]?[0-9]+)?$\"))) and ((type(effectiveTaxAmount) == \"number\") or ((type(effectiveTaxAmount) == \"string\") and trim(effectiveTaxAmount) != \"\" and matches(trim(effectiveTaxAmount), \"^[+-]?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))([eE][+-]?[0-9]+)?$\"))))"
           },
           {
-            "id": "e39-tax-matched-001",
-            "key": "e39TaxMatched",
-            "value": "(not($.e39Applicable)) ? true : ($.e39TaxComparable ? (number($.e39InvoiceDeductibleTax) == number(effectiveTaxAmount)) : false)"
+            "id": "w36-tax-matched-001",
+            "key": "w36TaxMatched",
+            "value": "(not($.w36Applicable)) ? true : ($.w36TaxComparable ? (number($.w36InvoiceDeductibleTax) == number(effectiveTaxAmount)) : false)"
           }
         ],
         "passThrough": true,
@@ -2347,177 +2347,177 @@
         "hitPolicy": "first",
         "rules": [
           {
-            "_id": "e39-rule-pass-01",
+            "_id": "w36-rule-pass-01",
             "_description": "",
-            "e39-input-applicable": "false",
-            "e39-input-tax-matched": "false",
-            "e39-output-instance-code": "instance_code",
-            "e39-output-reason-code": "\"E39\"",
-            "e39-output-audit-content": "\"检查发票可抵扣税额与核销单发票进项税额是否一致\"",
-            "e39-output-audit-type": "\"general-rules\"",
-            "e39-output-distinguish-content": "\"\"",
-            "e39-output-invoice-file-id": "invoice_file_id",
-            "e39-output-invoice-info-id": "invoice_info_id",
-            "e39-output-create-time": "context.executionTime",
-            "e39-output-distinguish-result": "\"PASS\"",
-            "e39-output-message": "\"\"",
-            "e39-output-policies-index": "\"\"",
-            "e39-output-suggestion": "\"\"",
-            "e39-output-problem-category": "\"\"",
-            "e39-output-optimization-action-category": "\"\""
+            "w36-input-applicable": "false",
+            "w36-input-tax-matched": "false",
+            "w36-output-instance-code": "instance_code",
+            "w36-output-reason-code": "\"W36\"",
+            "w36-output-audit-content": "\"检查发票可抵扣税额与核销单发票进项税额是否一致\"",
+            "w36-output-audit-type": "\"general-rules\"",
+            "w36-output-distinguish-content": "\"\"",
+            "w36-output-invoice-file-id": "invoice_file_id",
+            "w36-output-invoice-info-id": "invoice_info_id",
+            "w36-output-create-time": "context.executionTime",
+            "w36-output-distinguish-result": "\"PASS\"",
+            "w36-output-message": "\"\"",
+            "w36-output-policies-index": "\"\"",
+            "w36-output-suggestion": "\"\"",
+            "w36-output-problem-category": "\"\"",
+            "w36-output-optimization-action-category": "\"\""
           },
           {
-            "_id": "e39-rule-pass-02",
+            "_id": "w36-rule-pass-02",
             "_description": "",
-            "e39-input-applicable": "false",
-            "e39-input-tax-matched": "true",
-            "e39-output-instance-code": "instance_code",
-            "e39-output-reason-code": "\"E39\"",
-            "e39-output-audit-content": "\"检查发票可抵扣税额与核销单发票进项税额是否一致\"",
-            "e39-output-audit-type": "\"general-rules\"",
-            "e39-output-distinguish-content": "\"\"",
-            "e39-output-invoice-file-id": "invoice_file_id",
-            "e39-output-invoice-info-id": "invoice_info_id",
-            "e39-output-create-time": "context.executionTime",
-            "e39-output-distinguish-result": "\"PASS\"",
-            "e39-output-message": "\"\"",
-            "e39-output-policies-index": "\"\"",
-            "e39-output-suggestion": "\"\"",
-            "e39-output-problem-category": "\"\"",
-            "e39-output-optimization-action-category": "\"\""
+            "w36-input-applicable": "false",
+            "w36-input-tax-matched": "true",
+            "w36-output-instance-code": "instance_code",
+            "w36-output-reason-code": "\"W36\"",
+            "w36-output-audit-content": "\"检查发票可抵扣税额与核销单发票进项税额是否一致\"",
+            "w36-output-audit-type": "\"general-rules\"",
+            "w36-output-distinguish-content": "\"\"",
+            "w36-output-invoice-file-id": "invoice_file_id",
+            "w36-output-invoice-info-id": "invoice_info_id",
+            "w36-output-create-time": "context.executionTime",
+            "w36-output-distinguish-result": "\"PASS\"",
+            "w36-output-message": "\"\"",
+            "w36-output-policies-index": "\"\"",
+            "w36-output-suggestion": "\"\"",
+            "w36-output-problem-category": "\"\"",
+            "w36-output-optimization-action-category": "\"\""
           },
           {
-            "_id": "e39-rule-pass-03",
+            "_id": "w36-rule-pass-03",
             "_description": "",
-            "e39-input-applicable": "true",
-            "e39-input-tax-matched": "true",
-            "e39-output-instance-code": "instance_code",
-            "e39-output-reason-code": "\"E39\"",
-            "e39-output-audit-content": "\"检查发票可抵扣税额与核销单发票进项税额是否一致\"",
-            "e39-output-audit-type": "\"general-rules\"",
-            "e39-output-distinguish-content": "\"\"",
-            "e39-output-invoice-file-id": "invoice_file_id",
-            "e39-output-invoice-info-id": "invoice_info_id",
-            "e39-output-create-time": "context.executionTime",
-            "e39-output-distinguish-result": "\"PASS\"",
-            "e39-output-message": "\"\"",
-            "e39-output-policies-index": "\"\"",
-            "e39-output-suggestion": "\"\"",
-            "e39-output-problem-category": "\"\"",
-            "e39-output-optimization-action-category": "\"\""
+            "w36-input-applicable": "true",
+            "w36-input-tax-matched": "true",
+            "w36-output-instance-code": "instance_code",
+            "w36-output-reason-code": "\"W36\"",
+            "w36-output-audit-content": "\"检查发票可抵扣税额与核销单发票进项税额是否一致\"",
+            "w36-output-audit-type": "\"general-rules\"",
+            "w36-output-distinguish-content": "\"\"",
+            "w36-output-invoice-file-id": "invoice_file_id",
+            "w36-output-invoice-info-id": "invoice_info_id",
+            "w36-output-create-time": "context.executionTime",
+            "w36-output-distinguish-result": "\"PASS\"",
+            "w36-output-message": "\"\"",
+            "w36-output-policies-index": "\"\"",
+            "w36-output-suggestion": "\"\"",
+            "w36-output-problem-category": "\"\"",
+            "w36-output-optimization-action-category": "\"\""
           },
           {
-            "_id": "e39-rule-reject-01",
+            "_id": "w36-rule-reject-01",
             "_description": "",
-            "e39-input-applicable": "true",
-            "e39-input-tax-matched": "false",
-            "e39-output-instance-code": "instance_code",
-            "e39-output-reason-code": "\"E39\"",
-            "e39-output-audit-content": "\"检查发票可抵扣税额与核销单发票进项税额是否一致\"",
-            "e39-output-audit-type": "\"general-rules\"",
-            "e39-output-distinguish-content": "\"\"",
-            "e39-output-invoice-file-id": "invoice_file_id",
-            "e39-output-invoice-info-id": "invoice_info_id",
-            "e39-output-create-time": "context.executionTime",
-            "e39-output-distinguish-result": "\"REJECT\"",
-            "e39-output-message": "\"本次发票可抵扣税额合计为 \" + string(e39InvoiceDeductibleTax) + \" 元，与核销单发票进项税额 \" + string(effectiveTaxAmount) + \" 元不一致。\"",
-            "e39-output-policies-index": "\"无\"",
-            "e39-output-suggestion": "\"请核对发票税额和表单税额是否录入正确；无法确认的，系统将标记高风险并转财务审核。\"",
-            "e39-output-problem-category": "\"税额不一致\"",
-            "e39-output-optimization-action-category": "\"【核对税额】\""
+            "w36-input-applicable": "true",
+            "w36-input-tax-matched": "false",
+            "w36-output-instance-code": "instance_code",
+            "w36-output-reason-code": "\"W36\"",
+            "w36-output-audit-content": "\"检查发票可抵扣税额与核销单发票进项税额是否一致\"",
+            "w36-output-audit-type": "\"general-rules\"",
+            "w36-output-distinguish-content": "\"\"",
+            "w36-output-invoice-file-id": "invoice_file_id",
+            "w36-output-invoice-info-id": "invoice_info_id",
+            "w36-output-create-time": "context.executionTime",
+            "w36-output-distinguish-result": "\"REJECT\"",
+            "w36-output-message": "\"本次发票可抵扣税额合计为 \" + string(w36InvoiceDeductibleTax) + \" 元，与核销单发票进项税额 \" + string(effectiveTaxAmount) + \" 元不一致。\"",
+            "w36-output-policies-index": "\"无\"",
+            "w36-output-suggestion": "\"请核对发票税额和表单税额是否录入正确；无法确认的，系统将标记高风险并转财务审核。\"",
+            "w36-output-problem-category": "\"税额不一致\"",
+            "w36-output-optimization-action-category": "\"【核对税额】\""
           }
         ],
         "inputs": [
           {
-            "id": "e39-input-applicable",
-            "name": "E39适用票种",
-            "field": "e39Applicable"
+            "id": "w36-input-applicable",
+            "name": "W36适用票种",
+            "field": "w36Applicable"
           },
           {
-            "id": "e39-input-tax-matched",
-            "name": "E39税额一致",
-            "field": "e39TaxMatched"
+            "id": "w36-input-tax-matched",
+            "name": "W36税额一致",
+            "field": "w36TaxMatched"
           }
         ],
         "outputs": [
           {
-            "id": "e39-output-instance-code",
+            "id": "w36-output-instance-code",
             "name": "核销单号",
             "field": "instance_code"
           },
           {
-            "id": "e39-output-reason-code",
+            "id": "w36-output-reason-code",
             "name": "稽核代码",
             "field": "reason_code"
           },
           {
-            "id": "e39-output-distinguish-result",
+            "id": "w36-output-distinguish-result",
             "name": "识别结果（warning  reject   pass）",
             "field": "distinguish_result"
           },
           {
-            "id": "e39-output-audit-content",
+            "id": "w36-output-audit-content",
             "name": "稽核内容",
             "field": "audit_content"
           },
           {
-            "id": "e39-output-audit-type",
+            "id": "w36-output-audit-type",
             "name": "稽核类型",
             "field": "audit_type"
           },
           {
-            "id": "e39-output-distinguish-content",
+            "id": "w36-output-distinguish-content",
             "name": "识别内容",
             "field": "distinguish_content"
           },
           {
-            "id": "e39-output-invoice-file-id",
+            "id": "w36-output-invoice-file-id",
             "name": "发票文件主键",
             "field": "invoice_file_id"
           },
           {
-            "id": "e39-output-invoice-info-id",
+            "id": "w36-output-invoice-info-id",
             "name": "发票信息主键",
             "field": "invoice_info_id"
           },
           {
-            "id": "e39-output-message",
+            "id": "w36-output-message",
             "name": "日志内容",
             "field": "message"
           },
           {
-            "id": "e39-output-policies-index",
+            "id": "w36-output-policies-index",
             "name": "制度",
             "field": "policiesIndex"
           },
           {
-            "id": "e39-output-suggestion",
+            "id": "w36-output-suggestion",
             "name": "建议",
             "field": "employeeSuggestionTips"
           },
           {
-            "id": "e39-output-create-time",
+            "id": "w36-output-create-time",
             "name": "创建时间",
             "field": "create_time"
           },
           {
-            "id": "e39-output-problem-category",
+            "id": "w36-output-problem-category",
             "name": "问题分类",
             "field": "problem_category"
           },
           {
-            "id": "e39-output-optimization-action-category",
+            "id": "w36-output-optimization-action-category",
             "name": "优化动作分类",
             "field": "optimization_action_category"
           }
         ],
         "passThrough": false,
         "inputField": null,
-        "outputPath": "e39_tax_result",
+        "outputPath": "w36_tax_result",
         "executionMode": "single"
       },
-      "id": "travel_e39_tax_consistency_check",
-      "name": "E39税额一致性检查",
+      "id": "travel_w36_tax_consistency_check",
+      "name": "W36税额一致性检查",
       "position": {
         "x": 670,
         "y": 1410
@@ -2766,14 +2766,14 @@
       "type": "edge"
     },
     {
-      "id": "edge-preprocess-to-e39-tax",
+      "id": "edge-preprocess-to-w36-tax",
       "sourceId": "c67dcb33-2750-4a43-8af7-8346612c04a9",
-      "targetId": "travel_e39_tax_consistency_check",
+      "targetId": "travel_w36_tax_consistency_check",
       "type": "edge"
     },
     {
-      "id": "edge-e39-tax-to-response",
-      "sourceId": "travel_e39_tax_consistency_check",
+      "id": "edge-w36-tax-to-response",
+      "sourceId": "travel_w36_tax_consistency_check",
       "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
       "type": "edge"
     }
