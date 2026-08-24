@@ -22,7 +22,7 @@ entertainment_audit_rule_catalog: dict[str, dict[str, str]] = {
     "E35": {"auditContent": "检查发票票种是否符合业务招待费报销范围"},
     "E33": {"auditContent": "检查使用发票是否为当年发票"},
     "E09": {"auditContent": "检查发票是否已被核销"},
-    "E05": {"auditContent": "检查发票开具日期是否为当前报销年度"},
+    "E05": {"auditContent": "检查发票是否被其他核销单重复使用"},
     "E15": {"auditContent": "检查是否有员工本人费用"},
     "W33": {"auditContent": "检查礼品数量与接待人数的合理性"},
     "W34": {"auditContent": "检查本核销单及跨核销单发票号码是否连续或近似（差值≤10）"},

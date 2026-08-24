@@ -62,6 +62,47 @@ STD_OUTPUTS = [
 
 # 输入条件列 field id（复用通讯费的 input field id）
 INPUT_FIELD_ID = "dea9a1bc-66ae-47b3-885f-9e9a1bb07571"
+WRITE_OFF_CHECK_NODE_ID = "2ea2f963-44fc-4130-9632-af048b76d0b1"
+MESSAGE_FIELD_ID = "509fd9ba-3996-4e4a-9021-df6513ed6807"
+
+# E05 的消息必须在 Zen 表达式中使用真实输入字段拼接，不能保留
+# {发票号}/{重复报销单号列表}/{已报销金额} 这类仅供文案模板使用的占位符。
+ENTERTAINMENT_E05_REJECT_MESSAGE = (
+    '"票据 发票号 " + (invoiceNo ?? "") + '
+    '" 已在以下报销单中使用过：" + '
+    '(filter((serviceData.invoiceUsageHistory ?? []) as h, '
+    'h.chequeNo == (invoiceNo ?? ""))[0].miInstanceCode ?? '
+    'filter((serviceData.invoiceUsageHistory ?? []) as h, '
+    'h.chequeNo == (invoiceNo ?? ""))[0].instanceCode ?? "未知") + '
+    '"；已报销金额为 " + '
+    'string(number((filter((serviceData.invoiceUsageHistory ?? []) as h, '
+    'h.chequeNo == (invoiceNo ?? ""))[0].estimatedTotalAmount ?? '
+    'filter((serviceData.invoiceUsageHistory ?? []) as h, '
+    'h.chequeNo == (invoiceNo ?? ""))[0].totalAmount ?? 0))) + '
+    '" 元，不能再次用于本次报销。"'
+)
+
+
+def _patch_writeoff_check_node(node: dict) -> None:
+    """将通用 E05 节点的拒绝消息改为运行时变量表达式。
+
+    通讯费源图曾保留 ``{发票号}`` 等文案占位符。流程图运行时不会自动
+    对这些中文占位符做模板替换，因此招待费必须在 Zen 表达式中直接从
+    invoiceNo 和 serviceData.invoiceUsageHistory 读取实际值。
+    """
+    content = node.get("content") or {}
+    input_field = next(
+        (item.get("id") for item in content.get("inputs", []) if item.get("field") == "isWriteOff"),
+        INPUT_FIELD_ID,
+    )
+    for item in content.get("inputs", []):
+        if item.get("id") == input_field:
+            item["name"] = "发票是否被其他核销单使用"
+    for rule in content.get("rules", []):
+        if rule.get(input_field) == "false":
+            rule[MESSAGE_FIELD_ID] = ENTERTAINMENT_E05_REJECT_MESSAGE
+        elif rule.get(input_field) == "true":
+            rule[MESSAGE_FIELD_ID] = '""'
 
 
 def _new_uuid() -> str:
@@ -1065,6 +1106,12 @@ def build_entertainment_graph(source_path: Path | str | None = None) -> dict:
         e for e in edges
         if e["sourceId"] not in deleted_set and e["targetId"] not in deleted_set
     ]
+
+    # 通用源图中的 E05 需要按招待费流程的历史核销数据输出实际消息。
+    for node in nodes:
+        if node.get("id") == WRITE_OFF_CHECK_NODE_ID:
+            _patch_writeoff_check_node(node)
+            break
 
     # --- Phase 1: 改造数据校验预处理 expressionNode ---
     for node in nodes:

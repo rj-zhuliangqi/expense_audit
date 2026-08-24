@@ -484,6 +484,90 @@ class InvoiceNumberContinuityTests(unittest.TestCase):
         )
 
 
+class EntertainmentE05WriteoffMessageTests(unittest.TestCase):
+    def test_e05_replaces_history_placeholders_in_builder_and_official_graph(self) -> None:
+        request = {
+            "type": "inputNode",
+            "content": {"schema": ""},
+            "id": "request",
+            "name": "request",
+            "position": {"x": 0, "y": 0},
+        }
+        response = {
+            "type": "outputNode",
+            "content": {"schema": ""},
+            "id": "response",
+            "name": "response",
+            "position": {"x": 500, "y": 0},
+        }
+        graphs = (
+            ("builder", build_entertainment_graph()),
+            (
+                "official",
+                json.loads(OFFICIAL_GRAPH_PATHS["entertainment"].read_text(encoding="utf-8")),
+            ),
+        )
+
+        for graph_name, graph in graphs:
+            with self.subTest(graph=graph_name):
+                writeoff = next(
+                    node
+                    for node in graph["nodes"]
+                    if node.get("id") == "2ea2f963-44fc-4130-9632-af048b76d0b1"
+                )
+                content = writeoff["content"]
+                input_id = next(
+                    item["id"]
+                    for item in content["inputs"]
+                    if item.get("field") == "isWriteOff"
+                )
+                message_id = next(
+                    item["id"]
+                    for item in content["outputs"]
+                    if item.get("field") == "message"
+                )
+                reject_rule = next(
+                    rule for rule in content["rules"] if rule.get(input_id) == "false"
+                )
+                self.assertNotRegex(reject_rule[message_id], r"\{[^{}]+\}")
+                self.assertIn("invoiceUsageHistory", reject_rule[message_id])
+
+                isolated_graph = {
+                    "contentType": "application/vnd.gorules.decision",
+                    "nodes": [request, writeoff, response],
+                    "edges": [
+                        {"id": "edge-request-writeoff", "sourceId": "request", "targetId": writeoff["id"], "type": "edge"},
+                        {"id": "edge-writeoff-response", "sourceId": writeoff["id"], "targetId": "response", "type": "edge"},
+                    ],
+                }
+                decision = load_decision_from_content(isolated_graph)
+                result = evaluate_prepared_input(
+                    decision,
+                    {
+                        "isWriteOff": False,
+                        "invoiceNo": "24357000000034577982",
+                        "instance_code": "rjw260820000016",
+                        "serviceData": {
+                            "invoiceUsageHistory": [
+                                {
+                                    "chequeNo": "24357000000034577982",
+                                    "miInstanceCode": "rjw260813000002",
+                                    "estimatedTotalAmount": 100,
+                                }
+                            ]
+                        },
+                    },
+                    trace=False,
+                )
+                e05 = result["decisionOutput"]["writeoff_result"]
+                self.assertEqual(e05["reason_code"], "E05")
+                self.assertEqual(e05["distinguish_result"], "REJECT")
+                self.assertIn("24357000000034577982", e05["message"])
+                self.assertIn("rjw260813000002", e05["message"])
+                self.assertIn("100", e05["message"])
+                self.assertNotRegex(e05["message"], r"\{[^{}]+\}")
+
+
 class ContentComplianceLlmTests(unittest.TestCase):
     def test_prompt_uses_project_name_semantics_not_keyword_matching(self) -> None:
         self.assertIn("JSON.stringify(goodsName)", ENTERTAINMENT_CONTENT_PROMPT_SOURCE)
