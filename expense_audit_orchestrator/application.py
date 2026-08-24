@@ -209,6 +209,7 @@ class ReceiptAuditService:
         gift_count_context = _resolve_gift_count_context(prepared_receipt)
         cumulative_goods_count = 0.0
         invoice_preparations = prepared_receipt["invoicePreparations"]
+        amount_resolution_unknown = False
         # 差旅文档级规则（税额、补贴、场站、自驾等）只在首张发票执行；
         # 逐张规则仍对每张发票执行。提前汇总全部发票税额，避免首张票只
         # 比较当前票税额而漏掉后续票。
@@ -268,7 +269,14 @@ class ReceiptAuditService:
             _collect_invoice_number(invoice_preparation, previous_invoice_numbers)
             _collect_w34_invoice_number(invoice_preparation, previous_w34_invoice_numbers)
 
-            used_amount = _extract_invoice_final_amount(invoice_result)
+            used_amount = _extract_invoice_final_amount(
+                invoice_result,
+                prepared_input=_resolve_prepared_input(invoice_preparation),
+            )
+            if used_amount is None and _invoice_has_unresolved_e36_amount(invoice_result):
+                # E36 的有效金额来自 LLM。缺失/错误/模型服务失败时，不能把
+                # OCR 总额当作有效金额，也不能让 E31 误判为“只是金额不足”。
+                amount_resolution_unknown = True
             if used_amount is not None and remaining_apply_amount is not None:
                 remaining_apply_amount -= used_amount
 
@@ -281,12 +289,26 @@ class ReceiptAuditService:
             "invoiceCount": len(invoice_results),
             "invoiceResults": invoice_results,
             "summary": _build_receipt_summary(invoice_results),
-            "isAmountSufficient": (remaining_apply_amount is None or remaining_apply_amount <= 0),
+            "isAmountSufficient": (
+                None
+                if remaining_apply_amount is None or amount_resolution_unknown
+                else remaining_apply_amount <= 0
+            ),
             # Receipt-level amount context used by writeback to build the final
             # E31 message with real totals (有效发票合计 / 报销金额 / 缺少金额).
             "applyAmount": _resolve_initial_apply_amount(prepared_receipt),
-            "remainingApplyAmount": remaining_apply_amount,
-            "validInvoiceTotal": _resolve_valid_invoice_total(invoice_results, _resolve_initial_apply_amount(prepared_receipt), remaining_apply_amount),
+            "remainingApplyAmount": (
+                None if amount_resolution_unknown else remaining_apply_amount
+            ),
+            "validInvoiceTotal": (
+                None
+                if amount_resolution_unknown
+                else _resolve_valid_invoice_total(
+                    invoice_results,
+                    _resolve_initial_apply_amount(prepared_receipt),
+                    remaining_apply_amount,
+                )
+            ),
             "resolvedProfile": resolved_profile,
         }
         if gift_count_context is not None:
@@ -1266,14 +1288,6 @@ def _update_preparation_apply_amount(
         context["serviceData"] = updated_service_data
 
 
-# reject/failed 时仍允许发票「扣减后 finalAmount」计入 E31 有效合计的稽核码。
-# - E31：金额充足度本身，不否定发票内容有效性（单据级判定，回写层单独处理）。
-# - E34：发票明细含禁止报销项，LLM 已扣减并返回扣减后 finalAmount；按扣减后金额计入。
-# 其余 reject/failed（sys-001 伪造 / E09 黑名单 / E05 重复 / sys-003 作废 / sys-004 红冲 /
-# E17 充值卡 / E01 抬头 / E02 税号 …）视为整张无效，finalAmount 不计入（计 0）。
-_INVOICE_FINAL_AMOUNT_EXEMPT_RULE_CODES = frozenset({"E31", "E34"})
-
-
 def _iter_decision_rule_results(decision_output: Mapping[str, Any]) -> list[dict[str, Any]]:
     """提取 decisionOutput 下各决策表节点产出的结构化规则结果。"""
     rule_results: list[dict[str, Any]] = []
@@ -1291,9 +1305,16 @@ def _invoice_contributes_valid_amount(invoice_result: Mapping[str, Any]) -> bool
     return invoice_contributes_valid_amount(invoice_result)
 
 
-def _extract_invoice_final_amount(invoice_result: Mapping[str, Any]) -> float | None:
+def _extract_invoice_final_amount(
+    invoice_result: Mapping[str, Any],
+    *,
+    prepared_input: Mapping[str, Any] | None = None,
+) -> float | None:
     """提取 E31/E34 感知的发票扣减后金额，保持历史 float 返回类型。"""
-    final_amount = extract_valid_invoice_final_amount(invoice_result)
+    final_amount = extract_valid_invoice_final_amount(
+        invoice_result,
+        prepared_input=prepared_input,
+    )
     return float(final_amount) if final_amount is not None else None
 
 
@@ -1318,3 +1339,23 @@ def _resolve_valid_invoice_total(
                 found = True
         return total if found else None
     return apply_amount - remaining_apply_amount
+
+
+def _invoice_has_unresolved_e36_amount(invoice_result: Mapping[str, Any]) -> bool:
+    """Return whether E36 ran but did not produce an LLM effective amount.
+
+    E36 is the only current invoice rule whose LLM result changes the amount
+    counted by E31.  A missing ``invoice_finalAmount`` therefore means that the
+    amount is unknown, not that OCR ``totalAmount`` may be used as a fallback.
+    """
+    decision_output = _resolve_decision_output(invoice_result)
+    for value in decision_output.values():
+        if not isinstance(value, Mapping):
+            continue
+        reason_code = str(
+            value.get("reason_code") or value.get("reasonCode") or ""
+        ).strip().upper()
+        if reason_code != "E36":
+            continue
+        return True
+    return False

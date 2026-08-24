@@ -70,6 +70,7 @@ STD_OUTPUTS = [
 INPUT_FIELD_ID = "dea9a1bc-66ae-47b3-885f-9e9a1bb07571"
 WRITE_OFF_CHECK_NODE_ID = "2ea2f963-44fc-4130-9632-af048b76d0b1"
 MESSAGE_FIELD_ID = "509fd9ba-3996-4e4a-9021-df6513ed6807"
+INVOICE_FINAL_AMOUNT_FIELD_ID = "344a0dff-93a3-4ed3-9e24-0cf2cd544911"
 
 # E05 的消息必须在 Zen 表达式中使用真实输入字段拼接，不能保留
 # {发票号}/{重复报销单号列表}/{已报销金额} 这类仅供文案模板使用的占位符。
@@ -315,10 +316,25 @@ ENTERTAINMENT_PREPROCESS_EXPRESSIONS = [
     },
     {
         # E34：出租车发票去掉后两位后，前六位一致即视为连号。
-        # 历史库命中或本核销单内存在同前缀出租车发票时均不通过。
+        # 历史库命中、本核销单内存在同前缀出租车发票，或历史查询失败时均不通过。
+        "id": _new_uuid(),
+        "key": "isEntertainmentTaxiHistoricalConsecutive",
+        "value": '(serviceData.entertainmentInvoiceSerial.isTaxiInvoice ?? false) and (serviceData.entertainmentInvoiceSerial.historyHit ?? false)',
+    },
+    {
+        "id": _new_uuid(),
+        "key": "isEntertainmentTaxiBatchConsecutive",
+        "value": '(serviceData.entertainmentInvoiceSerial.isTaxiInvoice ?? false) and (serviceData.entertainmentInvoiceSerial.batchHit ?? false)',
+    },
+    {
+        "id": _new_uuid(),
+        "key": "isEntertainmentTaxiSerialLookupFailed",
+        "value": '(serviceData.entertainmentInvoiceSerial.isTaxiInvoice ?? false) and (serviceData.entertainmentInvoiceSerial.lookupFailed ?? false)',
+    },
+    {
         "id": _new_uuid(),
         "key": "isEntertainmentTaxiInvoiceSerialClean",
-        "value": 'not((serviceData.entertainmentInvoiceSerial.isTaxiInvoice ?? false) and ((serviceData.entertainmentInvoiceSerial.historyHit ?? false) or (serviceData.entertainmentInvoiceSerial.batchHit ?? false)))',
+        "value": 'not($.isEntertainmentTaxiSerialLookupFailed or $.isEntertainmentTaxiHistoricalConsecutive or $.isEntertainmentTaxiBatchConsecutive)',
     },
 ]
 
@@ -532,7 +548,7 @@ def _build_taxi_invoice_serial_check_node() -> dict:
             distinguish_result="REJECT",
             audit_content=audit_content,
             audit_type="general-rules",
-            message='"本次报销中存在出租车发票连号，发票号 " + (invoiceNo ?? "") + " 与" + (serviceData.entertainmentInvoiceSerial.relationDescription ?? "本核销单中的其他出租车发票") + " 存在连号关系，存在异常报销风险。"',
+            message='(serviceData.entertainmentInvoiceSerial.lookupFailed ?? false) ? "出租车发票历史连号接口查询失败，已自动重试但仍未成功，无法完成 E34 连号稽核，请稍后重试或联系财务处理。" : ("本次报销中存在出租车发票连号，发票号 " + (invoiceNo ?? "") + " 与" + (serviceData.entertainmentInvoiceSerial.relationDescription ?? "本核销单中的其他出租车发票") + " 存在连号关系，存在异常报销风险。")',
             policies_index='"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范\\n所有费用报销须提供真实、合法、合规的票据。"',
             suggestion='"请确认票据是否真实对应本次业务。无法说明合理业务原因的，请删除相关票据；保留提交的，系统将记录并转财务复核。"',
             problem_category="连号票据",
@@ -557,14 +573,19 @@ def _build_taxi_invoice_serial_check_node() -> dict:
 ENTERTAINMENT_CONTENT_PROMPT_SOURCE = r"""export const handler = async (input) => {
   // 发票内容唯一使用数据准备阶段由 items[*].goodsName 汇总出的单据级 goodsName。
   const goodsName = String(input.goodsName ?? '');
-  // 用 JSON.stringify 注入，避免商品名称中的反引号或 ${...} 破坏模板字符串。
+  const items = Array.isArray(input.items) ? input.items : [];
+  const rawTotalAmount = input.totalAmount ?? 0;
+  const parsedTotalAmount = parseFloat(rawTotalAmount);
+  const totalAmount = Number.isFinite(parsedTotalAmount) ? parsedTotalAmount : 0;
+  // 用 JSON.stringify 注入，避免商品名称或明细文本破坏模板字符串。
   const goodsNameForPrompt = JSON.stringify(goodsName);
+  const itemsForPrompt = JSON.stringify(items);
 
   const optimizedPrompt = `# 角色
-你是企业费用制度合规审核专家，负责判断业务招待费发票【项目名称】是否命中公司制度的禁止报销清单。
+你是企业费用制度合规审核专家，负责判断业务招待费发票【项目名称】是否命中公司制度的禁止报销清单，并计算发票有效可报销金额。
 
 # 审核范围
-只根据下面给出的发票项目名称判断，不要根据金额、销货方、发票类型或关键词的单独出现做推断。
+只根据下面给出的发票项目名称和明细金额判断，不要根据销货方、发票类型或关键词的单独出现做推断。
 公司制度明确禁止报销的项目为：
 1. 黄金（作为贵金属、金条、金币、黄金制品等）；
 2. 珠宝；
@@ -586,11 +607,21 @@ ENTERTAINMENT_CONTENT_PROMPT_SOURCE = r"""export const handler = async (input) =
 - 项目名称含义不清、无法确认命中禁止清单时，默认通过；
 - 多个项目名称中只要有一个明确命中禁止清单，就判定不通过。
 
+# 有效金额计算要求
+- 发票含税总额为 ${totalAmount} 元，这是最终金额上限和金额校验基准；
+- 必须逐项查看 items 中的 goodsName、detailAmount、taxAmount；
+- 标准 OCR 中 detailAmount 通常是不含税金额，单项含税金额应按 detailAmount + taxAmount 计算；若 taxAmount 缺失，则使用 detailAmount；
+- 有效金额 finalAmount = 发票含税总额 - 命中禁止清单项目的含税金额之和，并限制在 0 至发票含税总额之间；
+- 如果所有项目均未命中禁止清单、items 为空或无法确认任何禁止项目，finalAmount 必须等于发票含税总额；
+- 如果整张发票均为禁止项目，finalAmount 返回 0；
+- finalAmount 必须是非负数字，不能省略，不能返回 null、字符串说明或估算值；passed=true 时 finalAmount 必须与发票含税总额一致。
+
 # 输出要求
 必须只返回一个标准 JSON 对象，不得返回 Markdown、解释、推理过程或其他文字：
 {
   "passed": true 或 false,
-  "violationType": "none"、"prohibited_item" 或 "recharge_card"
+  "violationType": "none"、"prohibited_item" 或 "recharge_card",
+  "finalAmount": 有效可报销金额（数字）
 }
 
 字段约束：
@@ -599,15 +630,27 @@ ENTERTAINMENT_CONTENT_PROMPT_SOURCE = r"""export const handler = async (input) =
 - 命中礼品卡、充值卡或明确的预付/储值卡时，violationType 返回 "recharge_card"。
 
 # 待审核的发票项目名称（JSON 字符串）
-${goodsNameForPrompt}`;
+${goodsNameForPrompt}
 
+# 待审核的发票明细（JSON 数组；detailAmount 为金额，taxAmount 为税额）
+${itemsForPrompt}`;
+
+  // functionNode 的下游只会拿到本节点返回值，不能依赖 input.prev 或
+  // 自动回溯 request 节点。因此把金额和明细显式透传给 LLM 节点，
+  // 否则网关无法校验 finalAmount，所有 E36 都会被误判为模型失败。
   return {
     prompt: optimizedPrompt,
-    context: input.context || {}
+    context: input.context || {},
+    totalAmount: input.totalAmount ?? null,
+    items,
+    goodsName,
+    invoiceNo: input.invoiceNo ?? '',
+    instance_code: input.instance_code ?? null,
+    invoice_file_id: input.invoice_file_id ?? null,
+    invoice_info_id: input.invoice_info_id ?? null
   };
 };
 """
-
 
 def _build_content_compliance_prompt_node() -> dict:
     """改造充值卡检查prompt → 招待费内容合规prompt（合并规则2+规则6）。"""
@@ -637,13 +680,17 @@ def _build_content_compliance_llm_node() -> dict:
         "    }\r\n"
         "    const LOCAL_LLM_URL = context.llmGatewayUrl;\r\n"
         "    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\r\n"
+        "    const invoiceTotalAmount = input.totalAmount ?? (input.prev && input.prev.totalAmount);\r\n"
         "\r\n"
         "    if (!prompt) {\r\n"
         "      throw new Error('missing prompt from previous component output');\r\n"
         "    }\r\n"
         "\r\n"
         "    const payload = {\r\n"
-        "      prompt\r\n"
+        "      prompt,\r\n"
+        "      requiredFields: ['passed', 'finalAmount'],\r\n"
+        "      invoiceTotalAmount,\r\n"
+        "      requirePassedFinalAmountMatchesTotal: true\r\n"
         "    };\r\n"
         "\r\n"
         "    if (input.systemPrompt || context.systemPrompt) {\r\n"
@@ -724,17 +771,17 @@ def _build_content_compliance_check_node() -> dict:
             INPUT_FIELD_ID: '"error"',
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": '"E36"',
-            "f35ede49-0eae-4dda-b39e-11a11383697a": '"FAILED"',
+            "f35ede49-0eae-4dda-b39e-11a11383697a": '"REJECT"',
             "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": '"检查发票内容是否含禁止核销内容或充值卡信息"',
             "14801e5c-ebef-43a4-a56a-23cb5adf4a83": '"general-rules"',
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": '""',
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": '"模型服务暂时异常，当前内容合规检查未完成，请联系管理员处理。"',
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": '"模型服务暂时异常，当前内容合规检查未完成，请稍后重试或联系管理员处理。"',
             "a1b2c3d4-0000-0000-0000-regulation0": '""',
-            "a1b2c3d4-0000-0000-0000-suggestion0": '""',
-            "a1b2c3d4-0000-0000-0000-problemcategory0": '""',
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": '""',
+            "a1b2c3d4-0000-0000-0000-suggestion0": '"【模型异常】请稍后重试；如问题持续，请联系管理员处理。"',
+            "a1b2c3d4-0000-0000-0000-problemcategory0": '"模型服务异常"',
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": '"【稍后重试】【联系管理员】"',
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
         },
         # 通过
@@ -771,6 +818,12 @@ def _build_content_compliance_check_node() -> dict:
             suggestion='"【删除发票】删除本票据，不得上传礼品卡、充值卡或其他预付/储值卡类发票"',
         ),
     ]
+    for rule in rules:
+        if rule.get(INPUT_FIELD_ID) == '"error"':
+            rule[INVOICE_FINAL_AMOUNT_FIELD_ID] = "null"
+        else:
+            rule[INVOICE_FINAL_AMOUNT_FIELD_ID] = "llm_result.finalAmount"
+
     return _make_decision_table(
         node_id=node_id,
         name="招待费内容合规检查",
@@ -779,6 +832,13 @@ def _build_content_compliance_check_node() -> dict:
         rules=rules,
         output_path="content_compliance_result",
         position={"x": 675, "y": 1390},
+        extra_outputs=[
+            {
+                "id": INVOICE_FINAL_AMOUNT_FIELD_ID,
+                "name": "发票可用额度",
+                "field": "invoice_finalAmount",
+            }
+        ],
     )
 
 
@@ -983,7 +1043,8 @@ def _build_fraud_address_llm_node() -> dict:
         "    }\r\n"
         "\r\n"
         "    const payload = {\r\n"
-        "      prompt\r\n"
+        "      prompt,\r\n"
+        "      requiredFields: ['passed']\r\n"
         "    };\r\n"
         "\r\n"
         "    if (input.systemPrompt || context.systemPrompt) {\r\n"
@@ -1039,13 +1100,13 @@ def _build_fraud_postprocess_node() -> dict:
                 {
                     "id": _new_uuid(),
                     "key": "llmAddressPassed",
-                    "value": '(llm_status ?? "error") == "success" ? ((llm_result ?? {}).passed == true) : true',
+                    "value": '(llm_status ?? "error") == "success" ? ((llm_result ?? {}).passed == true) : false',
                 },
                 {
                     "id": _new_uuid(),
                     # 综合三项标志：任一为 true 则高风险
                     "key": "isHighRiskInvoice",
-                    "value": '(($.isHighRiskByRule ?? false) or ($.isRecentlyRegistered ?? false) or ((llm_status ?? "error") == "success" ? ((llm_result ?? {}).passed == false) : false)) ? "true" : "false"',
+                    "value": '(llm_status ?? "error") != "success" ? "error" : ((($.isHighRiskByRule ?? false) or ($.isRecentlyRegistered ?? false) or ((llm_result ?? {}).passed == false)) ? "true" : "false")',
                 },
             ],
             "passThrough": True,
@@ -1063,6 +1124,18 @@ def _build_fraud_check_node() -> dict:
     """规则5：虚开发票预警检查 W31（弱控 WARNING，转财务审核）。"""
     node_id = "ent-fraud-check"
     rules = [
+        _std_rule_row(
+            input_value='"error"',
+            reason_code="W31",
+            distinguish_result="WARNING",
+            audit_content="检查使用的发票销货方是否为高风险发票（虚开发票预警）",
+            audit_type="general-rules",
+            message='"模型服务暂时异常，当前虚开发票预警检查未完成，请稍后重试或联系管理员处理。"',
+            policies_index='""',
+            suggestion='"【模型异常】请稍后重试；如问题持续，请联系管理员处理。"',
+            problem_category="模型服务异常",
+            optimization_action_category="【稍后重试】【联系管理员】",
+        ),
         _std_rule_row(
             input_value='"false"',
             reason_code="W31",

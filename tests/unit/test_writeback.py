@@ -1384,24 +1384,25 @@ class WritebackAssemblerTests(unittest.TestCase):
             ],
             "summary": {"overallStatus": "SUCCESS"},
         }
-        # absent
+        expected_advice = "本次审核存在REJECT稽核项，请根据稽核明细处理。"
+        # absent: a deterministic warning is now required for a non-pass result.
         payload = assemble_result_audit_info(prepared_receipt, dict(base_processed))
-        self.assertNotIn("aiAuditAdvice", payload)
+        self.assertEqual(payload["aiAuditAdvice"], expected_advice)
         # empty string
         payload = assemble_result_audit_info(
             prepared_receipt, {**base_processed, "aiAuditAdvice": ""}
         )
-        self.assertNotIn("aiAuditAdvice", payload)
+        self.assertEqual(payload["aiAuditAdvice"], expected_advice)
         # whitespace
         payload = assemble_result_audit_info(
             prepared_receipt, {**base_processed, "aiAuditAdvice": "   "}
         )
-        self.assertNotIn("aiAuditAdvice", payload)
+        self.assertEqual(payload["aiAuditAdvice"], expected_advice)
         # None
         payload = assemble_result_audit_info(
             prepared_receipt, {**base_processed, "aiAuditAdvice": None}
         )
-        self.assertNotIn("aiAuditAdvice", payload)
+        self.assertEqual(payload["aiAuditAdvice"], expected_advice)
 
     def test_telecom_compliance_marks_telecom_service_penalty_and_surcharge_noncompliant(self) -> None:
         prepared_receipt = {

@@ -81,6 +81,44 @@ def _is_invoice_number_continuous_expression() -> str:
 
 
 class EntertainmentContentGraphWiringTests(unittest.TestCase):
+    def test_content_prompt_explicitly_passes_amount_and_items_to_llm(self) -> None:
+        # GoRules functionNode 下游只接收上游返回值，不能依赖 input.prev
+        # 自动拿回 request 输入；金额不透传会让网关无法校验 finalAmount，
+        # 进而把所有 E36 误判为模型失败。
+        graph = {
+            "contentType": "application/vnd.gorules.decision",
+            "nodes": [
+                {"type": "inputNode", "id": "request", "name": "request", "position": {"x": 0, "y": 0}},
+                {
+                    "type": "functionNode",
+                    "id": "prompt",
+                    "name": "prompt",
+                    "position": {"x": 100, "y": 0},
+                    "content": {"source": ENTERTAINMENT_CONTENT_PROMPT_SOURCE},
+                },
+                {"type": "outputNode", "id": "response", "name": "response", "position": {"x": 200, "y": 0}},
+            ],
+            "edges": [
+                {"id": "edge-1", "sourceId": "request", "targetId": "prompt", "type": "edge"},
+                {"id": "edge-2", "sourceId": "prompt", "targetId": "response", "type": "edge"},
+            ],
+        }
+        result = load_decision_from_content(graph).evaluate(
+            {
+                "goodsName": "餐饮",
+                "items": [{"goodsName": "餐饮", "detailAmount": "100", "taxAmount": "6"}],
+                "totalAmount": "106.00",
+                "invoiceNo": "INV-001",
+                "context": {"llmGatewayUrl": "http://node-gateway"},
+            },
+            {"trace": True},
+        )
+        output = result["result"]
+        self.assertEqual(output["totalAmount"], "106.00")
+        self.assertEqual(output["items"][0]["taxAmount"], "6")
+        self.assertEqual(output["goodsName"], "餐饮")
+        self.assertIn("发票含税总额为 106 元", output["prompt"])
+
     def test_content_decision_tables_wait_for_llm_postprocess(self) -> None:
         request_id = "9948bfb0-d9fb-416d-b9a2-b22a875094f0"
         postprocess_id = "ent-content-compliance-postprocess"
@@ -747,10 +785,10 @@ class ContentComplianceLlmTests(unittest.TestCase):
                 )
                 e36 = result["decisionOutput"]["content_compliance_result"]
                 self.assertEqual(e36["reason_code"], "E36")
-                self.assertEqual(e36["distinguish_result"], "FAILED")
+                self.assertEqual(e36["distinguish_result"], "REJECT")
                 self.assertEqual(
                     e36["message"],
-                    "模型服务暂时异常，当前内容合规检查未完成，请联系管理员处理。",
+                    "模型服务暂时异常，当前内容合规检查未完成，请稍后重试或联系管理员处理。",
                 )
                 self.assertNotIn(detail, e36["message"])
                 self.assertNotIn("error_type=", e36["message"])

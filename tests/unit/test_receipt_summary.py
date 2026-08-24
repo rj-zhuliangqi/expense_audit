@@ -77,7 +77,9 @@ class ReceiptSummaryTests(unittest.TestCase):
         self.assertEqual(
             build_ai_audit_advice(prepared_receipt, processed_receipt),
             "本次报销捕捉3张问题发票,需要删除/重开发票24000122、240000118、24000115,"
-            "待补充发票金额36.81元,期待下一次满分",
+            "待补充发票金额36.81元,期待下一次满分；"
+            "存在REJECT稽核项，请根据稽核明细处理；"
+            "存在FAILED稽核项，当前结果无法确认，请稍后重试或联系管理员处理",
         )
 
     def test_advice_keeps_warning_and_e34_valid_without_listing_them(self) -> None:
@@ -119,8 +121,43 @@ class ReceiptSummaryTests(unittest.TestCase):
 
         self.assertEqual(
             build_ai_audit_advice(prepared_receipt, processed_receipt),
-            "本次发票全部通过！",
+            "本次审核存在REJECT稽核项，请根据稽核明细处理；"
+            "存在WARNING稽核项，请根据稽核明细进行人工复核；"
+            "待补充发票金额36.81元",
         )
+
+    def test_advice_does_not_mask_reject_or_warning_in_legacy_audit_logs(self) -> None:
+        prepared_receipt = {
+            "serviceData": {"auditInfo": {"applyAmount": "200.00"}},
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "preparedInput": {
+                        "invoiceNo": "INV-001",
+                        "totalAmount": "1778.00",
+                    },
+                }
+            ],
+        }
+        # 历史回写/重放数据没有 invoiceResults，只有已经展开的 auditLogs。
+        processed_receipt = {
+            "auditLogs": [
+                {"reasonCode": "E31", "distinguishResult": "reject"},
+                {"reasonCode": "W33", "distinguishResult": "warning"},
+            ],
+            "aiAuditAdvice": "本次发票全部通过！",
+        }
+
+        advice = build_ai_audit_advice(prepared_receipt, processed_receipt)
+        self.assertIsNotNone(advice)
+        self.assertNotIn("本次发票全部通过", advice or "")
+        self.assertIn("REJECT", advice or "")
+        self.assertIn("WARNING", advice or "")
+
+        payload = assemble_result_audit_info(prepared_receipt, processed_receipt)
+        self.assertNotIn("本次发票全部通过", payload["aiAuditAdvice"])
+        self.assertIn("REJECT", payload["aiAuditAdvice"])
+        self.assertIn("WARNING", payload["aiAuditAdvice"])
 
     def test_advice_uses_invoice_number_fallback_priority(self) -> None:
         prepared_receipt = {
