@@ -161,6 +161,24 @@ ENTERTAINMENT_PREPROCESS_EXPRESSIONS = [
         "value": '(instanceComCode ?? "") != "" and some((serviceData.companyList ?? []) as c, (c.ccode ?? c.cCode ?? c.accountingCode ?? "") != "" and (c.ccode ?? c.cCode ?? c.accountingCode ?? "") == (instanceComCode ?? "") and (orgName ?? buyerName ?? "") != "" and (orgName ?? buyerName ?? "") == (c.companyName ?? c.cName ?? c.cname ?? ""))',
     },
     {
+        "id": "entertainment-e01-invoice-type-code",
+        "key": "e01InvoiceTypeCode",
+        # 与个人交通费保持一致：票种编码兼容数字、数字字符串和带空格的数字字符串。
+        "value": '(type(invoiceType) == "number") ? invoiceType : ((type(invoiceType) == "string" and trim(invoiceType) != "" and matches(trim(invoiceType), "^[+-]?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))([eE][+-]?[0-9]+)?$")) ? number(trim(invoiceType)) : -1)',
+    },
+    {
+        "id": "entertainment-e01-applicable",
+        "key": "e01Applicable",
+        # E01 适用票种清单复刻个人交通费，代码 21 仅适用 E01。
+        "value": "$.e01InvoiceTypeCode in [1, 2, 3, 4, 5, 7, 11, 12, 13, 15, 19, 21, 23, 25, 26, 27, 28, 29, 72]",
+    },
+    {
+        "id": "entertainment-e01-header-check",
+        "key": "header_check",
+        # 不适用 E01 的票种直接通过；适用票种继续执行招待费现有抬头匹配逻辑。
+        "value": "not($.e01Applicable ?? false) or $.isCompanyExists",
+    },
+    {
         "id": _new_uuid(),
         "key": "isBuyerCompany",
         # 购买方名称带公司/企业类后缀时，按公司抬头处理；否则按员工号/个人抬头处理。
@@ -173,6 +191,24 @@ ENTERTAINMENT_PREPROCESS_EXPRESSIONS = [
         # 公司抬头必须有税号且与核销单所属 instanceComCode 对应的财务体系公司税号一致；
         # 非公司抬头按员工号处理，直接通过 E02。
         "value": '((endsWith((buyerName ?? orgName ?? ""), "公司") or endsWith((buyerName ?? orgName ?? ""), "企业") or endsWith((buyerName ?? orgName ?? ""), "集团") or endsWith((buyerName ?? orgName ?? ""), "事务所") or endsWith((buyerName ?? orgName ?? ""), "商行") or endsWith((buyerName ?? orgName ?? ""), "合作社")) == false) or ((buyerTaxNo ?? buyerTaxNO ?? "") != "" and (instanceComCode ?? "") != "" and some((serviceData.companyList ?? []) as c, (c.ccode ?? c.cCode ?? c.accountingCode ?? "") == (instanceComCode ?? "") and (buyerTaxNo ?? buyerTaxNO ?? "") == (c.companyTax ?? c.taxNo ?? c.taxpayerIdentificationNumber ?? "")))',
+    },
+    {
+        "id": "entertainment-e02-invoice-type-code",
+        "key": "e02InvoiceTypeCode",
+        # 与个人交通费保持一致：票种编码兼容数字、数字字符串和带空格的数字字符串。
+        "value": '(type(invoiceType) == "number") ? invoiceType : ((type(invoiceType) == "string" and trim(invoiceType) != "" and matches(trim(invoiceType), "^[+-]?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))([eE][+-]?[0-9]+)?$")) ? number(trim(invoiceType)) : -1)',
+    },
+    {
+        "id": "entertainment-e02-applicable",
+        "key": "e02Applicable",
+        # E02 比 E01 少代码 21，保持个人交通费现行规则。
+        "value": "$.e02InvoiceTypeCode in [1, 2, 3, 4, 5, 7, 11, 12, 13, 15, 19, 23, 25, 26, 27, 28, 29, 72]",
+    },
+    {
+        "id": "entertainment-e02-tax-check",
+        "key": "tax_check",
+        # 不适用 E02 的票种直接通过；适用票种继续执行招待费现有税号匹配逻辑。
+        "value": "not($.e02Applicable ?? false) or $.isTaxExists",
     },
     {
         "id": _new_uuid(),
@@ -263,8 +299,8 @@ def _build_company_header_check_node() -> dict:
     return _make_decision_table(
         node_id=node_id,
         name="发票购买方公司检查",
-        input_field="isCompanyExists",
-        input_name="发票购买方公司是否与核销单财务体系公司一致",
+        input_field="header_check",
+        input_name="票种适用时发票购买方公司是否与核销单财务体系公司一致",
         rules=rules,
         output_path="header_result",
         position={"x": 660, "y": 900},
@@ -300,8 +336,8 @@ def _build_tax_number_check_node() -> dict:
     return _make_decision_table(
         node_id=node_id,
         name="发票购买方税号检查",
-        input_field="isTaxExists",
-        input_name="公司抬头发票购买方纳税人识别号是否与财务体系公司一致",
+        input_field="tax_check",
+        input_name="票种适用时发票购买方纳税人识别号是否与财务体系公司一致",
         rules=rules,
         output_path="tax_result",
         position={"x": 660, "y": 940},

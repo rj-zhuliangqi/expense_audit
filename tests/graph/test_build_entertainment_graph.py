@@ -186,7 +186,7 @@ class CompanyHeaderExpressionTests(unittest.TestCase):
 
     def test_graph_maps_e01_to_pass_and_reject(self) -> None:
         node = _build_company_header_check_node()
-        self.assertEqual(node["content"]["inputs"][0]["field"], "isCompanyExists")
+        self.assertEqual(node["content"]["inputs"][0]["field"], "header_check")
         self.assertEqual(node["content"]["outputPath"], "header_result")
 
         results_by_input = {
@@ -281,7 +281,7 @@ class TaxNumberExpressionTests(unittest.TestCase):
 
     def test_graph_maps_e02_to_pass_and_reject(self) -> None:
         node = _build_tax_number_check_node()
-        self.assertEqual(node["content"]["inputs"][0]["field"], "isTaxExists")
+        self.assertEqual(node["content"]["inputs"][0]["field"], "tax_check")
         self.assertEqual(node["content"]["outputPath"], "tax_result")
         results_by_input = {
             rule["dea9a1bc-66ae-47b3-885f-9e9a1bb07571"]: rule[

@@ -175,14 +175,44 @@
             "value": "(instanceComCode ?? \"\") != \"\" and some((serviceData.companyList ?? []) as c, (c.ccode ?? c.cCode ?? c.accountingCode ?? \"\") != \"\" and (c.ccode ?? c.cCode ?? c.accountingCode ?? \"\") == (instanceComCode ?? \"\") and (orgName ?? buyerName ?? \"\") != \"\" and (orgName ?? buyerName ?? \"\") == (c.companyName ?? c.cName ?? c.cname ?? \"\"))"
           },
           {
+            "id": "entertainment-e01-invoice-type-code",
+            "key": "e01InvoiceTypeCode",
+            "value": "(type(invoiceType) == \"number\") ? invoiceType : ((type(invoiceType) == \"string\" and trim(invoiceType) != \"\" and matches(trim(invoiceType), \"^[+-]?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))([eE][+-]?[0-9]+)?$\")) ? number(trim(invoiceType)) : -1)"
+          },
+          {
+            "id": "entertainment-e01-applicable",
+            "key": "e01Applicable",
+            "value": "$.e01InvoiceTypeCode in [1, 2, 3, 4, 5, 7, 11, 12, 13, 15, 19, 21, 23, 25, 26, 27, 28, 29, 72]"
+          },
+          {
+            "id": "entertainment-e01-header-check",
+            "key": "header_check",
+            "value": "not($.e01Applicable ?? false) or $.isCompanyExists"
+          },
+          {
             "id": "15da20c0-9871-4b41-a5ff-9ae74a68a361",
             "key": "isBuyerCompany",
             "value": "(endsWith((buyerName ?? orgName ?? \"\"), \"公司\") or endsWith((buyerName ?? orgName ?? \"\"), \"企业\") or endsWith((buyerName ?? orgName ?? \"\"), \"集团\") or endsWith((buyerName ?? orgName ?? \"\"), \"事务所\") or endsWith((buyerName ?? orgName ?? \"\"), \"商行\") or endsWith((buyerName ?? orgName ?? \"\"), \"合作社\"))"
           },
           {
+            "id": "entertainment-e02-invoice-type-code",
+            "key": "e02InvoiceTypeCode",
+            "value": "(type(invoiceType) == \"number\") ? invoiceType : ((type(invoiceType) == \"string\" and trim(invoiceType) != \"\" and matches(trim(invoiceType), \"^[+-]?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))([eE][+-]?[0-9]+)?$\")) ? number(trim(invoiceType)) : -1)"
+          },
+          {
+            "id": "entertainment-e02-applicable",
+            "key": "e02Applicable",
+            "value": "$.e02InvoiceTypeCode in [1, 2, 3, 4, 5, 7, 11, 12, 13, 15, 19, 23, 25, 26, 27, 28, 29, 72]"
+          },
+          {
             "id": "89ecf386-8736-4a73-8882-6d1c11d095d5",
             "key": "isTaxExists",
             "value": "((endsWith((buyerName ?? orgName ?? \"\"), \"公司\") or endsWith((buyerName ?? orgName ?? \"\"), \"企业\") or endsWith((buyerName ?? orgName ?? \"\"), \"集团\") or endsWith((buyerName ?? orgName ?? \"\"), \"事务所\") or endsWith((buyerName ?? orgName ?? \"\"), \"商行\") or endsWith((buyerName ?? orgName ?? \"\"), \"合作社\")) == false) or ((buyerTaxNo ?? buyerTaxNO ?? \"\") != \"\" and (instanceComCode ?? \"\") != \"\" and some((serviceData.companyList ?? []) as c, (c.ccode ?? c.cCode ?? c.accountingCode ?? \"\") == (instanceComCode ?? \"\") and (buyerTaxNo ?? buyerTaxNO ?? \"\") == (c.companyTax ?? c.taxNo ?? c.taxpayerIdentificationNumber ?? \"\")))"
+          },
+          {
+            "id": "entertainment-e02-tax-check",
+            "key": "tax_check",
+            "value": "not($.e02Applicable ?? false) or $.isTaxExists"
           },
           {
             "id": "3c3b4039-5ca7-452d-9fa2-3b258fdd964a",
@@ -1035,8 +1065,8 @@
         "inputs": [
           {
             "id": "dea9a1bc-66ae-47b3-885f-9e9a1bb07571",
-            "name": "发票购买方公司是否与核销单财务体系公司一致",
-            "field": "isCompanyExists"
+            "name": "票种适用时发票购买方公司是否与核销单财务体系公司一致",
+            "field": "header_check"
           }
         ],
         "outputs": [
@@ -1156,8 +1186,8 @@
         "inputs": [
           {
             "id": "dea9a1bc-66ae-47b3-885f-9e9a1bb07571",
-            "name": "公司抬头发票购买方纳税人识别号是否与财务体系公司一致",
-            "field": "isTaxExists"
+            "name": "票种适用时发票购买方纳税人识别号是否与财务体系公司一致",
+            "field": "tax_check"
           }
         ],
         "outputs": [
