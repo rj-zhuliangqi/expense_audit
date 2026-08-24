@@ -22,6 +22,7 @@ class E34EntertainmentInvoiceGraphTests(unittest.TestCase):
         is_taxi: bool,
         history_hit: bool = False,
         batch_hit: bool = False,
+        lookup_failed: bool = False,
     ) -> dict:
         invoice_no = "12345601"
         relation_description = ""
@@ -70,7 +71,7 @@ class E34EntertainmentInvoiceGraphTests(unittest.TestCase):
                     "historyHit": history_hit,
                     "batchHit": batch_hit,
                     "isTaxiInvoice": is_taxi,
-                    "lookupFailed": False,
+                    "lookupFailed": lookup_failed,
                     "relationDescription": relation_description,
                 },
             },
@@ -100,6 +101,18 @@ class E34EntertainmentInvoiceGraphTests(unittest.TestCase):
                 self.assertIn("发票号 12345601", rule["message"])
                 self.assertNotIn("{发票号}", rule["message"])
 
+    def test_history_lookup_failure_rejects_with_diagnostic_message(self) -> None:
+        result = evaluate_prepared_input(
+            self.decision,
+            self._prepared(is_taxi=True, lookup_failed=True),
+            trace=False,
+        )
+        rule = self._rule(result, "E34")
+
+        self.assertEqual(rule["distinguish_result"], "REJECT")
+        self.assertIn("历史连号接口查询失败", rule["message"])
+        self.assertIn("已自动重试但仍未成功", rule["message"])
+
     def test_message_shows_batch_and_history_peers(self) -> None:
         result = evaluate_prepared_input(
             self.decision,
@@ -123,7 +136,12 @@ class E34EntertainmentInvoiceGraphTests(unittest.TestCase):
     def test_non_taxi_passes_even_if_flags_are_true(self) -> None:
         result = evaluate_prepared_input(
             self.decision,
-            self._prepared(is_taxi=False, history_hit=True, batch_hit=True),
+            self._prepared(
+                is_taxi=False,
+                history_hit=True,
+                batch_hit=True,
+                lookup_failed=True,
+            ),
             trace=False,
         )
         self.assertEqual(self._rule(result, "E34")["distinguish_result"], "PASS")

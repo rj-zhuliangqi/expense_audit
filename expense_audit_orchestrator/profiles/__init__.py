@@ -216,11 +216,14 @@ def _build_entertainment_profile(
         },
         invoice_enrichers={
             "e15InvoiceType": build_e15_invoice_type_enricher(),
-            # W34 使用跨核销单发票连号接口；E34 仅使用本核销单出租车连号数据。
+            # W34 使用通用跨核销单发票连号接口；E34 使用出租车专用历史接口，
+            # 并在应用层补充本核销单内出租车发票连号关系。
             "w34InvoiceSerial": build_w34_invoice_serial_enricher(
                 service_url=service_url,
             ),
-            "entertainmentInvoiceSerial": build_entertainment_taxi_invoice_serial_enricher(),
+            "entertainmentInvoiceSerial": build_entertainment_taxi_invoice_serial_enricher(
+                service_url=service_url,
+            ),
         },
         compliance_rule=entertainment_compliance_rule,
         audit_rule_catalog=entertainment_audit_rule_catalog,

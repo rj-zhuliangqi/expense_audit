@@ -175,14 +175,23 @@ def build_w34_invoice_serial_enricher(
     return enricher
 
 
-def build_entertainment_taxi_invoice_serial_enricher() -> Callable[
-    [str, str, dict[str, Any], dict[str, Any]], dict[str, Any]
-]:
-    """构造 E34 的本核销单出租车连号数据准备。
+def build_entertainment_taxi_invoice_serial_enricher(
+    *,
+    service_url: str | None = None,
+    provider: InvoiceSerialNumberProvider | None = None,
+) -> Callable[[str, str, dict[str, Any], dict[str, Any]], dict[str, Any]]:
+    """构造 E34 的出租车历史及本核销单连号数据准备。
 
-    E34 只检查本核销单内出租车发票的出租车票号前缀，不调用 W34 使用的
-    ``invoice-serial-number`` 历史接口。
+    E34 使用出租车专用的 ``invoice-serial-number-taxi`` 历史接口，并由
+    应用层继续聚合本核销单内的出租车发票。历史接口返回空列表且本单无
+    连号时通过；查询失败会保留 ``lookupFailed``，交由流程图拒绝，避免
+    把接口故障静默当成无连号。
     """
+    resolved_service_url = service_url or audit_client.DEFAULT_AUDIT_SERVICE_URL
+    invoice_serial_provider = provider or partial(
+        audit_client.fetch_taxi_invoice_serial_numbers,
+        service_url=resolved_service_url,
+    )
 
     def enricher(
         receipt_code: str,
@@ -190,24 +199,57 @@ def build_entertainment_taxi_invoice_serial_enricher() -> Callable[
         ocr_data: dict[str, Any],
         service_data: dict[str, Any],
     ) -> dict[str, Any]:
-        del receipt_code, file_path, service_data
+        del file_path
         ocr = ocr_data if isinstance(ocr_data, Mapping) else {}
+        services = service_data if isinstance(service_data, Mapping) else {}
         invoice_no = (
             _string_value(ocr.get("chequeNo"))
             or _string_value(ocr.get("invoiceNo"))
             or _string_value(ocr.get("serialNo"))
         )
+        current_prefix = normalize_invoice_serial_prefix(invoice_no)
         taxi_invoice = is_taxi_invoice(ocr)
+        history_numbers: list[str] = []
+        lookup_failed = False
+
+        audit_info = services.get("auditInfo")
+        if not isinstance(audit_info, Mapping):
+            audit_info = {}
+        instance_code = _string_value(audit_info.get("instanceCode")) or receipt_code
+        accounting_code = (
+            _string_value(ocr.get("accountingCode"))
+            or _string_value(audit_info.get("accountingCode"))
+        )
+
+        if taxi_invoice and invoice_no and current_prefix:
+            try:
+                history_numbers = list(
+                    invoice_serial_provider(invoice_no, instance_code, accounting_code) or []
+                )
+            except Exception as exc:
+                lookup_failed = True
+                _logger.warning(
+                    "业务招待费 E34 出租车发票历史连号查询失败，降级为空列表",
+                    extra={
+                        "event": "data_prep.entertainment_e34_taxi_invoice_serial.fallback",
+                        "receipt_code": receipt_code,
+                        "instance_code": instance_code,
+                        "cheque_no": invoice_no,
+                        "accounting_code": accounting_code,
+                        "error": str(exc),
+                    },
+                )
+
         return {
             "invoiceNo": invoice_no,
-            "currentPrefix": normalize_invoice_serial_prefix(invoice_no),
-            "historyNumbers": [],
-            "historyHit": False,
+            "currentPrefix": current_prefix,
+            "historyNumbers": history_numbers,
+            "historyHit": bool(history_numbers),
             "batchHit": False,
             "isTaxiInvoice": taxi_invoice,
             "isEntertainmentInvoice": taxi_invoice,
             "relationSubject": "出租车发票",
-            "lookupFailed": False,
+            "lookupFailed": lookup_failed,
         }
 
     return enricher
