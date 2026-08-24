@@ -134,7 +134,7 @@ class GetProfileTelecomAssetDirTests(unittest.TestCase):
         # 招待费 enricher 当前返回空 dict（无专属数据）
         self.assertEqual(enricher("R", {}), {})
 
-    def test_entertainment_writeback_catalog_has_correct_e01_and_e33_descriptions(self) -> None:
+    def test_entertainment_writeback_catalog_has_correct_audit_descriptions(self) -> None:
         profile = get_profile("entertainment")
         self.assertEqual(
             profile.audit_rule_catalog["E01"]["auditContent"],
@@ -147,6 +147,10 @@ class GetProfileTelecomAssetDirTests(unittest.TestCase):
         self.assertEqual(
             profile.audit_rule_catalog["E02"]["auditContent"],
             "检查发票购买方纳税人识别号与核销单财务体系映射纳税人识别号是否一致",
+        )
+        self.assertEqual(
+            profile.audit_rule_catalog["E05"]["auditContent"],
+            "检查发票是否被其他核销单重复使用",
         )
 
     def test_unknown_profile_raises_value_error(self) -> None:
