@@ -105,6 +105,50 @@ class EntertainmentContentGraphWiringTests(unittest.TestCase):
                 self.assertNotIn((request_id, check_id), edges)
 
 
+class EntertainmentRuleTagTests(unittest.TestCase):
+    _PROBLEM_CATEGORY_ID = "a1b2c3d4-0000-0000-0000-problemcategory0"
+    _OPTIMIZATION_ACTION_CATEGORY_ID = (
+        "a1b2c3d4-0000-0000-0000-optimizationactioncategory0"
+    )
+
+    def test_generated_entertainment_checks_declare_tag_outputs(self) -> None:
+        graph = build_entertainment_graph()
+        for node in graph["nodes"]:
+            if node.get("type") != "decisionTableNode":
+                continue
+            fields = {output["field"] for output in node["content"]["outputs"]}
+            self.assertIn("problem_category", fields, node["id"])
+            self.assertIn("optimization_action_category", fields, node["id"])
+
+    def test_e15_e17_e34_reject_rules_populate_tags_in_builder_and_graph(self) -> None:
+        expected = {
+            "ent-self-expense-check": ('"本人费用"', '"【删除发票】"'),
+            "ent-recharge-card-check": ('"充值消费"', '"【删除发票】【重新开票】"'),
+            "ent-taxi-invoice-serial-check": ('"连号票据"', '"【删除票据】【风险记录】"'),
+        }
+        graphs = [
+            build_entertainment_graph(),
+            json.loads(
+                OFFICIAL_GRAPH_PATHS["entertainment"].read_text(encoding="utf-8")
+            ),
+        ]
+
+        for graph in graphs:
+            for node_id, labels in expected.items():
+                node = next(node for node in graph["nodes"] if node.get("id") == node_id)
+                reject_rules = [
+                    rule
+                    for rule in node["content"]["rules"]
+                    if rule["f35ede49-0eae-4dda-b39e-11a11383697a"] == '"REJECT"'
+                ]
+                self.assertEqual(len(reject_rules), 1, node_id)
+                rule = reject_rules[0]
+                self.assertEqual(rule[self._PROBLEM_CATEGORY_ID], labels[0], node_id)
+                self.assertEqual(
+                    rule[self._OPTIMIZATION_ACTION_CATEGORY_ID], labels[1], node_id
+                )
+
+
 class CompanyHeaderExpressionTests(unittest.TestCase):
     def test_requires_receipt_company_code_and_matching_company_name(self) -> None:
         expression = _is_company_exists_expression()
