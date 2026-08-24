@@ -1331,7 +1331,7 @@
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票号【\"+(invoiceNo??\"\")+\"】✗ 票面旅客姓名【\"+(passengerName??\"\")+\"】与核销单核销人姓名【\"+(serviceData.auditInfo.verifiUserName??\"\")+\"】一致，✓ 业务招待费不得报销核销人本人的交通、住宿等票据\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n4.4.2.2 禁止报销：员工本人的差旅费开支\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"【删除发票】删除本票据，业务招待费不得报销员工本人的费用\"",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"员工本人费用\"",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"本人费用\"",
             "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【删除发票】\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           }
@@ -2328,7 +2328,7 @@
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范\\n所有费用报销须提供真实、合法、合规的票据。\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"请确认票据是否真实对应本次业务。无法说明合理业务原因的，请删除相关票据；保留提交的，系统将记录并转财务复核。\"",
             "a1b2c3d4-0000-0000-0000-problemcategory0": "\"连号票据\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【删除票据】\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【删除票据】【风险记录】\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           }
         ],

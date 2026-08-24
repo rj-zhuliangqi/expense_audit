@@ -122,9 +122,9 @@ class EntertainmentRuleTagTests(unittest.TestCase):
 
     def test_e15_e17_e34_reject_rules_populate_tags_in_builder_and_graph(self) -> None:
         expected = {
-            "ent-self-expense-check": ('"员工本人费用"', '"【删除发票】"'),
+            "ent-self-expense-check": ('"本人费用"', '"【删除发票】"'),
             "ent-recharge-card-check": ('"充值消费"', '"【删除发票】【重新开票】"'),
-            "ent-taxi-invoice-serial-check": ('"连号票据"', '"【删除票据】"'),
+            "ent-taxi-invoice-serial-check": ('"连号票据"', '"【删除票据】【风险记录】"'),
         }
         graphs = [
             build_entertainment_graph(),

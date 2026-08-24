@@ -424,7 +424,7 @@ def _build_self_expense_check_node() -> dict:
             message='"发票号【"+(invoiceNo??"")+"】✗ 票面旅客姓名【"+(passengerName??"")+"】与核销单核销人姓名【"+(serviceData.auditInfo.verifiUserName??"")+"】一致，✓ 业务招待费不得报销核销人本人的交通、住宿等票据"',
             policies_index='"《锐捷网络员工费用管理与报销制度》\\n4.4.2.2 禁止报销：员工本人的差旅费开支"',
             suggestion='"【删除发票】删除本票据，业务招待费不得报销员工本人的费用"',
-            problem_category="员工本人费用",
+            problem_category="本人费用",
             optimization_action_category="【删除发票】",
         ),
     ]
@@ -536,7 +536,7 @@ def _build_taxi_invoice_serial_check_node() -> dict:
             policies_index='"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范\\n所有费用报销须提供真实、合法、合规的票据。"',
             suggestion='"请确认票据是否真实对应本次业务。无法说明合理业务原因的，请删除相关票据；保留提交的，系统将记录并转财务复核。"',
             problem_category="连号票据",
-            optimization_action_category="【删除票据】",
+            optimization_action_category="【删除票据】【风险记录】",
         ),
     ]
     return _make_decision_table(
