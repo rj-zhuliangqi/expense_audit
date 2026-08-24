@@ -711,7 +711,7 @@ def _build_content_compliance_check_node() -> dict:
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": '""',
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": '"LLM服务调用失败，内容合规检查无法执行；具体原因：" + (error_message ?? "未返回具体错误")',
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": '"模型服务暂时异常，当前内容合规检查未完成，请联系管理员处理。"',
             "a1b2c3d4-0000-0000-0000-regulation0": '""',
             "a1b2c3d4-0000-0000-0000-suggestion0": '""',
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",

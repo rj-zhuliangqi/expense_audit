@@ -650,7 +650,7 @@ class ContentComplianceLlmTests(unittest.TestCase):
                 self.assertIn("茅台老树S15干红葡萄酒", e36["message"])
                 self.assertIn("厉行节约", e36["message"])
 
-    def test_e36_llm_failure_message_includes_error_detail(self) -> None:
+    def test_e36_llm_failure_message_is_user_safe(self) -> None:
         request = {
             "type": "inputNode",
             "content": {"schema": ""},
@@ -704,8 +704,14 @@ class ContentComplianceLlmTests(unittest.TestCase):
                 e36 = result["decisionOutput"]["content_compliance_result"]
                 self.assertEqual(e36["reason_code"], "E36")
                 self.assertEqual(e36["distinguish_result"], "FAILED")
-                self.assertIn("LLM服务调用失败", e36["message"])
-                self.assertIn(detail, e36["message"])
+                self.assertEqual(
+                    e36["message"],
+                    "模型服务暂时异常，当前内容合规检查未完成，请联系管理员处理。",
+                )
+                self.assertNotIn(detail, e36["message"])
+                self.assertNotIn("error_type=", e36["message"])
+                self.assertNotIn("attempts=", e36["message"])
+                self.assertNotIn("upstream_status=", e36["message"])
 
     def test_e36_contains_recharge_card_result_row(self) -> None:
         node = _build_content_compliance_check_node()

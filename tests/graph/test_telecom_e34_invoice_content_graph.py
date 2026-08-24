@@ -108,8 +108,12 @@ class TelecomE34InvoiceContentGraphTests(unittest.TestCase):
         }
         self.assertEqual(zen.evaluate_expression(expression, legacy_reduced), "false")
 
-    def test_llm_failure_message_includes_error_detail_expression(self) -> None:
-        for node_name in ("发票充值卡检查", "发票内容金额检查"):
+    def test_llm_failure_message_is_user_safe(self) -> None:
+        expected_messages = {
+            "发票充值卡检查": "模型服务暂时异常，当前充值卡检查未完成，请联系管理员处理。",
+            "发票内容金额检查": "模型服务暂时异常，当前发票内容金额检查未完成，请联系管理员处理。",
+        }
+        for node_name, expected_message in expected_messages.items():
             with self.subTest(node=node_name):
                 node = next(node for node in self.graph["nodes"] if node.get("name") == node_name)
                 content = node["content"]
@@ -124,9 +128,11 @@ class TelecomE34InvoiceContentGraphTests(unittest.TestCase):
                     if rule.get(content["inputs"][0]["id"]) == '"error"'
                 )
                 message_expression = failure_rule[output_id]
-                self.assertIn("LLM服务调用失败", message_expression)
-                self.assertIn("error_message", message_expression)
-                self.assertIn("未返回具体错误", message_expression)
+                self.assertEqual(message_expression, f'"{expected_message}"')
+                self.assertNotIn("error_message", message_expression)
+                self.assertNotIn("error_type=", message_expression)
+                self.assertNotIn("attempts=", message_expression)
+                self.assertNotIn("upstream_status=", message_expression)
 
     def test_reject_message_uses_invoice_number_and_llm_hit_items(self) -> None:
         message_expression = self.reject_rule[
