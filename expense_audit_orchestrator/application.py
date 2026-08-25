@@ -15,6 +15,7 @@ from .overall_advice import OverallAdviceProvider, resolve_llm_evaluate_endpoint
 from .receipt_summary import (
     build_ai_audit_advice,
     build_ai_audit_summary,
+    build_ai_audit_summary_finance,
     extract_valid_invoice_final_amount,
     invoice_contributes_valid_amount,
 )
@@ -41,6 +42,8 @@ class ReceiptAuditService:
         run_id_factory: Callable[[], str] = new_run_id,
         overall_advice_provider: OverallAdviceProvider | None = None,
         audit_service_url: str | None = None,
+        expense_profile: str | None = None,
+        audit_risk_catalog: Mapping[str, Mapping[str, Any]] | None = None,
     ) -> None:
         # 动态路由模式（profile_resolver）与静态模式（graph_path/graph_content）互斥：
         # - 动态模式：每单据按 eiCode 路由到不同 profile，图路径由 profile.default_graph_path 决定
@@ -67,6 +70,8 @@ class ReceiptAuditService:
         self._run_id_factory = run_id_factory
         self._overall_advice_provider = overall_advice_provider
         self._audit_service_url = audit_service_url
+        self._expense_profile = expense_profile
+        self._audit_risk_catalog = audit_risk_catalog
         # LLM 网关端点：统一从 .env 的 NODE_GATEWAY_URL 解析，注入到图节点 context.llmGatewayUrl，
         # 让所有费用流程图共用同一配置，避免图 JSON 内硬编码 IP 地址。
         self._llm_evaluate_endpoint = resolve_llm_evaluate_endpoint()
@@ -344,6 +349,26 @@ class ReceiptAuditService:
         ai_audit_summary = build_ai_audit_summary(prepared_receipt, receipt_result)
         if ai_audit_summary:
             receipt_result["aiAuditSummary"] = ai_audit_summary
+
+        # 给财务看的稽核点统计与给用户看的整体建议是两个不同字段。
+        # 动态路由优先使用本单 resolved profile 的风险配置；静态模式使用
+        # service 构造时绑定的 profile 配置。
+        effective_profile_name = (
+            resolved_profile.name if resolved_profile is not None else self._expense_profile
+        )
+        effective_risk_catalog = (
+            resolved_profile.audit_risk_catalog
+            if resolved_profile is not None
+            else self._audit_risk_catalog
+        )
+        ai_audit_summary_finance = build_ai_audit_summary_finance(
+            prepared_receipt,
+            receipt_result,
+            audit_risk_catalog=effective_risk_catalog,
+            expense_profile=effective_profile_name,
+        )
+        if ai_audit_summary_finance:
+            receipt_result["aiAuditSummaryFinance"] = ai_audit_summary_finance
 
         # 核销单级确定性建议：所有发票跑完后、回写 sink 前生成。
         self._augment_with_overall_advice(prepared_receipt, receipt_result)

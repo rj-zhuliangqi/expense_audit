@@ -83,6 +83,9 @@ class ExpenseProfile:
     form_invoice_tax_views_builder: FormBuilder | None = None
     audit_rule_catalog: Mapping[str, Mapping[str, Any]] | None = None
     writeback_save_path: str = AUDIT_INFO_SAVE_PATH
+    # 稽核点风险等级配置：用于生成给财务看的 aiAuditSummaryFinance。
+    # 放在已有字段之后，避免改变旧版位置参数的含义。
+    audit_risk_catalog: Mapping[str, Mapping[str, Any]] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -180,6 +183,7 @@ def _build_personal_transport_profile(
         personal_transport_invoice_type_enricher,
         personal_transport_receipt_enricher,
     )
+    from .personal_transport.audit_risk import load_personal_transport_audit_risk_catalog
     from .personal_transport.writeback import personal_transport_compliance_rule
 
     return ExpenseProfile(
@@ -191,6 +195,7 @@ def _build_personal_transport_profile(
             "taxiInvoiceSerial": build_taxi_invoice_serial_enricher(service_url=service_url),
         },
         compliance_rule=personal_transport_compliance_rule,
+        audit_risk_catalog=load_personal_transport_audit_risk_catalog(),
         writeback_save_path=AUDIT_INFO_SAVE_PATH,
     )
 

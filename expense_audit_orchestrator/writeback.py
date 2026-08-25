@@ -7,6 +7,7 @@ from uuid import uuid4
 from .receipt_summary import (
     build_ai_audit_advice,
     build_ai_audit_summary,
+    build_ai_audit_summary_finance,
     extract_valid_invoice_final_amount,
 )
 
@@ -15,6 +16,7 @@ ComplianceRule = Callable[[str, Mapping[str, Any]], bool]
 AuditTravelsBuilder = Callable[[list[tuple[dict[str, Any], dict[str, Any]]], Mapping[str, Any]], list[dict[str, Any]]]
 FormBuilder = Callable[[list[tuple[dict[str, Any], dict[str, Any]]], Mapping[str, Any]], list[dict[str, Any]]]
 AuditRuleCatalog = Mapping[str, Mapping[str, Any]]
+AuditRiskCatalog = Mapping[str, Mapping[str, Any]]
 
 # goodsName 仅供内部审核规则和明细合规判断使用，不再作为回写结果字段返回。
 _EXCLUDED_TRUTHCHECK_FIELD_NAMES = frozenset({"goodsName"})
@@ -74,6 +76,7 @@ def assemble_result_audit_info(
     audit_travels_builder: AuditTravelsBuilder | None = None,
     form_invoice_tax_views_builder: FormBuilder | None = None,
     audit_rule_catalog: AuditRuleCatalog | None = None,
+    audit_risk_catalog: AuditRiskCatalog | None = None,
     expense_profile: str | None = None,
 ) -> dict[str, Any]:
     receipt_code = str(processed_receipt.get("receiptCode") or prepared_receipt.get("receiptCode") or "")
@@ -160,6 +163,19 @@ def assemble_result_audit_info(
         ai_audit_summary = build_ai_audit_summary(prepared_receipt, processed_receipt)
     if isinstance(ai_audit_summary, str) and ai_audit_summary.strip():
         result["aiAuditSummary"] = ai_audit_summary.strip()
+
+    # 给财务看的整体稽核建议必须基于回写层最终生成的 auditLogs 统计。
+    # 这里不能直接沿用编排层的中间值，因为回写层会对 E31/W33 等核销单级
+    # 结果做过滤和归一化。
+    ai_audit_summary_finance = build_ai_audit_summary_finance(
+        prepared_receipt,
+        processed_receipt,
+        audit_logs=result["auditLogs"],
+        audit_risk_catalog=audit_risk_catalog,
+        expense_profile=expense_profile,
+    )
+    if ai_audit_summary_finance:
+        result["aiAuditSummaryFinance"] = ai_audit_summary_finance
 
     # 核销单级整体建议必须与最终稽核状态一致。历史结果或外部调用方可能
     # 携带了“本次发票全部通过！”的旧文案，但当前回写阶段已经把 E31/W33

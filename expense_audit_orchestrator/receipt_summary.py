@@ -7,9 +7,142 @@ summary cannot depend on whichever invoice happened to run last.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 from typing import Any
+
+
+_FINANCE_SUMMARY_PROFILE = "personal_transport"
+_FINANCE_RISK_BLOCKING = "blocking"
+_FINANCE_RISK_HIGH = "high"
+_FINANCE_RISK_MEDIUM_LOW = "medium_low"
+_FINANCE_RISK_LEVELS = frozenset(
+    {_FINANCE_RISK_BLOCKING, _FINANCE_RISK_HIGH, _FINANCE_RISK_MEDIUM_LOW}
+)
+
+
+def build_ai_audit_summary_finance(
+    prepared_receipt: Mapping[str, Any],
+    processed_receipt: Mapping[str, Any],
+    *,
+    audit_risk_catalog: Mapping[str, Mapping[str, Any]] | None = None,
+    expense_profile: str | None = None,
+    audit_logs: Sequence[Mapping[str, Any]] | None = None,
+) -> str | None:
+    """Build the receipt-level audit-point summary for finance.
+
+    This is intentionally separate from the employee-facing ``aiAuditAdvice``:
+    it reports counts rather than remediation wording.  Each emitted rule
+    result is one audit point.  PASS results count as passed; non-PASS results
+    are classified by rule code.  E-codes are always blocking, while W-codes
+    use the profile's risk catalog.
+
+    ``audit_logs`` may be supplied by the writeback layer after it has applied
+    receipt-level filtering (for example E31/W33 are kept only on the last
+    invoice).  The orchestrator calls this function before writeback and walks
+    the raw invoice results with the same filtering rule.
+    """
+    normalized_profile = str(expense_profile or "").strip().lower()
+    if normalized_profile and normalized_profile != _FINANCE_SUMMARY_PROFILE:
+        return None
+    if not normalized_profile and audit_risk_catalog is None:
+        return None
+
+    counts = {
+        _FINANCE_RISK_HIGH: 0,
+        _FINANCE_RISK_MEDIUM_LOW: 0,
+        _FINANCE_RISK_BLOCKING: 0,
+        "passed": 0,
+    }
+
+    rows: Sequence[Mapping[str, Any]] | None = audit_logs
+    if rows is None:
+        prebuilt_rows = _iter_prebuilt_audit_rows(processed_receipt)
+        if prebuilt_rows:
+            rows = prebuilt_rows
+
+    if rows is not None:
+        for row in rows:
+            _count_finance_audit_point(row, counts, audit_risk_catalog)
+    else:
+        invoice_pairs = _invoice_pairs(prepared_receipt, processed_receipt)
+        for index, (_preparation, invoice_result) in enumerate(invoice_pairs):
+            decision_output = _resolve_decision_output(invoice_result)
+            for rule_result in _iter_decision_rule_results(decision_output):
+                reason_code = _resolve_rule_code(rule_result)
+                # E31/W33 are receipt-level rules and are written once, on the
+                # final invoice.  Counting earlier copies would inflate totals.
+                if reason_code in {"E31", "W33"} and index != len(invoice_pairs) - 1:
+                    continue
+                _count_finance_audit_point(rule_result, counts, audit_risk_catalog)
+
+    return (
+        f"本单高风险 {counts[_FINANCE_RISK_HIGH]} 项、"
+        f"中低风险 {counts[_FINANCE_RISK_MEDIUM_LOW]} 项，"
+        f"阻断 {counts[_FINANCE_RISK_BLOCKING]} 项，"
+        f"已通过 {counts['passed']} 项稽核项。"
+    )
+
+
+def _resolve_rule_code(rule_result: Mapping[str, Any]) -> str:
+    return str(
+        rule_result.get("reason_code")
+        or rule_result.get("reasonCode")
+        or ""
+    ).strip().upper()
+
+
+def _count_finance_audit_point(
+    rule_result: Mapping[str, Any],
+    counts: dict[str, int],
+    audit_risk_catalog: Mapping[str, Mapping[str, Any]] | None,
+) -> None:
+    reason_code = _resolve_rule_code(rule_result)
+    if not reason_code:
+        # A mapping without a reason code is not a countable audit point.
+        return
+    status = str(
+        rule_result.get("distinguish_result")
+        or rule_result.get("distinguishResult")
+        or ""
+    ).strip().lower()
+    if status in {"pass", "passed"}:
+        counts["passed"] += 1
+        return
+
+    risk_level = _resolve_finance_risk_level(reason_code, audit_risk_catalog)
+    counts[risk_level] += 1
+
+
+def _resolve_finance_risk_level(
+    reason_code: str,
+    audit_risk_catalog: Mapping[str, Mapping[str, Any]] | None,
+) -> str:
+    # 业务约定：所有 E 稽核点都是阻断，不能被配置误改。
+    if reason_code.startswith("E"):
+        return _FINANCE_RISK_BLOCKING
+
+    metadata = (audit_risk_catalog or {}).get(reason_code)
+    configured = metadata.get("riskLevel") if isinstance(metadata, Mapping) else None
+    normalized = str(configured or "").strip().lower().replace("-", "_")
+    aliases = {
+        "block": _FINANCE_RISK_BLOCKING,
+        "blocked": _FINANCE_RISK_BLOCKING,
+        "high_risk": _FINANCE_RISK_HIGH,
+        "low": _FINANCE_RISK_MEDIUM_LOW,
+        "medium": _FINANCE_RISK_MEDIUM_LOW,
+        "medium_risk": _FINANCE_RISK_MEDIUM_LOW,
+        "low_risk": _FINANCE_RISK_MEDIUM_LOW,
+    }
+    normalized = aliases.get(normalized, normalized)
+    if normalized in _FINANCE_RISK_LEVELS:
+        return normalized
+
+    # 未配置的新 W 规则采取保守的高风险口径，保证不会被漏计为已通过。
+    if reason_code.startswith("W"):
+        return _FINANCE_RISK_HIGH
+    # sys-* 等非 E/W 结果不能安全地视为弱控，按阻断处理。
+    return _FINANCE_RISK_BLOCKING
 
 
 # E31 is the receipt-level amount sufficiency rule.  E34 and E36 can return an
@@ -732,6 +865,7 @@ def _format_summary_amount(value: Decimal) -> str:
 __all__ = [
     "build_ai_audit_advice",
     "build_ai_audit_summary",
+    "build_ai_audit_summary_finance",
     "extract_valid_invoice_final_amount",
     "invoice_contributes_valid_amount",
 ]
