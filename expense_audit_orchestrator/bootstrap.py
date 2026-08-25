@@ -147,6 +147,10 @@ def create_receipt_audit_service(
         # not invoke this provider.
         overall_advice_provider=overall_advice_provider,
         audit_service_url=audit_service_url,
+        expense_profile=resolved_profile.name if resolved_profile is not None else None,
+        audit_risk_catalog=(
+            resolved_profile.audit_risk_catalog if resolved_profile is not None else None
+        ),
     )
 
 
@@ -236,6 +240,7 @@ def _resolve_receipt_result_sink(
         "audit_travels_builder": profile.audit_travels_builder,
         "form_invoice_tax_views_builder": profile.form_invoice_tax_views_builder,
         "audit_rule_catalog": profile.audit_rule_catalog,
+        "audit_risk_catalog": profile.audit_risk_catalog,
         "expense_profile": profile.name,
     }
     sinks: list[ReceiptResultSink] = []
@@ -283,6 +288,7 @@ def _build_dynamic_writeback_sink(
             "audit_travels_builder": profile.audit_travels_builder if profile else None,
             "form_invoice_tax_views_builder": profile.form_invoice_tax_views_builder if profile else None,
             "audit_rule_catalog": profile.audit_rule_catalog if profile else None,
+            "audit_risk_catalog": profile.audit_risk_catalog if profile else None,
             "expense_profile": profile.name if profile else None,
         }
         payload = build_writeback_payload(receipt_result, **strategy_kwargs)

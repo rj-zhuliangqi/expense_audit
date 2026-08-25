@@ -19,6 +19,7 @@ from .observability import get_logger
 
 _logger = get_logger("writeback")
 from .writeback import (
+    AuditRiskCatalog,
     AuditTravelsBuilder,
     ComplianceRule,
     FormBuilder,
@@ -260,6 +261,7 @@ def build_writeback_payload(
     audit_travels_builder: AuditTravelsBuilder | None = None,
     form_invoice_tax_views_builder: FormBuilder | None = None,
     audit_rule_catalog: Mapping[str, Mapping[str, Any]] | None = None,
+    audit_risk_catalog: AuditRiskCatalog | None = None,
     expense_profile: str | None = None,
 ) -> dict[str, Any]:
     prepared_receipt = _build_prepared_receipt_from_result(receipt_result)
@@ -278,6 +280,8 @@ def build_writeback_payload(
         kwargs["form_invoice_tax_views_builder"] = form_invoice_tax_views_builder
     if audit_rule_catalog is not None:
         kwargs["audit_rule_catalog"] = audit_rule_catalog
+    if audit_risk_catalog is not None:
+        kwargs["audit_risk_catalog"] = audit_risk_catalog
     if expense_profile is not None:
         kwargs["expense_profile"] = expense_profile
     return assemble_result_audit_info(prepared_receipt, receipt_result, **kwargs)
@@ -290,6 +294,7 @@ def build_receipt_writeback_sink(
     audit_travels_builder: AuditTravelsBuilder | None = None,
     form_invoice_tax_views_builder: FormBuilder | None = None,
     audit_rule_catalog: Mapping[str, Mapping[str, Any]] | None = None,
+    audit_risk_catalog: AuditRiskCatalog | None = None,
     expense_profile: str | None = None,
 ) -> ReceiptResultSink:
     def sink(receipt_result: dict[str, Any]) -> None:
@@ -299,6 +304,7 @@ def build_receipt_writeback_sink(
             audit_travels_builder=audit_travels_builder,
             form_invoice_tax_views_builder=form_invoice_tax_views_builder,
             audit_rule_catalog=audit_rule_catalog,
+            audit_risk_catalog=audit_risk_catalog,
             expense_profile=expense_profile,
         )
         client.save_result_audit_info(payload)
@@ -313,6 +319,7 @@ def build_receipt_writeback_file_sink(
     audit_travels_builder: AuditTravelsBuilder | None = None,
     form_invoice_tax_views_builder: FormBuilder | None = None,
     audit_rule_catalog: Mapping[str, Mapping[str, Any]] | None = None,
+    audit_risk_catalog: AuditRiskCatalog | None = None,
     expense_profile: str | None = None,
 ) -> ReceiptResultSink:
     resolved_output_dir = Path(output_dir)
@@ -325,6 +332,7 @@ def build_receipt_writeback_file_sink(
             audit_travels_builder=audit_travels_builder,
             form_invoice_tax_views_builder=form_invoice_tax_views_builder,
             audit_rule_catalog=audit_rule_catalog,
+            audit_risk_catalog=audit_risk_catalog,
             expense_profile=expense_profile,
         )
         output_file = resolved_output_dir / f"{receipt_code}.writeback-payload.json"

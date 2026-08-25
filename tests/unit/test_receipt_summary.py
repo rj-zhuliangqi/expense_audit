@@ -3,6 +3,7 @@ import unittest
 from expense_audit_orchestrator.receipt_summary import (
     build_ai_audit_advice,
     build_ai_audit_summary,
+    build_ai_audit_summary_finance,
 )
 from expense_audit_orchestrator.writeback import assemble_result_audit_info
 
@@ -306,6 +307,144 @@ class ReceiptSummaryTests(unittest.TestCase):
             build_ai_audit_summary(prepared_receipt, processed_receipt),
             "本次报销申请总金额100.00元|提交发票总金额0.00元|"
             "发票有效可报销金额88.00元|发票待补充金额12.00元",
+        )
+
+
+    def test_finance_summary_classifies_audit_points_by_code_and_pass_status(self) -> None:
+        catalog = {
+            "W29": {"riskLevel": "medium_low"},
+            "W36": {"riskLevel": "high"},
+        }
+        audit_logs = [
+            {"reasonCode": "E01", "distinguishResult": "reject"},
+            {"reasonCode": "W29", "distinguishResult": "warning"},
+            {"reasonCode": "W36", "distinguishResult": "reject"},
+            {"reasonCode": "E02", "distinguishResult": "pass"},
+            {"reasonCode": "E05", "distinguishResult": "PASSED"},
+        ]
+
+        summary = build_ai_audit_summary_finance(
+            {},
+            {},
+            audit_logs=audit_logs,
+            audit_risk_catalog=catalog,
+            expense_profile="personal_transport",
+        )
+
+        self.assertEqual(
+            summary,
+            "本单高风险 1 项、中低风险 1 项，阻断 1 项，已通过 2 项稽核项。",
+        )
+
+    def test_finance_summary_forces_all_e_codes_to_blocking_and_unconfigured_w_to_high(self) -> None:
+        summary = build_ai_audit_summary_finance(
+            {},
+            {},
+            audit_logs=[
+                {"reasonCode": "E01", "distinguishResult": "reject"},
+                {"reasonCode": "W99", "distinguishResult": "warning"},
+            ],
+            audit_risk_catalog={"E01": {"riskLevel": "high"}},
+            expense_profile="personal_transport",
+        )
+
+        self.assertEqual(
+            summary,
+            "本单高风险 1 项、中低风险 0 项，阻断 1 项，已通过 0 项稽核项。",
+        )
+
+    def test_finance_summary_counts_receipt_level_e31_only_on_last_invoice(self) -> None:
+        prepared_receipt = {
+            "invoicePreparations": [
+                {"invoiceKey": "F-1", "preparedInput": {}},
+                {"invoiceKey": "F-2", "preparedInput": {}},
+            ]
+        }
+        processed_receipt = {
+            "invoiceResults": [
+                {
+                    "invoiceKey": "F-1",
+                    "decisionOutput": {
+                        "amount_result": {
+                            "reason_code": "E31",
+                            "distinguish_result": "REJECT",
+                        }
+                    },
+                },
+                {
+                    "invoiceKey": "F-2",
+                    "decisionOutput": {
+                        "amount_result": {
+                            "reason_code": "E31",
+                            "distinguish_result": "PASS",
+                        }
+                    },
+                },
+            ]
+        }
+
+        summary = build_ai_audit_summary_finance(
+            prepared_receipt,
+            processed_receipt,
+            audit_risk_catalog={"E31": {"riskLevel": "blocking"}},
+            expense_profile="personal_transport",
+        )
+
+        self.assertEqual(
+            summary,
+            "本单高风险 0 项、中低风险 0 项，阻断 0 项，已通过 1 项稽核项。",
+        )
+
+    def test_writeback_payload_contains_finance_summary(self) -> None:
+        prepared_receipt = {
+            "receiptCode": "REC-FINANCE-SUMMARY-001",
+            "serviceData": {
+                "auditInfo": {"instanceCode": "REC-FINANCE-SUMMARY-001"},
+            },
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "preparedInput": {},
+                },
+            ],
+        }
+        processed_receipt = {
+            "receiptCode": "REC-FINANCE-SUMMARY-001",
+            "invoiceResults": [
+                {
+                    "invoiceKey": "FID-001",
+                    "executionStatus": "SUCCEEDED",
+                    "decisionOutput": {
+                        "header_result": {
+                            "reason_code": "W29",
+                            "distinguish_result": "WARNING",
+                        },
+                        "tax_result": {
+                            "reason_code": "W36",
+                            "distinguish_result": "PASS",
+                        },
+                        "date_result": {
+                            "reason_code": "E33",
+                            "distinguish_result": "REJECT",
+                        },
+                    },
+                },
+            ],
+        }
+
+        payload = assemble_result_audit_info(
+            prepared_receipt,
+            processed_receipt,
+            expense_profile="personal_transport",
+            audit_risk_catalog={
+                "W29": {"riskLevel": "medium_low"},
+                "W36": {"riskLevel": "high"},
+            },
+        )
+
+        self.assertEqual(
+            payload["aiAuditSummaryFinance"],
+            "本单高风险 0 项、中低风险 1 项，阻断 1 项，已通过 1 项稽核项。",
         )
 
     def test_writeback_payload_contains_summary_when_receipt_result_did_not_precompute_it(self) -> None:

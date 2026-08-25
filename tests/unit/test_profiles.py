@@ -73,6 +73,10 @@ class GetProfileTelecomAssetDirTests(unittest.TestCase):
         enricher = profile.receipt_enrichers["personal_transport_data"]
         self.assertEqual(enricher("R", {}), {})
         self.assertIn("personalTransportInvoiceType", profile.invoice_enrichers)
+        self.assertIsNotNone(profile.audit_risk_catalog)
+        self.assertEqual(profile.audit_risk_catalog["E01"]["riskLevel"], "blocking")
+        self.assertEqual(profile.audit_risk_catalog["W29"]["riskLevel"], "medium_low")
+        self.assertEqual(profile.audit_risk_catalog["W36"]["riskLevel"], "high")
         invoice_enricher = profile.invoice_enrichers["personalTransportInvoiceType"]
         result = invoice_enricher(
             "R",

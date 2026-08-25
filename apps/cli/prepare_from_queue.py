@@ -81,6 +81,8 @@ def consume_and_prepare_once(
     compliance_rule: Any | None = None,
     audit_travels_builder: Any | None = None,
     form_invoice_tax_views_builder: Any | None = None,
+    audit_risk_catalog: Any | None = None,
+    expense_profile: str | None = None,
 ) -> int:
     connection = create_blocking_connection(settings)
     channel = connection.channel()
@@ -124,6 +126,8 @@ def consume_and_prepare_once(
                 compliance_rule=compliance_rule,
                 audit_travels_builder=audit_travels_builder,
                 form_invoice_tax_views_builder=form_invoice_tax_views_builder,
+                audit_risk_catalog=audit_risk_catalog,
+                expense_profile=expense_profile,
             )
             export_writeback_payload(writeback_payload, writeback_output_path)
 
@@ -211,6 +215,8 @@ def main_cli(argv: Sequence[str] | None = None) -> int:
             "compliance_rule": profile.compliance_rule,
             "audit_travels_builder": profile.audit_travels_builder,
             "form_invoice_tax_views_builder": profile.form_invoice_tax_views_builder,
+            "audit_risk_catalog": profile.audit_risk_catalog,
+            "expense_profile": profile.name,
         }
     return consume_and_prepare_once(
         service=service,
