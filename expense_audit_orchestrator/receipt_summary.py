@@ -13,6 +13,7 @@ from typing import Any
 
 
 _FINANCE_SUMMARY_PROFILES = frozenset({"personal_transport", "telecom", "entertainment"})
+_EOR_E31_PROFILES = frozenset({"personal_transport", "telecom", "entertainment"})
 _FINANCE_RISK_BLOCKING = "blocking"
 _FINANCE_RISK_HIGH = "high"
 _FINANCE_RISK_MEDIUM_LOW = "medium_low"
@@ -48,6 +49,12 @@ def build_ai_audit_summary_finance(
     if not normalized_profile and audit_risk_catalog is None:
         return None
 
+    is_eor = _is_eor_enabled(
+        prepared_receipt,
+        processed_receipt,
+        normalized_profile,
+    )
+
     counts = {
         _FINANCE_RISK_HIGH: 0,
         _FINANCE_RISK_MEDIUM_LOW: 0,
@@ -63,7 +70,7 @@ def build_ai_audit_summary_finance(
 
     if rows is not None:
         for row in rows:
-            _count_finance_audit_point(row, counts, audit_risk_catalog)
+            _count_finance_audit_point(row, counts, audit_risk_catalog, is_eor=is_eor)
     else:
         invoice_pairs = _invoice_pairs(prepared_receipt, processed_receipt)
         for index, (_preparation, invoice_result) in enumerate(invoice_pairs):
@@ -74,7 +81,12 @@ def build_ai_audit_summary_finance(
                 # final invoice.  Counting earlier copies would inflate totals.
                 if reason_code in {"E31", "W33"} and index != len(invoice_pairs) - 1:
                     continue
-                _count_finance_audit_point(rule_result, counts, audit_risk_catalog)
+                _count_finance_audit_point(
+                    rule_result,
+                    counts,
+                    audit_risk_catalog,
+                    is_eor=is_eor,
+                )
 
     return (
         f"本单高风险 {counts[_FINANCE_RISK_HIGH]} 项、"
@@ -96,6 +108,8 @@ def _count_finance_audit_point(
     rule_result: Mapping[str, Any],
     counts: dict[str, int],
     audit_risk_catalog: Mapping[str, Mapping[str, Any]] | None,
+    *,
+    is_eor: bool = False,
 ) -> None:
     reason_code = _resolve_rule_code(rule_result)
     if not reason_code:
@@ -110,15 +124,24 @@ def _count_finance_audit_point(
         counts["passed"] += 1
         return
 
-    risk_level = _resolve_finance_risk_level(reason_code, audit_risk_catalog)
+    risk_level = _resolve_finance_risk_level(
+        reason_code,
+        audit_risk_catalog,
+        is_eor=is_eor,
+    )
     counts[risk_level] += 1
 
 
 def _resolve_finance_risk_level(
     reason_code: str,
     audit_risk_catalog: Mapping[str, Mapping[str, Any]] | None,
+    *,
+    is_eor: bool = False,
 ) -> str:
-    # 业务约定：所有 E 稽核点都是阻断，不能被配置误改。
+    # EOR 只改变通讯费、个人交通费和业务招待费的 E31；其它 E 稽核点
+    # 仍保持阻断，不能被风险配置误改。
+    if reason_code == "E31" and is_eor:
+        return _FINANCE_RISK_HIGH
     if reason_code.startswith("E"):
         return _FINANCE_RISK_BLOCKING
 
@@ -186,6 +209,8 @@ def build_ai_audit_summary(
 def build_ai_audit_advice(
     prepared_receipt: Mapping[str, Any],
     processed_receipt: Mapping[str, Any],
+    *,
+    expense_profile: str | None = None,
 ) -> str | None:
     """Build deterministic receipt-level advice without masking audit issues.
 
@@ -203,7 +228,11 @@ def build_ai_audit_advice(
             _resolve_invoice_number(preparation, invoice_result)
         )
 
-    status_flags = _audit_status_flags(processed_receipt)
+    status_flags = _audit_status_flags(
+        processed_receipt,
+        prepared_receipt=prepared_receipt,
+        expense_profile=expense_profile,
+    )
     status_notice = _build_status_notice(status_flags)
 
     # 即使申请金额缺失，也不能因为无法计算金额而返回空建议或“全部通过”。
@@ -630,7 +659,12 @@ def _is_model_failure_rule(
     return status == "failed" or _is_model_error_text(rule_text)
 
 
-def _audit_status_flags(processed_receipt: Mapping[str, Any]) -> dict[str, bool]:
+def _audit_status_flags(
+    processed_receipt: Mapping[str, Any],
+    *,
+    prepared_receipt: Mapping[str, Any] | None = None,
+    expense_profile: str | None = None,
+) -> dict[str, bool]:
     flags = {
         "reject": False,
         "warning": False,
@@ -652,6 +686,12 @@ def _audit_status_flags(processed_receipt: Mapping[str, Any]) -> dict[str, bool]
                 flags["external_error"] = True
                 flags["warning"] = True
 
+    is_eor = _is_eor_enabled(
+        prepared_receipt or {},
+        processed_receipt,
+        expense_profile,
+    )
+
     # E31 是核销单级规则，不一定出现在 invoiceResults 的 decisionOutput 中。
     # 应用层已经根据有效发票金额写入 isAmountSufficient，汇总必须同步读取，
     # 否则 E31=REJECT 时会错误落到“本次发票全部通过！”。
@@ -662,9 +702,11 @@ def _audit_status_flags(processed_receipt: Mapping[str, Any]) -> dict[str, bool]
         flags["warning"] = True
     if "isAmountSufficient" in processed_receipt:
         amount_status = processed_receipt.get("isAmountSufficient")
-        if amount_status is False or amount_status is None:
-            # 金额不足或无法确认都只能形成 REJECT，不能暴露为 FAILED，也不能
-            # 因为金额未知而默认通过。回写层会把 E31 写成同样的 REJECT。
+        if amount_status is False:
+            # EOR 下 E31 是高风险弱控；非 EOR 仍是阻断项。
+            flags["warning" if is_eor else "reject"] = True
+        elif amount_status is None:
+            # 无法确认仍按硬控处理，不能因为金额未知而默认通过。
             flags["reject"] = True
 
     for invoice_result in (
@@ -686,6 +728,7 @@ def _audit_status_flags(processed_receipt: Mapping[str, Any]) -> dict[str, bool]
         has_generic_failed_rule = False
         hard_reject_rule = False
         weak_w33_rule = False
+        eor_e31_warning_rule = False
         for rule_result in rule_results:
             status = str(
                 rule_result.get("distinguish_result")
@@ -706,13 +749,17 @@ def _audit_status_flags(processed_receipt: Mapping[str, Any]) -> dict[str, bool]
                 )
             )
 
-            # E31 是硬控且禁止 FAILED；W33 是弱控，只能 PASS/WARNING。
+            # E31 在 EOR 下是弱控，W33 始终是弱控，只能 PASS/WARNING。
             # 兼容历史运行结果时在汇总层再次归一化，避免旧状态污染最终建议。
             if reason_code == "E31" and status == "failed":
                 flags["reject"] = True
                 if _is_model_error_text(rule_text):
                     flags["model_error"] = True
                 hard_reject_rule = True
+                continue
+            if reason_code == "E31" and is_eor and status == "reject":
+                flags["warning"] = True
+                eor_e31_warning_rule = True
                 continue
             if reason_code == "W33" and status in {"reject", "failed"}:
                 flags["warning"] = True
@@ -753,7 +800,7 @@ def _audit_status_flags(processed_receipt: Mapping[str, Any]) -> dict[str, bool]
         if decision_status == "reject":
             # 历史 W33 可能把弱控整体状态写成 reject，但回写协议中 W33
             # 不能产生 REJECT；只有存在其它硬控拒绝时才保留 reject。
-            if weak_w33_rule and not hard_reject_rule:
+            if (weak_w33_rule or eor_e31_warning_rule) and not hard_reject_rule:
                 flags["warning"] = True
             else:
                 flags["reject"] = True
@@ -808,6 +855,8 @@ def _audit_status_flags(processed_receipt: Mapping[str, Any]) -> dict[str, bool]
             continue
         if reason_code == "E31" and status == "failed":
             flags["reject"] = True
+        elif reason_code == "E31" and is_eor and status == "reject":
+            flags["warning"] = True
         elif status == "reject":
             flags["reject"] = True
         elif status == "warning":
@@ -831,6 +880,27 @@ def _iter_prebuilt_audit_rows(processed_receipt: Mapping[str, Any]) -> list[Mapp
         if isinstance(value, list):
             rows.extend(item for item in value if isinstance(item, Mapping))
     return rows
+
+
+def _is_eor_enabled(
+    prepared_receipt: Mapping[str, Any],
+    processed_receipt: Mapping[str, Any],
+    expense_profile: str | None,
+) -> bool:
+    """Return whether EOR semantics apply to this receipt's E31 rule."""
+    normalized_profile = str(expense_profile or "").strip().lower().replace("-", "_")
+    if normalized_profile not in _EOR_E31_PROFILES:
+        return False
+
+    for receipt in (prepared_receipt, processed_receipt):
+        service_data = receipt.get("serviceData")
+        if not isinstance(service_data, Mapping):
+            continue
+        audit_info = service_data.get("auditInfo")
+        if not isinstance(audit_info, Mapping) or "isEor" not in audit_info:
+            continue
+        return str(audit_info.get("isEor") or "").strip().lower() in {"1", "true"}
+    return False
 
 
 def _to_decimal(value: Any) -> Decimal | None:

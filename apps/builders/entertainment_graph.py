@@ -68,6 +68,7 @@ STD_OUTPUTS = [
 
 # 输入条件列 field id（复用通讯费的 input field id）
 INPUT_FIELD_ID = "dea9a1bc-66ae-47b3-885f-9e9a1bb07571"
+EOR_INPUT_FIELD_ID = "eor-e31-input"
 WRITE_OFF_CHECK_NODE_ID = "2ea2f963-44fc-4130-9632-af048b76d0b1"
 MESSAGE_FIELD_ID = "509fd9ba-3996-4e4a-9021-df6513ed6807"
 INVOICE_FINAL_AMOUNT_FIELD_ID = "344a0dff-93a3-4ed3-9e24-0cf2cd544911"
@@ -197,6 +198,50 @@ def _make_decision_table(
     }
 
 
+def _patch_eor_amount_check_node(node: dict) -> None:
+    """Make the receipt-level E31 table distinguish EOR from normal claims."""
+    content = node.setdefault("content", {})
+    inputs = content.setdefault("inputs", [])
+    amount_input = next(
+        (item for item in inputs if item.get("field") == "isAmountEnough"),
+        None,
+    )
+    if amount_input is None:
+        amount_input = {"id": INPUT_FIELD_ID, "name": "金额是否充足", "field": "isAmountEnough"}
+        inputs.insert(0, amount_input)
+    else:
+        amount_input["name"] = "金额是否充足"
+    if not any(item.get("id") == EOR_INPUT_FIELD_ID for item in inputs):
+        inputs.append({"id": EOR_INPUT_FIELD_ID, "name": "是否EOR", "field": "isEor"})
+
+    rules = list(content.get("rules") or [])
+    pass_rule = next(
+        (rule for rule in rules if rule.get(INPUT_FIELD_ID) in {"true", "True"}),
+        None,
+    )
+    reject_rule = next(
+        (rule for rule in rules if rule.get(INPUT_FIELD_ID) in {"false", "False"}),
+        None,
+    )
+    if pass_rule is None or reject_rule is None:
+        raise ValueError(f"E31 amount table {node.get('id')} must contain true/false rules")
+
+    def clone(rule: dict, *, is_amount_enough: str, is_eor: str, status: str) -> dict:
+        copied = dict(rule)
+        copied["_id"] = str(uuid.uuid4())
+        copied[INPUT_FIELD_ID] = is_amount_enough
+        copied[EOR_INPUT_FIELD_ID] = is_eor
+        copied["f35ede49-0eae-4dda-b39e-11a11383697a"] = f'"{status}"'
+        return copied
+
+    content["rules"] = [
+        clone(pass_rule, is_amount_enough="true", is_eor="true", status="PASS"),
+        clone(pass_rule, is_amount_enough="true", is_eor="false", status="PASS"),
+        clone(reject_rule, is_amount_enough="false", is_eor="true", status="WARNING"),
+        clone(reject_rule, is_amount_enough="false", is_eor="false", status="REJECT"),
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Phase 1: 改造数据校验预处理 expressionNode
 # ---------------------------------------------------------------------------
@@ -271,6 +316,11 @@ ENTERTAINMENT_PREPROCESS_EXPRESSIONS = [
         "id": _new_uuid(),
         "key": "isAmountEnough",
         "value": 'number(serviceData.auditInfo.applyAmount ?? 0) <= number(invoiceAmount ?? 0)',
+    },
+    {
+        "id": "eor-e31-expression",
+        "key": "isEor",
+        "value": 'serviceData.auditInfo.isEor == "1"',
     },
     {
         "id": _new_uuid(),
@@ -1237,6 +1287,11 @@ def build_entertainment_graph(source_path: Path | str | None = None) -> dict:
     for node in nodes:
         if node["id"] == "c67dcb33-2750-4a43-8af7-8346612c04a9":
             node["content"]["expressions"] = ENTERTAINMENT_PREPROCESS_EXPRESSIONS
+            break
+
+    for node in nodes:
+        if node.get("id") == "dcc29290-4d5e-4eb9-8e77-eee31820529a":
+            _patch_eor_amount_check_node(node)
             break
 
     # --- Phase 1: 改造票据类型检查 E35 的 message/suggestion/policiesIndex ---

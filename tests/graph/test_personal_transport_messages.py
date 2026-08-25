@@ -79,7 +79,7 @@ class PersonalTransportMessageTests(unittest.TestCase):
                 if not is_llm_failure and value != '""':
                     self.assertIn("+", value, node["name"])
                     dynamic_count += 1
-        self.assertEqual(dynamic_count, 17)
+        self.assertEqual(dynamic_count, 18)
 
     def _base_input(self) -> dict:
         return {

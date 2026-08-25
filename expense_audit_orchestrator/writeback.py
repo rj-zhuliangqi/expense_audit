@@ -83,9 +83,29 @@ def assemble_result_audit_info(
     expense_profile = expense_profile or _resolve_expense_profile_name(
         processed_receipt, prepared_receipt
     )
-    service_data = dict(prepared_receipt.get("serviceData") or processed_receipt.get("serviceData") or {})
-    audit_info = dict(service_data.get("auditInfo") or {})
+    prepared_service_data = prepared_receipt.get("serviceData")
+    processed_service_data = processed_receipt.get("serviceData")
+    service_data = dict(
+        prepared_service_data
+        if isinstance(prepared_service_data, Mapping) and prepared_service_data
+        else processed_service_data
+        if isinstance(processed_service_data, Mapping)
+        else {}
+    )
+    # Prepared data is authoritative, but retain fields added by a newer
+    # processed payload when an older caller omitted them (notably isEor).
+    processed_audit_info = (
+        processed_service_data.get("auditInfo")
+        if isinstance(processed_service_data, Mapping)
+        else None
+    )
+    audit_info = dict(processed_audit_info) if isinstance(processed_audit_info, Mapping) else {}
+    prepared_audit_info = service_data.get("auditInfo")
+    if isinstance(prepared_audit_info, Mapping):
+        audit_info.update(prepared_audit_info)
+    service_data["auditInfo"] = audit_info
     instance_code = _get_string_value(audit_info, "instanceCode") or receipt_code
+    is_eor = _is_eor_enabled(audit_info, expense_profile)
 
     invoice_pairs = _pair_invoices(prepared_receipt, processed_receipt)
     is_amount_sufficient = processed_receipt.get("isAmountSufficient")
@@ -118,6 +138,7 @@ def assemble_result_audit_info(
             audit_info,
             invoice_pairs,
             is_amount_sufficient=is_amount_sufficient,
+            is_eor=is_eor,
             amount_status_available=amount_status_available,
             apply_amount=apply_amount,
             valid_invoice_total=valid_invoice_total,
@@ -133,6 +154,7 @@ def assemble_result_audit_info(
             audit_info,
             invoice_pairs,
             is_amount_sufficient=is_amount_sufficient,
+            is_eor=is_eor,
             amount_status_available=amount_status_available,
             apply_amount=apply_amount,
             valid_invoice_total=valid_invoice_total,
@@ -180,7 +202,11 @@ def assemble_result_audit_info(
     # 核销单级整体建议必须与最终稽核状态一致。历史结果或外部调用方可能
     # 携带了“本次发票全部通过！”的旧文案，但当前回写阶段已经把 E31/W33
     # 等核销单级规则重算为 reject/warning；此时必须用确定性建议替换旧文案。
-    generated_advice = build_ai_audit_advice(prepared_receipt, processed_receipt)
+    generated_advice = build_ai_audit_advice(
+        prepared_receipt,
+        processed_receipt,
+        expense_profile=expense_profile,
+    )
     overall_advice = processed_receipt.get("aiAuditAdvice")
     if isinstance(overall_advice, str) and overall_advice.strip():
         normalized_advice = overall_advice.strip()
@@ -278,6 +304,7 @@ def _override_e31_rule_result(
     rule_result: Mapping[str, Any],
     *,
     is_amount_sufficient: bool | None,
+    is_eor: bool = False,
     apply_amount: float | None = None,
     valid_invoice_total: float | None = None,
     expense_profile: str | None = None,
@@ -311,8 +338,9 @@ def _override_e31_rule_result(
         overridden["problem_category"] = "模型服务异常"
         overridden["optimization_action_category"] = "【稍后重试】【联系管理员】"
     else:
-        overridden["distinguish_result"] = "REJECT"
-        overridden["distinguishResult"] = "REJECT"
+        result_status = "WARNING" if is_eor else "REJECT"
+        overridden["distinguish_result"] = result_status
+        overridden["distinguishResult"] = result_status
         if _is_personal_transport_profile(expense_profile):
             # E31 是核销单级金额规则，必须使用回写层计算出的整单有效发票金额；
             # 不能保留图内按单张发票计算的 message，也不能把占位符写回结果。
@@ -498,6 +526,7 @@ def _build_audit_logs(
     invoice_pairs: list[tuple[dict[str, Any], dict[str, Any]]],
     *,
     is_amount_sufficient: bool | None = None,
+    is_eor: bool = False,
     amount_status_available: bool = False,
     apply_amount: float | None = None,
     valid_invoice_total: float | None = None,
@@ -538,6 +567,7 @@ def _build_audit_logs(
                     rule_result = _override_e31_rule_result(
                         rule_result,
                         is_amount_sufficient=is_amount_sufficient,
+                        is_eor=is_eor,
                         apply_amount=apply_amount,
                         valid_invoice_total=valid_invoice_total,
                         expense_profile=expense_profile,
@@ -776,6 +806,7 @@ def _build_audit_invoice_infos(
     invoice_pairs: list[tuple[dict[str, Any], dict[str, Any]]],
     *,
     is_amount_sufficient: bool | None = None,
+    is_eor: bool = False,
     amount_status_available: bool = False,
     apply_amount: float | None = None,
     valid_invoice_total: float | None = None,
@@ -798,6 +829,7 @@ def _build_audit_invoice_infos(
             overridden_amount_result = _override_e31_rule_result(
                 decision_output["amount_result"],
                 is_amount_sufficient=is_amount_sufficient,
+                is_eor=is_eor,
                 apply_amount=apply_amount,
                 valid_invoice_total=valid_invoice_total,
                 expense_profile=expense_profile,
@@ -1171,6 +1203,21 @@ def _is_personal_transport_profile(expense_profile: str | None) -> bool:
         "交通费",
         "个人交通费",
     }
+
+
+def _is_eor_enabled(audit_info: Mapping[str, Any], expense_profile: str | None) -> bool:
+    """Return whether EOR semantics apply to this profile's E31 rule.
+
+    The audit-info endpoint returns ``isEor`` as ``"1"``/``"0"``.  Keep the
+    profile guard here as a second line of defense so a future travel graph (or
+    a legacy caller that happens to carry the field) cannot accidentally turn
+    travel E31 into a warning.
+    """
+    normalized_profile = (expense_profile or "").strip().lower().replace("-", "_")
+    if normalized_profile not in {"telecom", "personal_transport", "entertainment"}:
+        return False
+    value = audit_info.get("isEor")
+    return str(value).strip().lower() in {"1", "true"}
 
 
 def _resolve_expense_profile_name(*sources: Mapping[str, Any]) -> str | None:
