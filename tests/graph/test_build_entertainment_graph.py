@@ -618,7 +618,7 @@ class InvoiceNumberContinuityTests(unittest.TestCase):
 
 
 class EntertainmentE05WriteoffMessageTests(unittest.TestCase):
-    def test_e05_replaces_history_placeholders_in_builder_and_official_graph(self) -> None:
+    def test_e05_supports_history_and_current_receipt_duplicates(self) -> None:
         request = {
             "type": "inputNode",
             "content": {"schema": ""},
@@ -640,6 +640,37 @@ class EntertainmentE05WriteoffMessageTests(unittest.TestCase):
                 json.loads(OFFICIAL_GRAPH_PATHS["entertainment"].read_text(encoding="utf-8")),
             ),
         )
+        scenarios = (
+            (
+                "history",
+                False,
+                False,
+                [{
+                    "chequeNo": "24357000000034577982",
+                    "miInstanceCode": "rjw260813000002",
+                    "estimatedTotalAmount": 100,
+                }],
+                "票据 发票号 24357000000034577982 已在以下报销单中使用过：rjw260813000002；已报销金额为 100 元，不能再次用于本次报销。",
+            ),
+            (
+                "receipt",
+                True,
+                True,
+                [],
+                "票据 发票号 24357000000034577982 在本核销单内重复出现，不能再次用于本次报销。",
+            ),
+            (
+                "both",
+                False,
+                True,
+                [{
+                    "chequeNo": "24357000000034577982",
+                    "miInstanceCode": "rjw260813000002",
+                    "estimatedTotalAmount": 100,
+                }],
+                "票据 发票号 24357000000034577982 在本核销单内重复出现，且已在以下报销单中使用过：rjw260813000002；已报销金额为 100 元，不能再次用于本次报销。",
+            ),
+        )
 
         for graph_name, graph in graphs:
             with self.subTest(graph=graph_name):
@@ -649,21 +680,21 @@ class EntertainmentE05WriteoffMessageTests(unittest.TestCase):
                     if node.get("id") == "2ea2f963-44fc-4130-9632-af048b76d0b1"
                 )
                 content = writeoff["content"]
-                input_id = next(
-                    item["id"]
+                input_ids = {
+                    item["field"]: item["id"]
                     for item in content["inputs"]
-                    if item.get("field") == "isWriteOff"
+                }
+                self.assertEqual(
+                    set(input_ids),
+                    {"isWriteOff", "isReceiptInvoiceDuplicate"},
                 )
                 message_id = next(
                     item["id"]
                     for item in content["outputs"]
                     if item.get("field") == "message"
                 )
-                reject_rule = next(
-                    rule for rule in content["rules"] if rule.get(input_id) == "false"
-                )
-                self.assertNotRegex(reject_rule[message_id], r"\{[^{}]+\}")
-                self.assertIn("invoiceUsageHistory", reject_rule[message_id])
+                for rule in content["rules"]:
+                    self.assertNotRegex(rule[message_id], r"\{[^{}]+\}")
 
                 isolated_graph = {
                     "contentType": "application/vnd.gorules.decision",
@@ -674,31 +705,27 @@ class EntertainmentE05WriteoffMessageTests(unittest.TestCase):
                     ],
                 }
                 decision = load_decision_from_content(isolated_graph)
-                result = evaluate_prepared_input(
-                    decision,
-                    {
-                        "isWriteOff": False,
-                        "invoiceNo": "24357000000034577982",
-                        "instance_code": "rjw260820000016",
-                        "serviceData": {
-                            "invoiceUsageHistory": [
-                                {
-                                    "chequeNo": "24357000000034577982",
-                                    "miInstanceCode": "rjw260813000002",
-                                    "estimatedTotalAmount": 100,
-                                }
-                            ]
-                        },
-                    },
-                    trace=False,
-                )
-                e05 = result["decisionOutput"]["writeoff_result"]
-                self.assertEqual(e05["reason_code"], "E05")
-                self.assertEqual(e05["distinguish_result"], "REJECT")
-                self.assertIn("24357000000034577982", e05["message"])
-                self.assertIn("rjw260813000002", e05["message"])
-                self.assertIn("100", e05["message"])
-                self.assertNotRegex(e05["message"], r"\{[^{}]+\}")
+
+                for scenario, is_writeoff, is_receipt_duplicate, history, expected_message in scenarios:
+                    with self.subTest(scenario=scenario):
+                        result = evaluate_prepared_input(
+                            decision,
+                            {
+                                "isWriteOff": is_writeoff,
+                                "isReceiptInvoiceDuplicate": is_receipt_duplicate,
+                                "invoiceNo": "24357000000034577982",
+                                "instance_code": "rjw260820000016",
+                                "serviceData": {
+                                    "invoiceUsageHistory": history,
+                                },
+                            },
+                            trace=False,
+                        )
+                        e05 = result["decisionOutput"]["writeoff_result"]
+                        self.assertEqual(e05["reason_code"], "E05")
+                        self.assertEqual(e05["distinguish_result"], "REJECT")
+                        self.assertEqual(e05["message"], expected_message)
+                        self.assertNotRegex(e05["message"], r"\{[^{}]+\}")
 
 
 class ContentComplianceLlmTests(unittest.TestCase):

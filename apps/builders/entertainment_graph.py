@@ -20,6 +20,7 @@ import uuid
 from pathlib import Path
 
 from expense_audit_orchestrator.paths import OFFICIAL_GRAPH_PATHS, PROJECT_ROOT, resolve_project_path
+from apps.builders.e05 import E05_RECEIPT_DUPLICATE_EXPRESSION, patch_e05_node
 
 REPO_ROOT = PROJECT_ROOT
 SRC_GRAPH = OFFICIAL_GRAPH_PATHS["telecom"]
@@ -73,45 +74,12 @@ WRITE_OFF_CHECK_NODE_ID = "2ea2f963-44fc-4130-9632-af048b76d0b1"
 MESSAGE_FIELD_ID = "509fd9ba-3996-4e4a-9021-df6513ed6807"
 INVOICE_FINAL_AMOUNT_FIELD_ID = "344a0dff-93a3-4ed3-9e24-0cf2cd544911"
 
-# E05 的消息必须在 Zen 表达式中使用真实输入字段拼接，不能保留
-# {发票号}/{重复报销单号列表}/{已报销金额} 这类仅供文案模板使用的占位符。
-ENTERTAINMENT_E05_REJECT_MESSAGE = (
-    '"票据 发票号 " + (invoiceNo ?? "") + '
-    '" 已在以下报销单中使用过：" + '
-    '(filter((serviceData.invoiceUsageHistory ?? []) as h, '
-    'h.chequeNo == (invoiceNo ?? ""))[0].miInstanceCode ?? '
-    'filter((serviceData.invoiceUsageHistory ?? []) as h, '
-    'h.chequeNo == (invoiceNo ?? ""))[0].instanceCode ?? "未知") + '
-    '"；已报销金额为 " + '
-    'string(number((filter((serviceData.invoiceUsageHistory ?? []) as h, '
-    'h.chequeNo == (invoiceNo ?? ""))[0].estimatedTotalAmount ?? '
-    'filter((serviceData.invoiceUsageHistory ?? []) as h, '
-    'h.chequeNo == (invoiceNo ?? ""))[0].totalAmount ?? 0))) + '
-    '" 元，不能再次用于本次报销。"'
-)
+# E05 is a common rule; its node shape and runtime messages are shared
+# across all expense profiles.
 
 
 def _patch_writeoff_check_node(node: dict) -> None:
-    """将通用 E05 节点的拒绝消息改为运行时变量表达式。
-
-    通讯费源图曾保留 ``{发票号}`` 等文案占位符。流程图运行时不会自动
-    对这些中文占位符做模板替换，因此招待费必须在 Zen 表达式中直接从
-    invoiceNo 和 serviceData.invoiceUsageHistory 读取实际值。
-    """
-    content = node.get("content") or {}
-    input_field = next(
-        (item.get("id") for item in content.get("inputs", []) if item.get("field") == "isWriteOff"),
-        INPUT_FIELD_ID,
-    )
-    for item in content.get("inputs", []):
-        if item.get("id") == input_field:
-            item["name"] = "发票是否被其他核销单使用"
-    for rule in content.get("rules", []):
-        if rule.get(input_field) == "false":
-            rule[MESSAGE_FIELD_ID] = ENTERTAINMENT_E05_REJECT_MESSAGE
-        elif rule.get(input_field) == "true":
-            rule[MESSAGE_FIELD_ID] = '""'
-
+    patch_e05_node(node)
 
 def _new_uuid() -> str:
     return str(uuid.uuid4())
@@ -331,6 +299,11 @@ ENTERTAINMENT_PREPROCESS_EXPRESSIONS = [
         "id": _new_uuid(),
         "key": "isWriteOff",
         "value": 'invoiceNo not in map((serviceData.invoiceUsageHistory ?? []) as c, c.chequeNo)',
+    },
+    {
+        "id": "entertainment-e05-invoice-duplicate",
+        "key": "isReceiptInvoiceDuplicate",
+        "value": E05_RECEIPT_DUPLICATE_EXPRESSION,
     },
     {
         "id": _new_uuid(),

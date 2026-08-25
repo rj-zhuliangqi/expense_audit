@@ -23,6 +23,11 @@ from pathlib import Path
 from typing import Any
 
 from expense_audit_orchestrator.paths import LEGACY_TRAVEL_RULE_SOURCE, OFFICIAL_GRAPH_PATHS, PROJECT_ROOT, resolve_project_path
+from apps.builders.e05 import (
+    E05_BOTH_DUPLICATE_MESSAGE,
+    E05_HISTORY_DUPLICATE_MESSAGE,
+    E05_RECEIPT_DUPLICATE_MESSAGE,
+)
 
 ROOT = PROJECT_ROOT
 SOURCE_GRAPH = OFFICIAL_GRAPH_PATHS["telecom"]
@@ -183,7 +188,20 @@ def _formula_expression(formula: str | None, key: str, code: str) -> str:
     if formula == "e09":
         return 'salerName == null or serviceData.companyBlacklist == null ? "missing" : (salerName not in map(serviceData.companyBlacklist as c, c.value) ? "pass" : "reject")'
     if formula == "e05":
-        return 'invoiceNo == null or serviceData.invoiceUsageHistory == null ? "missing" : (invoiceNo not in map(serviceData.invoiceUsageHistory as c, c.chequeNo) ? "pass" : "reject")'
+        return (
+            '(invoiceNo == null or '
+            '(serviceData.invoiceUsageHistory == null and '
+            'serviceData.e05HistoryDuplicateInstanceCodes == null)) ? "missing" : '
+            '(((serviceData.receiptInvoiceDuplicate ?? false) == true) and '
+            '(((serviceData.e05HistoryDuplicateInstanceCodes ?? "") != "") or '
+            'some((serviceData.invoiceUsageHistory ?? []) as c, '
+            'c.chequeNo == (invoiceNo ?? ""))) ? "reject_both" : '
+            '(((serviceData.e05HistoryDuplicateInstanceCodes ?? "") != "") or '
+            'some((serviceData.invoiceUsageHistory ?? []) as c, '
+            'c.chequeNo == (invoiceNo ?? ""))) ? "reject" : '
+            '((serviceData.receiptInvoiceDuplicate ?? false) == true ? '
+            '"reject_receipt" : "pass"))'
+        )
     if formula == "tax":
         return '((serviceData.travelAudit.taxInfo.invoiceDeductibleTaxTotal ?? serviceData.travelAudit.taxInfo.invoiceDeductibleTax ?? "") == "" or (serviceData.travelAudit.taxInfo.formInputTax ?? "") == "") ? "missing" : (number(serviceData.travelAudit.taxInfo.invoiceDeductibleTaxTotal ?? serviceData.travelAudit.taxInfo.invoiceDeductibleTax) == number(serviceData.travelAudit.taxInfo.formInputTax) ? "pass" : "warning")'
     if formula == "monthly_train":
@@ -241,6 +259,7 @@ def _rule_row(
     policy: str,
     suggestion: str,
     distinguish_content: str = "",
+    message_is_expression: bool = False,
 ) -> dict[str, str]:
     return {
         "_id": _stable_id(f"rule:{code}:{state}:{audit_content}"),
@@ -254,7 +273,7 @@ def _rule_row(
         "d9a8e0e2-8a13-4a39-b50e-c339519e811e": _literal(distinguish_content),
         "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
         "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-        "509fd9ba-3996-4e4a-9021-df6513ed6807": _literal(message),
+        "509fd9ba-3996-4e4a-9021-df6513ed6807": message if message_is_expression else _literal(message),
         "a1b2c3d4-0000-0000-0000-regulation0": _literal(policy),
         "a1b2c3d4-0000-0000-0000-suggestion0": _literal(suggestion),
         "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
@@ -311,6 +330,19 @@ def _make_decision_node(
             message=failure_message, policy=policy, suggestion=suggestion,
         ))
         rules[-1][input_id] = _literal("reject_invoice")
+    elif key == "e05_duplicate":
+        for state, message in (
+            ("reject_both", E05_BOTH_DUPLICATE_MESSAGE),
+            ("reject_receipt", E05_RECEIPT_DUPLICATE_MESSAGE),
+            ("reject", E05_HISTORY_DUPLICATE_MESSAGE),
+        ):
+            rules.append(_rule_row(
+                state=state, code=definition["codes"][0], result="REJECT",
+                audit_content=audit_content, audit_type=audit_type,
+                message=message, policy=policy, suggestion=suggestion,
+                message_is_expression=True,
+            ))
+            rules[-1][input_id] = _literal(state)
     else:
         result = "WARNING" if definition["mode"] == "warning" else "REJECT"
         state = "warning" if definition["mode"] == "warning" else "reject"
