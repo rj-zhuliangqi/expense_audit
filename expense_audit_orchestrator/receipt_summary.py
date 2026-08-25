@@ -12,7 +12,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 
-_FINANCE_SUMMARY_PROFILE = "personal_transport"
+_FINANCE_SUMMARY_PROFILES = frozenset({"personal_transport", "telecom", "entertainment"})
 _FINANCE_RISK_BLOCKING = "blocking"
 _FINANCE_RISK_HIGH = "high"
 _FINANCE_RISK_MEDIUM_LOW = "medium_low"
@@ -43,7 +43,7 @@ def build_ai_audit_summary_finance(
     the raw invoice results with the same filtering rule.
     """
     normalized_profile = str(expense_profile or "").strip().lower()
-    if normalized_profile and normalized_profile != _FINANCE_SUMMARY_PROFILE:
+    if normalized_profile and normalized_profile not in _FINANCE_SUMMARY_PROFILES:
         return None
     if not normalized_profile and audit_risk_catalog is None:
         return None

@@ -122,6 +122,7 @@ def _build_telecom_profile(
         resolve_telecom_csv_path,
         telecom_receipt_enricher,
     )
+    from .telecom.audit_risk import load_telecom_audit_risk_catalog
     from .telecom.writeback import telecom_compliance_rule
 
     csv_path = resolve_telecom_csv_path(asset_dir)
@@ -130,6 +131,7 @@ def _build_telecom_profile(
         default_graph_path=_resolve_graph_path(TELECOM_GRAPH_PATH_ENV, DEFAULT_GRAPH_PATH),
         receipt_enrichers={"telecom_list": telecom_receipt_enricher(load_telecom_list(csv_path))},
         compliance_rule=telecom_compliance_rule,
+        audit_risk_catalog=load_telecom_audit_risk_catalog(),
         writeback_save_path=AUDIT_INFO_SAVE_PATH,
     )
 
@@ -210,6 +212,7 @@ def _build_entertainment_profile(
         build_entertainment_taxi_invoice_serial_enricher,
         build_w34_invoice_serial_enricher,
     )
+    from .entertainment.audit_risk import load_entertainment_audit_risk_catalog
     from .entertainment.writeback import entertainment_compliance_rule
     from .entertainment.writeback import entertainment_audit_rule_catalog
 
@@ -232,6 +235,7 @@ def _build_entertainment_profile(
         },
         compliance_rule=entertainment_compliance_rule,
         audit_rule_catalog=entertainment_audit_rule_catalog,
+        audit_risk_catalog=load_entertainment_audit_risk_catalog(),
         writeback_save_path=AUDIT_INFO_SAVE_PATH,
     )
 

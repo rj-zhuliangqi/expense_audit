@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import apps.cli.prepare_from_queue as prepare_from_queue
+from expense_audit_orchestrator.profiles import get_profile
 from expense_audit_orchestrator.profiles.telecom.writeback import telecom_compliance_rule
 from expense_audit_orchestrator.writeback import assemble_result_audit_info
 
@@ -307,10 +308,13 @@ class PrepareFromQueueCliTests(unittest.TestCase):
                 ]
             )
 
+            telecom_profile = get_profile("telecom")
             expected_payload = assemble_result_audit_info(
                 prepared_receipt,
                 processed_receipt,
                 compliance_rule=telecom_compliance_rule,
+                audit_risk_catalog=telecom_profile.audit_risk_catalog,
+                expense_profile=telecom_profile.name,
             )
             actual_payload = json.loads(output_path.read_text(encoding="utf-8"))
             self.assertEqual(
