@@ -1193,7 +1193,7 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"发票号【\"+(invoiceNo??\"\")+\"】✗ 发票购买方【\"+(buyerName??orgName??\"\")+\"】按公司抬头处理，但纳税人识别号【\"+(buyerTaxNo??buyerTaxNO??\"\")+\"】未与组织编码【\"+(instanceComCode??\"\")+\"】对应的财务体系公司纳税人识别号一致，✓ 公司抬头发票必须使用核销单财务体系映射公司的纳税人识别号\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的购货方纳税人识别号为“\" + (buyerTaxNo ?? buyerTaxNO ?? \"\") + \"”，与所属公司正确纳税人识别号“\" + (filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].companyTax ?? \"\") + \"”不一致。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2.1.1 员工需要确保票据中公司信息的准确性。\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"【重新开票】请按核销单财务体系映射公司的正确抬头和纳税人识别号重新开具发票，并重新上传\"",
             "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",

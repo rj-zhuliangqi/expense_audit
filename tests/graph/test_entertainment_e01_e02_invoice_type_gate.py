@@ -104,6 +104,15 @@ class EntertainmentE01E02InvoiceTypeGateTests(unittest.TestCase):
                     "REJECT",
                 )
 
+    def test_e02_reject_message_uses_standard_tax_number_template(self) -> None:
+        result = self._evaluate(1)
+
+        self.assertEqual(
+            self._rule(result, "E02")["message"],
+            "票据 发票号 ENT-E01-E02-GATE-001 的购货方纳税人识别号为“BAD-TAX”，"
+            "与所属公司正确纳税人识别号“GOOD-TAX”不一致。",
+        )
+
     def test_invoice_type_21_only_runs_e01(self) -> None:
         result = self._evaluate(21)
         self.assertEqual(self._rule(result, "E01")["distinguish_result"], "REJECT")
