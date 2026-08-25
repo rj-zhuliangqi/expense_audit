@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -151,6 +151,9 @@ class ReceiptAuditService:
         # 先为兼容未进入核销单循环的调用方注入整单总量；正式核销单执行时，
         # process_prepared_receipt() 会按发票顺序改写为当前累计商品数量，最后一张即整单总量。
         _inject_total_goods_count(prepared_receipt)
+        # E05 的发票重复检查需要整单视角；在逐票执行前一次性统计本单发票号，
+        # 同一发票号的每一张票都注入命中标记。
+        _inject_e05_duplicate_context(prepared_receipt)
         # 所有发票完成数据准备后一次性计算本单发票连号关系，供需要在执行前
         # 读取 prepared receipt 的调用方使用；process_prepared_receipt() 会幂等重算一次，
         # 兼容从队列/磁盘加载的既有 prepared receipt。
@@ -198,6 +201,9 @@ class ReceiptAuditService:
         receipt_code = str(prepared_receipt.get("receiptCode") or "")
         # 兼容从磁盘/队列加载、尚未经过 prepare_receipt 聚合的 prepared receipt。
         _inject_total_goods_count(prepared_receipt)
+        # 旧 prepared receipt 可能没有经过本版本的整单聚合；执行前幂等重算，
+        # 确保队列重放和磁盘加载路径也能执行 E05 本单重复检查。
+        _inject_e05_duplicate_context(prepared_receipt)
         # 所有发票已完成数据准备后一次性计算本单发票连号关系，确保同一
         # 连号组中的每张发票都能命中，不受发票执行顺序影响。
         _inject_invoice_serial_batch_context(prepared_receipt)
@@ -737,6 +743,136 @@ def _update_gift_count_state(
     prepared_input["cumulativeGoodsCount"] = normalized_goods_count
     prepared_input["giftRemainingReceptionCount"] = normalized_remaining
     prepared_input["isLastInvoice"] = is_last_invoice
+
+
+def _inject_e05_duplicate_context(prepared_receipt: Mapping[str, Any]) -> None:
+    """注入 E05 所需的核销单级发票重复上下文。
+
+    流程图运行粒度是一张发票，而“本核销单内重复”必须先看到整单所有发票号
+    才能判断。因此这里先用 ``Counter`` 做一次 O(n) 统计，再把统计结果写回
+    每张发票的 ``serviceData`` 和 ``context.serviceData``。历史占用信息也是
+    在这里整理成可直接展示的核销单号列表和金额，避免在 Zen 表达式中反复
+    filter 同一批数据。
+
+    空发票号不参与统计；发票号只做字符串 trim，不转数字，以保留前导零。
+    对已经落盘的旧 prepared receipt 该函数也是幂等的，便于队列重放。
+    """
+    invoice_preparations = prepared_receipt.get("invoicePreparations")
+    if not isinstance(invoice_preparations, list):
+        return
+
+    invoice_numbers: Counter[str] = Counter()
+    candidates: list[tuple[dict[str, Any], str]] = []
+
+    for item in invoice_preparations:
+        if not isinstance(item, Mapping):
+            continue
+        prepared_input = item.get("preparedInput")
+        if not isinstance(prepared_input, dict):
+            continue
+
+        invoice_no = _normalize_e05_invoice_number(prepared_input)
+        candidates.append((prepared_input, invoice_no))
+        if invoice_no:
+            invoice_numbers[invoice_no] += 1
+
+    for prepared_input, invoice_no in candidates:
+        service_data = _ensure_prepared_input_service_data(prepared_input)
+        if service_data is None:
+            continue
+
+        duplicate_count = invoice_numbers.get(invoice_no, 0) if invoice_no else 0
+        service_data["receiptInvoiceDuplicate"] = duplicate_count > 1
+        service_data["receiptInvoiceDuplicateCount"] = duplicate_count
+
+        history_records = _resolve_e05_history_records(service_data, invoice_no)
+        instance_codes: list[str] = []
+        history_amount = 0.0
+        for record in history_records:
+            instance_code = _resolve_e05_history_instance_code(record)
+            if instance_code and instance_code not in instance_codes:
+                instance_codes.append(instance_code)
+
+            amount = _coerce_number(record.get("estimatedTotalAmount"))
+            if amount is None:
+                amount = _coerce_number(record.get("totalAmount"))
+            if amount is not None:
+                history_amount += amount
+
+        service_data["e05HistoryDuplicateInstanceCodes"] = "、".join(instance_codes)
+        service_data["e05HistoryDuplicateAmount"] = _normalize_e05_amount(history_amount)
+        prepared_input["serviceData"] = service_data
+
+        context = prepared_input.get("context")
+        if not isinstance(context, dict):
+            context = {}
+            prepared_input["context"] = context
+        context["serviceData"] = service_data
+
+
+def _ensure_prepared_input_service_data(
+    prepared_input: dict[str, Any],
+) -> dict[str, Any] | None:
+    service_data = prepared_input.get("serviceData")
+    if isinstance(service_data, dict):
+        return service_data
+
+    context = prepared_input.get("context")
+    context_service_data = context.get("serviceData") if isinstance(context, dict) else None
+    if isinstance(context_service_data, dict):
+        prepared_input["serviceData"] = context_service_data
+        return context_service_data
+
+    # 没有 serviceData 的旧 prepared receipt 无法参与历史检查，但仍可安全
+    # 注入重复字段，后续流程图会按默认值处理历史重复。
+    service_data = {}
+    prepared_input["serviceData"] = service_data
+    return service_data
+
+
+def _normalize_e05_invoice_number(prepared_input: Mapping[str, Any]) -> str:
+    for key in ("invoiceNo", "chequeNo", "serialNo"):
+        value = prepared_input.get(key)
+        if value is None:
+            continue
+        normalized = str(value).strip()
+        if normalized:
+            return normalized
+    return ""
+
+
+def _resolve_e05_history_records(
+    service_data: Mapping[str, Any],
+    invoice_no: str,
+) -> list[Mapping[str, Any]]:
+    history = service_data.get("invoiceUsageHistory")
+    if not isinstance(history, Sequence) or isinstance(history, (str, bytes, bytearray)):
+        return []
+
+    records: list[Mapping[str, Any]] = []
+    for item in history:
+        if not isinstance(item, Mapping):
+            continue
+        cheque_no = item.get("chequeNo")
+        if cheque_no is None:
+            cheque_no = item.get("invoiceNo", item.get("serialNo"))
+        normalized_cheque_no = "" if cheque_no is None else str(cheque_no).strip()
+        if normalized_cheque_no == invoice_no and invoice_no:
+            records.append(item)
+    return records
+
+
+def _resolve_e05_history_instance_code(record: Mapping[str, Any]) -> str:
+    for key in ("miInstanceCode", "instanceCode", "instance_code"):
+        value = record.get(key)
+        normalized = "" if value is None else str(value).strip()
+        if normalized:
+            return normalized
+    return "未知"
+
+
+def _normalize_e05_amount(value: float) -> int | float:
+    return int(value) if value.is_integer() else value
 
 
 def _inject_total_goods_count(prepared_receipt: Mapping[str, Any]) -> None:

@@ -1953,6 +1953,148 @@ class FormalServiceTests(unittest.TestCase):
         )
         runtime_client.evaluate.assert_not_called()
 
+    def test_prepare_receipt_injects_e05_duplicate_context_for_all_invoices(self) -> None:
+        receipt_context = {
+            "receiptCode": "REC-E05-PREP-001",
+            "serviceData": {"auditInfo": {"instanceCode": "REC-E05-PREP-001"}},
+            "invoiceFiles": [
+                {"fid": "FID-001", "filePath": "base64://FID-001"},
+                {"fid": "FID-002", "filePath": "base64://FID-002"},
+                {"fid": "FID-003", "filePath": "base64://FID-003"},
+                {"fid": "FID-004", "filePath": "base64://FID-004"},
+                {"fid": "FID-005", "filePath": "base64://FID-005"},
+            ],
+        }
+        prepared_inputs_by_fid = {
+            "FID-001": {
+                "invoiceNo": "000123",
+                "serviceData": {
+                    "invoiceUsageHistory": [
+                        {
+                            "chequeNo": "000123",
+                            "miInstanceCode": "REC-OLD-001",
+                            "estimatedTotalAmount": "100",
+                        },
+                        {
+                            "chequeNo": "000123",
+                            "instanceCode": "REC-OLD-002",
+                            "totalAmount": 200,
+                        }
+                    ]
+                },
+            },
+            "FID-002": {
+                "invoiceNo": "000123",
+                "serviceData": {"invoiceUsageHistory": []},
+            },
+            "FID-003": {
+                "invoiceNo": "000123",
+                "serviceData": {"invoiceUsageHistory": []},
+            },
+            "FID-004": {
+                "invoiceNo": "000124",
+                "serviceData": {"invoiceUsageHistory": []},
+            },
+            "FID-005": {
+                "invoiceNo": "",
+                "serviceData": {"invoiceUsageHistory": []},
+            },
+        }
+
+        service = ReceiptAuditService(
+            graph_runtime_client=MagicMock(),
+            data_preparer=FakeSplitDataPreparer(receipt_context, prepared_inputs_by_fid),
+        )
+
+        result = service.prepare_receipt("REC-E05-PREP-001")
+        prepared_by_fid = {
+            item["invoiceFile"]["fid"]: item["preparedInput"]
+            for item in result["invoicePreparations"]
+        }
+
+        first_service_data = prepared_by_fid["FID-001"]["serviceData"]
+        second_service_data = prepared_by_fid["FID-002"]["serviceData"]
+        third_service_data = prepared_by_fid["FID-003"]["serviceData"]
+        unique_service_data = prepared_by_fid["FID-004"]["serviceData"]
+        empty_service_data = prepared_by_fid["FID-005"]["serviceData"]
+        self.assertTrue(first_service_data["receiptInvoiceDuplicate"])
+        self.assertEqual(first_service_data["receiptInvoiceDuplicateCount"], 3)
+        self.assertEqual(first_service_data["e05HistoryDuplicateInstanceCodes"], "REC-OLD-001、REC-OLD-002")
+        self.assertEqual(first_service_data["e05HistoryDuplicateAmount"], 300)
+        self.assertTrue(second_service_data["receiptInvoiceDuplicate"])
+        self.assertEqual(second_service_data["receiptInvoiceDuplicateCount"], 3)
+        self.assertTrue(third_service_data["receiptInvoiceDuplicate"])
+        self.assertEqual(third_service_data["receiptInvoiceDuplicateCount"], 3)
+        self.assertFalse(unique_service_data["receiptInvoiceDuplicate"])
+        self.assertEqual(unique_service_data["receiptInvoiceDuplicateCount"], 1)
+        self.assertFalse(empty_service_data["receiptInvoiceDuplicate"])
+        self.assertEqual(empty_service_data["receiptInvoiceDuplicateCount"], 0)
+        self.assertIs(
+            prepared_by_fid["FID-001"]["context"]["serviceData"],
+            first_service_data,
+        )
+
+    def test_process_prepared_receipt_reinjects_e05_context_for_old_prepared_receipt(self) -> None:
+        prepared_receipt = {
+            "receiptCode": "REC-E05-OLD-001",
+            "serviceData": {},
+            "receiptContext": {"receiptCode": "REC-E05-OLD-001"},
+            "invoiceCount": 3,
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-001",
+                    "invoiceFile": {"fid": "FID-001"},
+                    "preparedInput": {
+                        "invoiceNo": "A-001",
+                        "serviceData": {"invoiceUsageHistory": []},
+                    },
+                },
+                {
+                    "invoiceKey": "FID-002",
+                    "invoiceFile": {"fid": "FID-002"},
+                    "preparedInput": {
+                        "invoiceNo": "A-001",
+                        "context": {"serviceData": {"invoiceUsageHistory": []}},
+                    },
+                },
+                {
+                    "invoiceKey": "FID-003",
+                    "invoiceFile": {"fid": "FID-003"},
+                    "preparedInput": {
+                        "invoiceNo": "A-002",
+                        "serviceData": {"invoiceUsageHistory": []},
+                    },
+                },
+            ],
+        }
+
+        class CapturingGraphRuntimeClient:
+            def __init__(self) -> None:
+                self.inputs: list[dict[str, Any]] = []
+
+            def evaluate(self, *, prepared_input: dict[str, Any], graph_path=None, graph_content=None) -> dict[str, Any]:
+                del graph_path, graph_content
+                self.inputs.append(prepared_input)
+                return {"decisionOutput": {"checkStatus": "passed"}}
+
+        runtime_client = CapturingGraphRuntimeClient()
+        service = ReceiptAuditService(
+            graph_runtime_client=runtime_client,
+            data_preparer=MagicMock(),
+        )
+
+        service.process_prepared_receipt(prepared_receipt)
+
+        self.assertEqual(len(runtime_client.inputs), 3)
+        self.assertTrue(runtime_client.inputs[0]["serviceData"]["receiptInvoiceDuplicate"])
+        self.assertEqual(runtime_client.inputs[0]["serviceData"]["receiptInvoiceDuplicateCount"], 2)
+        self.assertTrue(runtime_client.inputs[1]["serviceData"]["receiptInvoiceDuplicate"])
+        self.assertFalse(runtime_client.inputs[2]["serviceData"]["receiptInvoiceDuplicate"])
+        self.assertEqual(
+            runtime_client.inputs[1]["context"]["serviceData"]["receiptInvoiceDuplicateCount"],
+            2,
+        )
+
     def test_receipt_audit_service_process_prepared_receipt_executes_runtime_without_repreparing(self) -> None:
         prepared_receipt = {
             "receiptCode": "REC-PROCESS-PREP-001",
