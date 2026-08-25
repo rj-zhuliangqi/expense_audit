@@ -20,6 +20,7 @@ W28_NODE_ID = "e2b630c8-096d-4fea-ad4c-986473d8a880"
 INPUT_FIELD_ID = "dea9a1bc-66ae-47b3-885f-9e9a1bb07571"
 REASON_CODE_ID = "48a29115-f542-44d3-8c02-3ff71e19ee38"
 RESULT_ID = "f35ede49-0eae-4dda-b39e-11a11383697a"
+HEADER_INVOICE_TYPES = {1, 2, 3, 4, 5, 7, 11, 12, 13, 15, 19, 21, 23, 25, 26, 27, 28, 29, 72}
 
 
 class TelecomE01W28HeaderGraphTests(unittest.TestCase):
@@ -60,11 +61,15 @@ class TelecomE01W28HeaderGraphTests(unittest.TestCase):
         }
         self.assertEqual(
             expressions["header_check"],
-            "not($.e01Applicable ?? false) or ($.is_company ? $.is_in_company_list:$.is_same_peple)",
+            "not($.e01Applicable ?? false) or ($.is_company ? $.is_in_company_list : ($.is_in_telecom_list and $.is_same_peple))",
         )
         self.assertEqual(
             expressions["header_personal_check"],
-            "$.is_company or ($.is_same_peple == false) or $.is_in_telecom_list",
+            "not($.w28Applicable ?? false) or ($.is_company or ($.is_same_peple == false) or (not($.is_in_telecom_list)))",
+        )
+        self.assertEqual(
+            expressions["w28Applicable"],
+            "$.w28InvoiceTypeCode in [1, 2, 3, 4, 5, 7, 11, 12, 13, 15, 19, 21, 23, 25, 26, 27, 28, 29, 72]",
         )
 
         e01_rules = self._rules_for(self.e01_node, "E01")
@@ -87,21 +92,32 @@ class TelecomE01W28HeaderGraphTests(unittest.TestCase):
         )
 
         self.assertEqual(results["E01"], "PASS")
-        self.assertEqual(results["W28"], "PASS")
+        self.assertEqual(results["W28"], "WARNING")
         self._assert_at_most_one_non_pass(results)
 
-    def test_personal_employee_outside_operator_city_is_only_w28_warning(self) -> None:
+    def test_personal_employee_outside_operator_city_is_e01_reject(self) -> None:
         results = self._header_results(
             buyer_name="蔡盈琳（个人）",
             saler_name="中国移动通信集团福建有限公司福州分公司",
             telecom_list=[["移动", "广东"]],
         )
 
-        self.assertEqual(results["E01"], "PASS")
-        self.assertEqual(results["W28"], "WARNING")
+        self.assertEqual(results["E01"], "REJECT")
+        self.assertEqual(results["W28"], "PASS")
         self._assert_at_most_one_non_pass(results)
 
     def test_personal_non_employee_is_only_e01_reject(self) -> None:
+        results = self._header_results(
+            buyer_name="王荣波（个人）",
+            saler_name="中国移动通信集团广东有限公司广州分公司",
+            telecom_list=[["移动", "广东"]],
+        )
+
+        self.assertEqual(results["E01"], "REJECT")
+        self.assertEqual(results["W28"], "PASS")
+        self._assert_at_most_one_non_pass(results)
+
+    def test_personal_non_employee_outside_operator_city_is_only_e01_reject(self) -> None:
         results = self._header_results(
             buyer_name="王荣波（个人）",
             saler_name="中国移动通信集团福建有限公司福州分公司",
@@ -134,16 +150,54 @@ class TelecomE01W28HeaderGraphTests(unittest.TestCase):
         self.assertEqual(results["W28"], "PASS")
         self._assert_at_most_one_non_pass(results)
 
+    def test_all_header_invoice_types_apply_both_e01_and_w28_rules(self) -> None:
+        for invoice_type in sorted(HEADER_INVOICE_TYPES):
+            with self.subTest(invoice_type=invoice_type):
+                results = self._header_results(
+                    buyer_name="蔡盈琳（个人）",
+                    saler_name="中国移动通信集团广东有限公司广州分公司",
+                    telecom_list=[["移动", "广东"]],
+                    invoice_type=invoice_type,
+                )
+
+                self.assertEqual(results["E01"], "PASS")
+                self.assertEqual(results["W28"], "WARNING")
+
+    def test_header_invoice_type_normalization_applies_w28_gate(self) -> None:
+        for invoice_type in (1, "1", " 1 ", 72, "72", " 72 "):
+            with self.subTest(invoice_type=invoice_type):
+                results = self._header_results(
+                    buyer_name="蔡盈琳（个人）",
+                    saler_name="中国移动通信集团广东有限公司广州分公司",
+                    telecom_list=[["移动", "广东"]],
+                    invoice_type=invoice_type,
+                )
+
+                self.assertEqual(results["E01"], "PASS")
+                self.assertEqual(results["W28"], "WARNING")
+
+    def test_non_applicable_invoice_type_skips_both_header_audits(self) -> None:
+        results = self._header_results(
+            buyer_name="王荣波（个人）",
+            saler_name="非运营商",
+            telecom_list=[],
+            invoice_type=9,
+        )
+
+        self.assertEqual(results["E01"], "PASS")
+        self.assertEqual(results["W28"], "PASS")
+
     def _header_results(
         self,
         *,
         buyer_name: str,
         saler_name: str,
         telecom_list: list[list[str]],
+        invoice_type: Any = 1,
     ) -> dict[str, str]:
         prepared_input = {
             "receipt": {"code": "TELECOM-E01-W28-TEST"},
-            "invoiceType": 1,
+            "invoiceType": invoice_type,
             "buyerName": buyer_name,
             "salerName": saler_name,
             "instanceComCode": "111",
