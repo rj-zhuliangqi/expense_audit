@@ -340,7 +340,7 @@ class ReceiptSummaryTests(unittest.TestCase):
         audit_logs = [
             {"reasonCode": "W28", "distinguishResult": "WARNING"},
             {"reasonCode": "W32", "distinguishResult": "REJECT"},
-            {"reasonCode": "E32", "distinguishResult": "REJECT"},
+            {"reasonCode": "W40", "distinguishResult": "REJECT"},
             {"reasonCode": "E01", "distinguishResult": "PASS"},
         ]
         telecom_summary = build_ai_audit_summary_finance(
@@ -350,12 +350,13 @@ class ReceiptSummaryTests(unittest.TestCase):
             audit_risk_catalog={
                 "W28": {"riskLevel": "medium_low"},
                 "W32": {"riskLevel": "high"},
+                "W40": {"riskLevel": "medium_low"},
             },
             expense_profile="telecom",
         )
         self.assertEqual(
             telecom_summary,
-            "本单高风险 1 项、中低风险 1 项，阻断 1 项，已通过 1 项稽核项。",
+            "本单高风险 1 项、中低风险 2 项，阻断 0 项，已通过 1 项稽核项。",
         )
 
         entertainment_summary = build_ai_audit_summary_finance(
@@ -585,7 +586,7 @@ class ReceiptSummaryTests(unittest.TestCase):
 
         for reason_code, expected_status in (
             ("E17", "REJECT"),
-            ("E32", "REJECT"),
+            ("W40", "REJECT"),
             ("W32", "REJECT"),
             ("E34", "REJECT"),
             ("E36", "REJECT"),

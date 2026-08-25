@@ -100,7 +100,7 @@ class GetProfileTelecomAssetDirTests(unittest.TestCase):
 
         self.assertEqual(profile.audit_risk_catalog["W28"]["riskLevel"], "medium_low")
         self.assertEqual(profile.audit_risk_catalog["W32"]["riskLevel"], "high")
-        self.assertEqual(profile.audit_risk_catalog["E32"]["riskLevel"], "blocking")
+        self.assertEqual(profile.audit_risk_catalog["W40"]["riskLevel"], "medium_low")
 
     def test_entertainment_profile_loads_finance_audit_risk_catalog(self) -> None:
         profile = get_profile("entertainment")

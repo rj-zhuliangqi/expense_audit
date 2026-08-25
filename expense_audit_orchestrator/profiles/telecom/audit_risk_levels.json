@@ -8,7 +8,7 @@
     "E09": {"riskLevel": "blocking"},
     "E05": {"riskLevel": "blocking"},
     "E33": {"riskLevel": "blocking"},
-    "E32": {"riskLevel": "blocking"},
+    "W40": {"riskLevel": "medium_low"},
     "E19": {"riskLevel": "blocking"},
     "E17": {"riskLevel": "blocking"},
     "E34": {"riskLevel": "blocking"},

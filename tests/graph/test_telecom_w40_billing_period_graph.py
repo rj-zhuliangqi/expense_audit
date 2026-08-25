@@ -10,17 +10,17 @@ import zen
 GRAPH_PATH = Path(__file__).parents[2] / "resources" / "graphs" / "graph-latest-telecom-0727-1900.json"
 PROMPT_NODE_ID = "6acb7b84-51a3-4d7d-9556-960d459d518d"
 POSTPROCESS_NODE_ID = "a6e16f2e-1e43-4f71-8895-0ee44210a4c7"
-E32_NODE_ID = "f27969dd-cdcd-43da-9e75-328e4546239c"
-E32_MESSAGE_FIELD_ID = "509fd9ba-3996-4e4a-9021-df6513ed6807"
-E32_INPUT_FIELD_ID = "dea9a1bc-66ae-47b3-885f-9e9a1bb07571"
+W40_NODE_ID = "f27969dd-cdcd-43da-9e75-328e4546239c"
+W40_MESSAGE_FIELD_ID = "509fd9ba-3996-4e4a-9021-df6513ed6807"
+W40_INPUT_FIELD_ID = "dea9a1bc-66ae-47b3-885f-9e9a1bb07571"
 
 
-class TelecomE32BillingPeriodGraphTests(unittest.TestCase):
+class TelecomW40BillingPeriodGraphTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.graph = json.loads(GRAPH_PATH.read_text(encoding="utf-8"))
         cls.prompt_node = next(node for node in cls.graph["nodes"] if node["id"] == PROMPT_NODE_ID)
-        cls.e32_node = next(node for node in cls.graph["nodes"] if node["id"] == E32_NODE_ID)
+        cls.w40_node = next(node for node in cls.graph["nodes"] if node["id"] == W40_NODE_ID)
         cls.postprocess_node = next(node for node in cls.graph["nodes"] if node["id"] == POSTPROCESS_NODE_ID)
 
     def test_prompt_extracts_qizhi_period_and_preserves_year_check(self) -> None:
@@ -105,13 +105,13 @@ class TelecomE32BillingPeriodGraphTests(unittest.TestCase):
 
         self.assertEqual(result, "15259918011")
 
-    def test_e32_message_falls_back_when_billing_period_is_empty(self) -> None:
+    def test_w40_message_falls_back_when_billing_period_is_empty(self) -> None:
         reject_rule = next(
             rule
-            for rule in self.e32_node["content"]["rules"]
-            if rule[E32_INPUT_FIELD_ID] == "false"
+            for rule in self.w40_node["content"]["rules"]
+            if rule[W40_INPUT_FIELD_ID] == "false"
         )
-        message_expression = reject_rule[E32_MESSAGE_FIELD_ID]
+        message_expression = reject_rule[W40_MESSAGE_FIELD_ID]
         prepared = {
             "invoiceNo": "24357000000034577982",
             "billingPeriod": "",
