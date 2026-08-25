@@ -180,6 +180,21 @@
             "value": "(buyerTaxNo ?? \"\") != \"\" and (buyerTaxNo ?? \"\") == (filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].companyTax ?? \"\")"
           },
           {
+            "id": "telecom-e02-invoice-type-code",
+            "key": "e02InvoiceTypeCode",
+            "value": "(type(invoiceType) == \"number\") ? invoiceType : ((type(invoiceType) == \"string\" and trim(invoiceType) != \"\" and matches(trim(invoiceType), \"^[+-]?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))([eE][+-]?[0-9]+)?$\")) ? number(trim(invoiceType)) : -1)"
+          },
+          {
+            "id": "telecom-e02-applicable",
+            "key": "e02Applicable",
+            "value": "$.e02InvoiceTypeCode in [1, 2, 3, 4, 5, 7, 11, 12, 13, 15, 19, 23, 25, 26, 27, 28, 29, 72]"
+          },
+          {
+            "id": "telecom-e02-tax-check",
+            "key": "tax_check",
+            "value": "not($.e02Applicable ?? false) or $.isTaxExists"
+          },
+          {
             "id": "f86cf5db-4ebb-4ae1-9a21-2166e5b50098",
             "key": "isAmountEnough",
             "value": "number(serviceData.auditInfo.applyAmount ?? 0) <= number(totalAmount ?? 0)"
@@ -534,8 +549,8 @@
         "inputs": [
           {
             "id": "dea9a1bc-66ae-47b3-885f-9e9a1bb07571",
-            "name": "票据类型",
-            "field": "isTaxExists"
+            "name": "票种适用时发票购买方纳税人识别号是否与财务体系公司一致",
+            "field": "tax_check"
           }
         ],
         "outputs": [
@@ -1676,9 +1691,19 @@
             "value": "(serviceData.auditInfo.verifiUserName ?? \"\") != \"\" and ((buyerName ?? \"\") == (serviceData.auditInfo.verifiUserName ?? \"\") or (buyerName ?? \"\") == ((serviceData.auditInfo.verifiUserName ?? \"\") + \"（个人）\") or (buyerName ?? \"\") == ((serviceData.auditInfo.verifiUserName ?? \"\") + \" (个人)\") or (buyerName ?? \"\") == ((serviceData.auditInfo.verifiUserName ?? \"\") + \"(个人)\") or (buyerName ?? \"\") == ((serviceData.auditInfo.verifiUserName ?? \"\") + \" （个人）\") or (buyerName ?? \"\") == ((serviceData.auditInfo.verifiUserName ?? \"\") + \"个人\"))"
           },
           {
+            "id": "telecom-e01-invoice-type-code",
+            "key": "e01InvoiceTypeCode",
+            "value": "(type(invoiceType) == \"number\") ? invoiceType : ((type(invoiceType) == \"string\" and trim(invoiceType) != \"\" and matches(trim(invoiceType), \"^[+-]?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))([eE][+-]?[0-9]+)?$\")) ? number(trim(invoiceType)) : -1)"
+          },
+          {
+            "id": "telecom-e01-applicable",
+            "key": "e01Applicable",
+            "value": "$.e01InvoiceTypeCode in [1, 2, 3, 4, 5, 7, 11, 12, 13, 15, 19, 21, 23, 25, 26, 27, 28, 29, 72]"
+          },
+          {
             "id": "99145f04-7d00-4d80-bcc8-4c1ce810915a",
             "key": "header_check",
-            "value": "$.is_company ? $.is_in_company_list:$.is_same_peple"
+            "value": "not($.e01Applicable ?? false) or ($.is_company ? $.is_in_company_list:$.is_same_peple)"
           },
           {
             "id": "9db2de79-bbf9-41cc-a7b6-03595332fede",

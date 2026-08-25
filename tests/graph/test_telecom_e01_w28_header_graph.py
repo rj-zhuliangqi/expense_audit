@@ -58,7 +58,10 @@ class TelecomE01W28HeaderGraphTests(unittest.TestCase):
             expression["key"]: expression["value"]
             for expression in self.preprocess_node["content"]["expressions"]
         }
-        self.assertEqual(expressions["header_check"], "$.is_company ? $.is_in_company_list:$.is_same_peple")
+        self.assertEqual(
+            expressions["header_check"],
+            "not($.e01Applicable ?? false) or ($.is_company ? $.is_in_company_list:$.is_same_peple)",
+        )
         self.assertEqual(
             expressions["header_personal_check"],
             "$.is_company or ($.is_same_peple == false) or $.is_in_telecom_list",
@@ -140,6 +143,7 @@ class TelecomE01W28HeaderGraphTests(unittest.TestCase):
     ) -> dict[str, str]:
         prepared_input = {
             "receipt": {"code": "TELECOM-E01-W28-TEST"},
+            "invoiceType": 1,
             "buyerName": buyer_name,
             "salerName": saler_name,
             "instanceComCode": "111",
