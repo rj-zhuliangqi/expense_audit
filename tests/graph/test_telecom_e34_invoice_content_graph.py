@@ -28,7 +28,10 @@ class TelecomE34InvoiceContentGraphTests(unittest.TestCase):
         cls.reject_rule = next(
             rule
             for rule in cls.amount_node["content"]["rules"]
-            if rule.get("f35ede49-0eae-4dda-b39e-11a11383697a") == '"REJECT"'
+            if (
+                rule.get("f35ede49-0eae-4dda-b39e-11a11383697a") == '"REJECT"'
+                and rule.get("dea9a1bc-66ae-47b3-885f-9e9a1bb07571") == '"false"'
+            )
         )
         cls.postprocess_node = next(
             node

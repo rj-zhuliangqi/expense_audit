@@ -304,7 +304,7 @@ ENTERTAINMENT_PREPROCESS_EXPRESSIONS = [
         # 接待人数来自核销单业务费用明细接口，项目类别由 hasGiftItem 标识。
         "id": _new_uuid(),
         "key": "isGiftCountReasonable",
-        "value": '((isLastInvoice ?? true) == false) or (serviceData.entertainment_data.hasGiftItem ?? false) == false or number(serviceData.entertainment_data.giftReceptionCount ?? 0) <= number(totalGoodsCount ?? sum(map((items ?? []) as i, number(i.num ?? i.quantity ?? 0))))',
+        "value": '(serviceData.entertainment_data.giftDetailLookupStatus ?? "success") == "error" ? "error" : ((((isLastInvoice ?? true) == false) or (serviceData.entertainment_data.hasGiftItem ?? false) == false or number(serviceData.entertainment_data.giftReceptionCount ?? 0) <= number(totalGoodsCount ?? sum(map((items ?? []) as i, number(i.num ?? i.quantity ?? 0))))) ? "true" : "false")',
     },
     {
         # W34：只检查三类适用票种；本核销单由数据准备计算 batchHit，
@@ -459,6 +459,18 @@ def _build_gift_count_check_node() -> dict:
     """规则4：礼品数量合理性检查 W33（弱控 WARNING）。"""
     node_id = "ent-gift-count-check"
     rules = [
+        _std_rule_row(
+            input_value='"error"',
+            reason_code="W33",
+            distinguish_result="WARNING",
+            audit_content="检查【项目类别】为赠送纪念品中接待人数量与发票中购买商品数量的合理性",
+            audit_type="staff-behavior",
+            message='"业务招待费业务费用明细接口异常，无法确认【项目类别】及赠送纪念品接待人数，W33 稽核未完成："+(serviceData.entertainment_data.giftDetailLookupError??"请稍后重试或联系管理员处理。")',
+            policies_index='""',
+            suggestion='"【接口异常】请稍后重试；如问题持续，请联系管理员处理。"',
+            problem_category="业务费用明细接口异常",
+            optimization_action_category="【稍后重试】【联系管理员】",
+        ),
         _std_rule_row(
             input_value="true",
             reason_code="W33",
@@ -845,6 +857,18 @@ def _build_content_compliance_check_node() -> dict:
 def _build_recharge_card_check_node() -> dict:
     """独立输出 E17，确保普通内容也有 E17/PASS 结果。"""
     rules = [
+        _std_rule_row(
+            input_value='"error"',
+            reason_code="E17",
+            distinguish_result="REJECT",
+            audit_content="检查发票内容是否包含充值卡、预付卡或预存类项目",
+            audit_type="general-rules",
+            message='"模型服务暂时异常，当前充值卡检查未完成，请稍后重试或联系管理员处理。"',
+            policies_index='""',
+            suggestion='"【模型异常】请稍后重试；如问题持续，请联系管理员处理。"',
+            problem_category="模型服务异常",
+            optimization_action_category="【稍后重试】【联系管理员】",
+        ),
         _std_rule_row(
             input_value='"pass"',
             reason_code="E17",

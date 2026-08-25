@@ -131,8 +131,10 @@ class GetProfileTelecomAssetDirTests(unittest.TestCase):
         profile = get_profile("entertainment")
         self.assertEqual(profile.name, "entertainment")
         enricher = profile.receipt_enrichers["entertainment_data"]
-        # 招待费 enricher 当前返回空 dict（无专属数据）
-        self.assertEqual(enricher("R", {}), {})
+        # 缺少核销单号时必须显式标记业务费用明细查询异常，避免 W33 默认通过。
+        result = enricher("R", {})
+        self.assertEqual(result["giftDetailLookupStatus"], "error")
+        self.assertIn("缺少核销单号", result["giftDetailLookupError"])
 
     def test_entertainment_writeback_catalog_has_correct_audit_descriptions(self) -> None:
         profile = get_profile("entertainment")

@@ -174,10 +174,14 @@ class EntertainmentRuleTagTests(unittest.TestCase):
         for graph in graphs:
             for node_id, labels in expected.items():
                 node = next(node for node in graph["nodes"] if node.get("id") == node_id)
+                input_field = node["content"]["inputs"][0]["id"]
                 reject_rules = [
                     rule
                     for rule in node["content"]["rules"]
-                    if rule["f35ede49-0eae-4dda-b39e-11a11383697a"] == '"REJECT"'
+                    if (
+                        rule["f35ede49-0eae-4dda-b39e-11a11383697a"] == '"REJECT"'
+                        and rule[input_field] != '"error"'
+                    )
                 ]
                 self.assertEqual(len(reject_rules), 1, node_id)
                 rule = reject_rules[0]
@@ -400,19 +404,40 @@ class GiftCountExpressionTests(unittest.TestCase):
         expression = _is_gift_count_reasonable_expression()
         base = {"serviceData": {"entertainment_data": {"hasGiftItem": True, "giftReceptionCount": 10}}}
 
-        self.assertFalse(zen.evaluate_expression(expression, {**base, "totalGoodsCount": 1}))
-        self.assertTrue(zen.evaluate_expression(expression, {**base, "totalGoodsCount": 10}))
-        self.assertTrue(
+        self.assertEqual(zen.evaluate_expression(expression, {**base, "totalGoodsCount": 1}), "false")
+        self.assertEqual(zen.evaluate_expression(expression, {**base, "totalGoodsCount": 10}), "true")
+        self.assertEqual(
             zen.evaluate_expression(
                 expression,
                 {**base, "totalGoodsCount": 1, "isLastInvoice": False},
-            )
+            ),
+            "true",
         )
-        self.assertFalse(
+        self.assertEqual(
             zen.evaluate_expression(
                 expression,
                 {**base, "totalGoodsCount": 1, "isLastInvoice": True},
-            )
+            ),
+            "false",
+        )
+
+    def test_lookup_error_is_not_treated_as_a_valid_gift_count(self) -> None:
+        expression = _is_gift_count_reasonable_expression()
+
+        self.assertEqual(
+            zen.evaluate_expression(
+                expression,
+                {
+                    "serviceData": {
+                        "entertainment_data": {
+                            "giftDetailLookupStatus": "error",
+                            "giftDetailLookupError": "接口不可用",
+                        }
+                    },
+                    "totalGoodsCount": 100,
+                },
+            ),
+            "error",
         )
 
     def test_non_gift_project_is_not_checked(self) -> None:
@@ -431,6 +456,32 @@ class GiftCountExpressionTests(unittest.TestCase):
                 },
             )
         )
+
+    def test_lookup_error_rule_is_warning_and_preserves_service_error(self) -> None:
+        graph = json.loads(DST_GRAPH.read_text(encoding="utf-8"))
+        node = next(node for node in graph["nodes"] if node.get("id") == "ent-gift-count-check")
+        error_rule = next(
+            rule
+            for rule in node["content"]["rules"]
+            if rule["dea9a1bc-66ae-47b3-885f-9e9a1bb07571"] == '"error"'
+        )
+
+        self.assertEqual(
+            error_rule["f35ede49-0eae-4dda-b39e-11a11383697a"],
+            '"WARNING"',
+        )
+        message = zen.evaluate_expression(
+            error_rule["509fd9ba-3996-4e4a-9021-df6513ed6807"],
+            {
+                "serviceData": {
+                    "entertainment_data": {
+                        "giftDetailLookupError": "接口不可用",
+                    }
+                }
+            },
+        )
+        self.assertIn("业务费用明细接口异常", message)
+        self.assertIn("接口不可用", message)
 
     def test_warning_rule_message_is_evaluable(self) -> None:
         graph = json.loads(DST_GRAPH.read_text(encoding="utf-8"))
