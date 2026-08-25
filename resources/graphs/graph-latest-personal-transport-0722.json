@@ -210,6 +210,11 @@
             "value": "invoiceNo not in map((serviceData.invoiceUsageHistory ?? []) as c, c.chequeNo)"
           },
           {
+            "id": "personal-transport-e05-invoice-duplicate",
+            "key": "isReceiptInvoiceDuplicate",
+            "value": "serviceData.receiptInvoiceDuplicate ?? false"
+          },
+          {
             "id": "7fe051f0-138b-4658-b318-26503211dd65",
             "key": "isCurrentYearInvoice",
             "value": "(invoiceDate ?? \"\") != \"\" and (serviceData.auditInfo.submitTime ?? \"\") != \"\" and d(invoiceDate).year() == d(serviceData.auditInfo.submitTime).year()"
@@ -920,13 +925,73 @@
         "hitPolicy": "first",
         "rules": [
           {
+            "_id": "personal-transport-e05-history-and-receipt-duplicate",
+            "_description": "",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E05\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票是否被其他核销单或本核销单重复使用\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
+            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 在本核销单内重复出现，且已在以下报销单中使用过：\" + ((serviceData.e05HistoryDuplicateInstanceCodes ?? \"\") != \"\" ? serviceData.e05HistoryDuplicateInstanceCodes : (filter((serviceData.invoiceUsageHistory ?? []) as h, h.chequeNo == (invoiceNo ?? \"\"))[0].miInstanceCode ?? filter((serviceData.invoiceUsageHistory ?? []) as h, h.chequeNo == (invoiceNo ?? \"\"))[0].instanceCode ?? \"未知\")) + \"；已报销金额为 \" + string(number(serviceData.e05HistoryDuplicateAmount ?? filter((serviceData.invoiceUsageHistory ?? []) as h, h.chequeNo == (invoiceNo ?? \"\"))[0].estimatedTotalAmount ?? filter((serviceData.invoiceUsageHistory ?? []) as h, h.chequeNo == (invoiceNo ?? \"\"))[0].totalAmount ?? 0)) + \" 元，不能再次用于本次报销。\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请删除该票据，并上传未被使用过的真实交通费票据。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"重复报销\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【删除票据】\"",
+            "personal-transport-e05-invoice-duplicate-input": "true"
+          },
+          {
+            "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
+            "_description": "",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E05\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票是否被其他核销单或本核销单重复使用\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
+            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 已在以下报销单中使用过：\" + ((serviceData.e05HistoryDuplicateInstanceCodes ?? \"\") != \"\" ? serviceData.e05HistoryDuplicateInstanceCodes : (filter((serviceData.invoiceUsageHistory ?? []) as h, h.chequeNo == (invoiceNo ?? \"\"))[0].miInstanceCode ?? filter((serviceData.invoiceUsageHistory ?? []) as h, h.chequeNo == (invoiceNo ?? \"\"))[0].instanceCode ?? \"未知\")) + \"；已报销金额为 \" + string(number(serviceData.e05HistoryDuplicateAmount ?? filter((serviceData.invoiceUsageHistory ?? []) as h, h.chequeNo == (invoiceNo ?? \"\"))[0].estimatedTotalAmount ?? filter((serviceData.invoiceUsageHistory ?? []) as h, h.chequeNo == (invoiceNo ?? \"\"))[0].totalAmount ?? 0)) + \" 元，不能再次用于本次报销。\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请删除该票据，并上传未被使用过的真实交通费票据。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"重复报销\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【删除票据】\"",
+            "personal-transport-e05-invoice-duplicate-input": "false"
+          },
+          {
+            "_id": "personal-transport-e05-receipt-duplicate",
+            "_description": "",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E05\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票是否被其他核销单或本核销单重复使用\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
+            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 在本核销单内重复出现，不能再次用于本次报销。\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请删除该票据，并上传未被使用过的真实交通费票据。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"重复报销\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【删除票据】\"",
+            "personal-transport-e05-invoice-duplicate-input": "true"
+          },
+          {
             "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E05\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票是否被其他核销单重复使用\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票是否被其他核销单或本核销单重复使用\"",
             "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
@@ -936,26 +1001,8 @@
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
             "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
-          },
-          {
-            "_id": "a68ada94-78ea-488c-9552-5286d3aa2b91",
-            "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
-            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
-            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E05\"",
-            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票是否被其他核销单重复使用\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
-            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
-            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
-            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 已在核销单 \" + (filter((serviceData.invoiceUsageHistory ?? []) as h, h.chequeNo == (invoiceNo ?? \"\"))[0].miInstanceCode ?? filter((serviceData.invoiceUsageHistory ?? []) as h, h.chequeNo == (invoiceNo ?? \"\"))[0].instanceCode ?? \"未知\") + \" 中使用，不能重复报销。\"",
-            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请删除该票据，并上传未被使用过的真实交通费票据。\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"重复报销\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【删除票据】\""
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\"",
+            "personal-transport-e05-invoice-duplicate-input": "false"
           }
         ],
         "inputs": [
@@ -963,6 +1010,11 @@
             "id": "dea9a1bc-66ae-47b3-885f-9e9a1bb07571",
             "name": "票据类型",
             "field": "isWriteOff"
+          },
+          {
+            "id": "personal-transport-e05-invoice-duplicate-input",
+            "name": "发票是否在本核销单内重复",
+            "field": "isReceiptInvoiceDuplicate"
           }
         ],
         "outputs": [

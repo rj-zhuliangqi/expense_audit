@@ -79,7 +79,7 @@ class PersonalTransportMessageTests(unittest.TestCase):
                 if not is_llm_failure and value != '""':
                     self.assertIn("+", value, node["name"])
                     dynamic_count += 1
-        self.assertEqual(dynamic_count, 18)
+        self.assertEqual(dynamic_count, 20)
 
     def _base_input(self) -> dict:
         return {
@@ -108,7 +108,13 @@ class PersonalTransportMessageTests(unittest.TestCase):
                     "verifiUserName": "张三",
                 },
                 "companyBlacklist": [{"value": "风险销方"}],
-                "invoiceUsageHistory": [{"chequeNo": "123", "miInstanceCode": "REC-OLD-001"}],
+                "invoiceUsageHistory": [
+                    {
+                        "chequeNo": "123",
+                        "miInstanceCode": "REC-OLD-001",
+                        "estimatedTotalAmount": 100,
+                    }
+                ],
             },
         }
 
@@ -143,7 +149,7 @@ class PersonalTransportMessageTests(unittest.TestCase):
             "E02": "",
             "E31": "本次交通费报销金额为 150 元，当前有效发票金额为 100 元，待补充 50 元。可用发票金额不足，暂不能提交。",
             "E09": "票据 发票号 123 的销货方“风险销方”命中公司或税务高风险/黑名单企业。",
-            "E05": "票据 发票号 123 已在核销单 REC-OLD-001 中使用，不能重复报销。",
+            "E05": "票据 发票号 123 已在以下报销单中使用过：REC-OLD-001；已报销金额为 100 元，不能再次用于本次报销。",
             "E33": "票据 发票号 123 的开票日期为 2025-01-01，与本次报销提交年度 2026 不一致。",
             "sys-001": "票据 发票号 123 的发票真伪查验未通过，暂不符合真实、合法、合规票据要求。",
             "E34": "本次报销中存在出租车发票连票，发票号 123 与历史发票号 122 存在连票关系，存在异常报销风险。",
@@ -152,6 +158,49 @@ class PersonalTransportMessageTests(unittest.TestCase):
             actual = self._rule(result, code)["message"]
             self.assertEqual(actual, message, code)
             self.assertNotRegex(actual, r"\{[^{}]+\}", code)
+
+    def test_e05_rejects_invoice_repeated_within_current_receipt(self) -> None:
+        prepared = self._base_input()
+        prepared["serviceData"]["invoiceUsageHistory"] = []
+        prepared["serviceData"]["receiptInvoiceDuplicate"] = True
+
+        result = evaluate_prepared_input(self.decision, prepared, trace=False)
+        e05 = self._rule(result, "E05")
+
+        self.assertEqual(e05["distinguish_result"], "REJECT")
+        self.assertEqual(
+            e05["message"],
+            "票据 发票号 123 在本核销单内重复出现，不能再次用于本次报销。",
+        )
+
+    def test_e05_reports_history_and_current_receipt_duplicates_together(self) -> None:
+        prepared = self._base_input()
+        prepared["serviceData"]["receiptInvoiceDuplicate"] = True
+        prepared["serviceData"]["e05HistoryDuplicateInstanceCodes"] = "REC-OLD-001、REC-OLD-002"
+        prepared["serviceData"]["e05HistoryDuplicateAmount"] = 300
+        prepared["serviceData"]["invoiceUsageHistory"] = [
+            {"chequeNo": "123", "miInstanceCode": "REC-OLD-001"},
+            {"chequeNo": "123", "instanceCode": "REC-OLD-002"},
+        ]
+
+        result = evaluate_prepared_input(self.decision, prepared, trace=False)
+        e05 = self._rule(result, "E05")
+
+        self.assertEqual(e05["distinguish_result"], "REJECT")
+        self.assertEqual(
+            e05["message"],
+            "票据 发票号 123 在本核销单内重复出现，且已在以下报销单中使用过：REC-OLD-001、REC-OLD-002；已报销金额为 300 元，不能再次用于本次报销。",
+        )
+
+    def test_e05_missing_current_receipt_duplicate_flag_keeps_history_check(self) -> None:
+        prepared = self._base_input()
+        prepared["serviceData"].pop("receiptInvoiceDuplicate", None)
+
+        result = evaluate_prepared_input(self.decision, prepared, trace=False)
+        e05 = self._rule(result, "E05")
+
+        self.assertEqual(e05["distinguish_result"], "REJECT")
+        self.assertIn("REC-OLD-001", e05["message"])
 
     def test_e01_header_mismatch_is_rejected_for_applicable_invoice_type(self) -> None:
         prepared = self._base_input()
