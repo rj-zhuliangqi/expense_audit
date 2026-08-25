@@ -400,7 +400,7 @@ def _build_tax_number_check_node() -> dict:
             distinguish_result="REJECT",
             audit_content=audit_content,
             audit_type="general-rules",
-            message='"发票号【"+(invoiceNo??"")+"】✗ 发票购买方【"+(buyerName??orgName??"")+"】按公司抬头处理，但纳税人识别号【"+(buyerTaxNo??buyerTaxNO??"")+"】未与组织编码【"+(instanceComCode??"")+"】对应的财务体系公司纳税人识别号一致，✓ 公司抬头发票必须使用核销单财务体系映射公司的纳税人识别号"',
+            message='"票据 发票号 " + (invoiceNo ?? "") + " 的购货方纳税人识别号为“" + (buyerTaxNo ?? buyerTaxNO ?? "") + "”，与所属公司正确纳税人识别号“" + (filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? ""))[0].companyTax ?? "") + "”不一致。"',
             policies_index='"《锐捷网络员工费用管理与报销制度》\n5.2.1.1 员工需要确保票据中公司信息的准确性。"',
             suggestion='"【重新开票】请按核销单财务体系映射公司的正确抬头和纳税人识别号重新开具发票，并重新上传"',
         ),
