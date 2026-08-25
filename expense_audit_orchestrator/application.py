@@ -371,7 +371,11 @@ class ReceiptAuditService:
             receipt_result["aiAuditSummaryFinance"] = ai_audit_summary_finance
 
         # 核销单级确定性建议：所有发票跑完后、回写 sink 前生成。
-        self._augment_with_overall_advice(prepared_receipt, receipt_result)
+        self._augment_with_overall_advice(
+            prepared_receipt,
+            receipt_result,
+            expense_profile=effective_profile_name,
+        )
         self._receipt_result_sink(receipt_result)
         return receipt_result
 
@@ -451,6 +455,8 @@ class ReceiptAuditService:
         self,
         prepared_receipt: Mapping[str, Any],
         receipt_result: dict[str, Any],
+        *,
+        expense_profile: str | None = None,
     ) -> None:
         """Attach the deterministic receipt-level ``aiAuditAdvice``.
 
@@ -459,7 +465,11 @@ class ReceiptAuditService:
         it.  Advice is now calculated from the completed invoice results
         locally, so this step cannot trigger an LLM or another network call.
         """
-        advice = build_ai_audit_advice(prepared_receipt, receipt_result)
+        advice = build_ai_audit_advice(
+            prepared_receipt,
+            receipt_result,
+            expense_profile=expense_profile,
+        )
         if advice:
             receipt_result["aiAuditAdvice"] = advice
 
