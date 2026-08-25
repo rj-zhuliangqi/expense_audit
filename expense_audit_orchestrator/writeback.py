@@ -4,7 +4,11 @@ from collections.abc import Callable, Mapping
 from typing import Any
 from uuid import uuid4
 
-from .receipt_summary import build_ai_audit_summary
+from .receipt_summary import (
+    build_ai_audit_advice,
+    build_ai_audit_summary,
+    extract_valid_invoice_final_amount,
+)
 
 
 ComplianceRule = Callable[[str, Mapping[str, Any]], bool]
@@ -34,6 +38,30 @@ E31_SUGGESTION = (
 )
 
 
+def _is_pass_like_advice(value: str) -> bool:
+    """Return whether an existing summary is an unconditional pass message.
+
+    Older callers may still send one of the historical pass-only phrases.  If
+    the current receipt has a REJECT/WARNING result, keeping such a phrase
+    would hide the actual audit outcome, so it must be replaced by the
+    deterministic advice generated from the normalized statuses.
+    """
+    normalized = "".join(str(value or "").strip().lower().split())
+    if not normalized:
+        return False
+    return any(
+        phrase in normalized
+        for phrase in (
+            "本次发票全部通过",
+            "全部通过",
+            "审核通过",
+            "建议通过",
+            "无需修改",
+            "无问题",
+        )
+    )
+
+
 def _default_compliance(goods_name: str, item: Mapping[str, Any]) -> bool:
     return True
 
@@ -58,6 +86,7 @@ def assemble_result_audit_info(
 
     invoice_pairs = _pair_invoices(prepared_receipt, processed_receipt)
     is_amount_sufficient = processed_receipt.get("isAmountSufficient")
+    amount_status_available = "isAmountSufficient" in processed_receipt
     is_gift_count_reasonable = processed_receipt.get("isGiftCountReasonable")
     gift_reception_count = _coerce_receipt_number(
         processed_receipt.get("giftReceptionCount")
@@ -85,6 +114,7 @@ def assemble_result_audit_info(
             audit_info,
             invoice_pairs,
             is_amount_sufficient=is_amount_sufficient,
+            amount_status_available=amount_status_available,
             apply_amount=apply_amount,
             valid_invoice_total=valid_invoice_total,
             is_gift_count_reasonable=is_gift_count_reasonable,
@@ -98,6 +128,7 @@ def assemble_result_audit_info(
             audit_info,
             invoice_pairs,
             is_amount_sufficient=is_amount_sufficient,
+            amount_status_available=amount_status_available,
             apply_amount=apply_amount,
             valid_invoice_total=valid_invoice_total,
             is_gift_count_reasonable=is_gift_count_reasonable,
@@ -127,10 +158,18 @@ def assemble_result_audit_info(
     if isinstance(ai_audit_summary, str) and ai_audit_summary.strip():
         result["aiAuditSummary"] = ai_audit_summary.strip()
 
-    # 核销单级整体建议：仅在非空时输出，避免给下游送 null。
+    # 核销单级整体建议必须与最终稽核状态一致。历史结果或外部调用方可能
+    # 携带了“本次发票全部通过！”的旧文案，但当前回写阶段已经把 E31/W33
+    # 等核销单级规则重算为 reject/warning；此时必须用确定性建议替换旧文案。
+    generated_advice = build_ai_audit_advice(prepared_receipt, processed_receipt)
     overall_advice = processed_receipt.get("aiAuditAdvice")
     if isinstance(overall_advice, str) and overall_advice.strip():
-        result["aiAuditAdvice"] = overall_advice.strip()
+        normalized_advice = overall_advice.strip()
+        if generated_advice and _is_pass_like_advice(normalized_advice):
+            normalized_advice = generated_advice
+        result["aiAuditAdvice"] = normalized_advice
+    elif generated_advice:
+        result["aiAuditAdvice"] = generated_advice
     return result
 
 
@@ -176,17 +215,14 @@ def _sum_invoice_final_amounts(
     total = 0.0
     found = False
     for preparation, result in invoice_pairs:
-        decision_output = dict(result.get("decisionOutput") or {})
-        final_amount = (
-            decision_output.get("invoice_finalAmount")
-            or (decision_output.get("invoice_content_valid_result") or {}).get("invoice_finalAmount")
+        prepared_input = _resolve_prepared_input(preparation, result)
+        final_amount = extract_valid_invoice_final_amount(
+            result,
+            prepared_input=prepared_input,
         )
         if final_amount is not None:
-            try:
-                total += float(final_amount)
-                found = True
-            except (ValueError, TypeError):
-                pass
+            total += float(final_amount)
+            found = True
     return total if found else None
 
 
@@ -199,8 +235,8 @@ def _build_e31_message(
     """Build an E31 message from the profile's latest CSV template.
 
     正常执行路径会从核销单结果拿到报销金额和可用发票金额。金额缺失时，
-    不再回退到旧版「当前核销单有效发票合计金额……」文案，而是返回新版的
-    无金额上下文提示，避免把旧规则文案重新写回回写结果。
+    不再回退到旧版「当前核销单有效发票合计金额……」占位文案；如果 E31
+    已明确判定金额不足但调用方没有传金额上下文，则保留通用的不可提交提示。
     """
     if apply_amount is None or valid_invoice_total is None:
         return "可用发票金额不足，暂不能提交。"
@@ -222,7 +258,7 @@ def _build_e31_message(
 def _override_e31_rule_result(
     rule_result: Mapping[str, Any],
     *,
-    is_amount_sufficient: bool,
+    is_amount_sufficient: bool | None,
     apply_amount: float | None = None,
     valid_invoice_total: float | None = None,
     expense_profile: str | None = None,
@@ -235,7 +271,7 @@ def _override_e31_rule_result(
     the old CSV message/suggestion.
     """
     overridden = dict(rule_result)
-    if is_amount_sufficient:
+    if is_amount_sufficient is True:
         overridden["distinguish_result"] = "PASS"
         overridden["distinguishResult"] = "PASS"
         overridden["message"] = "发票合计金额充足"
@@ -243,6 +279,18 @@ def _override_e31_rule_result(
         overridden["employeeSuggestionTips"] = ""
         overridden["problem_category"] = ""
         overridden["optimization_action_category"] = ""
+    elif is_amount_sufficient is None:
+        overridden["distinguish_result"] = "REJECT"
+        overridden["distinguishResult"] = "REJECT"
+        overridden["message"] = (
+            "有效发票金额无法确认，可能是模型服务异常，请稍后重试或联系管理员处理。"
+        )
+        overridden["policiesIndex"] = ""
+        overridden["employeeSuggestionTips"] = (
+            "【模型异常】请稍后重试；如问题持续，请联系管理员处理。"
+        )
+        overridden["problem_category"] = "模型服务异常"
+        overridden["optimization_action_category"] = "【稍后重试】【联系管理员】"
     else:
         overridden["distinguish_result"] = "REJECT"
         overridden["distinguishResult"] = "REJECT"
@@ -364,6 +412,7 @@ def _build_audit_logs(
     invoice_pairs: list[tuple[dict[str, Any], dict[str, Any]]],
     *,
     is_amount_sufficient: bool | None = None,
+    amount_status_available: bool = False,
     apply_amount: float | None = None,
     valid_invoice_total: float | None = None,
     is_gift_count_reasonable: bool | None = None,
@@ -397,14 +446,15 @@ def _build_audit_logs(
                 if reason_code == "E31":
                     if not is_last:
                         continue
-                    if is_amount_sufficient is not None:
-                        rule_result = _override_e31_rule_result(
-                            rule_result,
-                            is_amount_sufficient=bool(is_amount_sufficient),
-                            apply_amount=apply_amount,
-                            valid_invoice_total=valid_invoice_total,
-                            expense_profile=expense_profile,
-                        )
+                    # E31 不能以 FAILED 回写。即使调用方没有提供整单金额状态，
+                    # 也按“金额无法确认”写成 REJECT，禁止默认通过。
+                    rule_result = _override_e31_rule_result(
+                        rule_result,
+                        is_amount_sufficient=is_amount_sufficient,
+                        apply_amount=apply_amount,
+                        valid_invoice_total=valid_invoice_total,
+                        expense_profile=expense_profile,
+                    )
 
                 if reason_code == "W33":
                     # W33 是核销单级规则，只在最后一张发票回写最终结果。
@@ -436,7 +486,10 @@ def _build_audit_logs(
                         "auditContent": rule_result.get("audit_content") or rule_result.get("auditContent"),
                         "distinguishContent": rule_result.get("distinguish_content") or rule_result.get("distinguishContent"),
                         "distinguishResult": _normalize_rule_distinguish_result(
-                            rule_result.get("distinguish_result") or rule_result.get("distinguishResult")
+                            rule_result.get("distinguish_result") or rule_result.get("distinguishResult"),
+                            reason_code=str(
+                                rule_result.get("reason_code") or rule_result.get("reasonCode") or ""
+                            ),
                         )
                         or result.get("decisionStatus"),
                         "message": rule_result.get("message") or result.get("errorMessage"),
@@ -497,7 +550,8 @@ def _build_audit_logs(
                         catalog_rule_result.update(
                             {
                                 "distinguishResult": _normalize_rule_distinguish_result(
-                                    overridden_w33.get("distinguish_result")
+                                    overridden_w33.get("distinguish_result"),
+                                    reason_code="W33",
                                 ),
                                 "message": overridden_w33.get("message", ""),
                                 "specificProblemDes": overridden_w33.get("message", ""),
@@ -610,6 +664,7 @@ def _build_audit_invoice_infos(
     invoice_pairs: list[tuple[dict[str, Any], dict[str, Any]]],
     *,
     is_amount_sufficient: bool | None = None,
+    amount_status_available: bool = False,
     apply_amount: float | None = None,
     valid_invoice_total: float | None = None,
     is_gift_count_reasonable: bool | None = None,
@@ -626,10 +681,10 @@ def _build_audit_invoice_infos(
         current_audit_invoice_file = _resolve_current_audit_invoice_file(preparation, prepared_input)
         decision_output = dict(result.get("decisionOutput") or {})
 
-        if is_last and is_amount_sufficient is not None and "amount_result" in decision_output:
+        if is_last and "amount_result" in decision_output:
             overridden_amount_result = _override_e31_rule_result(
                 decision_output["amount_result"],
-                is_amount_sufficient=bool(is_amount_sufficient),
+                is_amount_sufficient=is_amount_sufficient,
                 apply_amount=apply_amount,
                 valid_invoice_total=valid_invoice_total,
                 expense_profile=expense_profile,
@@ -1035,8 +1090,123 @@ def _extract_rule_results(decision_output: Mapping[str, Any]) -> list[dict[str, 
     rule_results: list[dict[str, Any]] = []
     for value in decision_output.values():
         if isinstance(value, Mapping) and _is_rule_result(value):
-            rule_results.append(dict(value))
+            normalized = _normalize_model_failure_rule_result(value)
+            reason_code = str(
+                normalized.get("reason_code") or normalized.get("reasonCode") or ""
+            ).strip().upper()
+            status = str(
+                normalized.get("distinguish_result")
+                or normalized.get("distinguishResult")
+                or ""
+            ).strip().lower()
+
+            # 回写协议中 E31 不允许暴露 FAILED；金额无法确认统一按 REJECT。
+            if reason_code == "E31" and status == "failed":
+                normalized["distinguish_result"] = "REJECT"
+                normalized["distinguishResult"] = "REJECT"
+                normalized["message"] = normalized.get("message") or (
+                    "有效发票金额无法确认，可能是模型服务异常，请稍后重试或联系管理员处理。"
+                )
+                normalized["employeeSuggestionTips"] = normalized.get(
+                    "employeeSuggestionTips"
+                ) or "【模型异常】请稍后重试；如问题持续，请联系管理员处理。"
+                normalized["problem_category"] = normalized.get(
+                    "problem_category"
+                ) or "模型服务异常"
+                normalized["optimization_action_category"] = normalized.get(
+                    "optimization_action_category"
+                ) or "【稍后重试】【联系管理员】"
+
+            # W33 是弱控，历史数据即使写成 REJECT/FAILED，也只能按 WARNING
+            # 回写，避免弱控把整单升级为拒绝。
+            elif reason_code == "W33" and status in {"reject", "failed"}:
+                normalized["distinguish_result"] = "WARNING"
+                normalized["distinguishResult"] = "WARNING"
+                normalized["message"] = normalized.get("message") or (
+                    "礼品数量与接待人数的匹配结果需要人工复核。"
+                )
+
+            rule_results.append(normalized)
     return rule_results
+
+
+def _normalize_model_failure_rule_result(value: Mapping[str, Any]) -> dict[str, Any]:
+    """Map legacy LLM ``FAILED`` rows to the business status contract.
+
+    The graph now emits E36=REJECT and W31=WARNING directly.  This normalizer
+    keeps old graph/runtime payloads safe during rolling upgrades and ensures a
+    model outage can never be mistaken for a generic FAILED or a pass.
+    """
+    result = dict(value)
+    reason_code = str(
+        result.get("reason_code") or result.get("reasonCode") or ""
+    ).strip().upper()
+    status = str(
+        result.get("distinguish_result") or result.get("distinguishResult") or ""
+    ).strip().lower()
+    rule_text = " ".join(
+        str(result.get(key) or "")
+        for key in (
+            "message",
+            "problem_category",
+            "problemCategory",
+            "employeeSuggestionTips",
+            "suggestion",
+        )
+    ).lower()
+    model_failure = any(
+        token in rule_text
+        for token in ("模型服务", "模型异常", "模型失败", "llm", "model service", "model failure")
+    )
+    if reason_code == "E31" and (status == "failed" or model_failure):
+        result["distinguish_result"] = "REJECT"
+        result["distinguishResult"] = "REJECT"
+        result["message"] = result.get("message") or (
+            "有效发票金额无法确认，可能是模型服务异常，请稍后重试或联系管理员处理。"
+        )
+        result["policiesIndex"] = result.get("policiesIndex") or ""
+        result["employeeSuggestionTips"] = result.get("employeeSuggestionTips") or (
+            "【模型异常】请稍后重试；如问题持续，请联系管理员处理。"
+        )
+        result["problem_category"] = result.get("problem_category") or "模型服务异常"
+        result["optimization_action_category"] = (
+            result.get("optimization_action_category") or "【稍后重试】【联系管理员】"
+        )
+    elif reason_code == "W33" and status in {"reject", "failed"}:
+        result["distinguish_result"] = "WARNING"
+        result["distinguishResult"] = "WARNING"
+        result["message"] = result.get("message") or (
+            "礼品数量与接待人数的匹配结果需要人工复核。"
+        )
+    elif reason_code == "E36" and (status == "failed" or model_failure):
+        result["distinguish_result"] = "REJECT"
+        result["distinguishResult"] = "REJECT"
+        result["message"] = result.get("message") or (
+            "模型服务暂时异常，当前内容合规检查未完成，请稍后重试或联系管理员处理。"
+        )
+        result["policiesIndex"] = result.get("policiesIndex") or ""
+        result["employeeSuggestionTips"] = result.get("employeeSuggestionTips") or (
+            "【模型异常】请稍后重试；如问题持续，请联系管理员处理。"
+        )
+        result["problem_category"] = result.get("problem_category") or "模型服务异常"
+        result["optimization_action_category"] = (
+            result.get("optimization_action_category") or "【稍后重试】【联系管理员】"
+        )
+    elif reason_code == "W31" and (status == "failed" or model_failure):
+        result["distinguish_result"] = "WARNING"
+        result["distinguishResult"] = "WARNING"
+        result["message"] = result.get("message") or (
+            "模型服务暂时异常，当前虚开发票预警检查未完成，请稍后重试或联系管理员处理。"
+        )
+        result["policiesIndex"] = result.get("policiesIndex") or ""
+        result["employeeSuggestionTips"] = result.get("employeeSuggestionTips") or (
+            "【模型异常】请稍后重试；如问题持续，请联系管理员处理。"
+        )
+        result["problem_category"] = result.get("problem_category") or "模型服务异常"
+        result["optimization_action_category"] = (
+            result.get("optimization_action_category") or "【稍后重试】【联系管理员】"
+        )
+    return result
 
 
 def _is_rule_result(value: Mapping[str, Any]) -> bool:
@@ -1051,7 +1221,11 @@ def _is_rule_result(value: Mapping[str, Any]) -> bool:
     )
 
 
-def _normalize_rule_distinguish_result(value: Any) -> str | None:
+def _normalize_rule_distinguish_result(
+    value: Any,
+    *,
+    reason_code: str | None = None,
+) -> str | None:
     if not isinstance(value, str):
         return None
 
@@ -1060,9 +1234,16 @@ def _normalize_rule_distinguish_result(value: Any) -> str | None:
         return "pass"
     if normalized in {"warn", "warning"}:
         return "warning"
+    normalized_reason_code = str(reason_code or "").strip().upper()
     if normalized in {"fail", "failed"}:
+        if normalized_reason_code == "E31":
+            return "reject"
+        if normalized_reason_code == "W33":
+            return "warning"
         return "failed"
     if normalized == "reject":
+        if normalized_reason_code == "W33":
+            return "warning"
         return "reject"
     return normalized or None
 
@@ -1080,7 +1261,12 @@ def _select_primary_rule_result(
         ]
     for candidate_status in ("reject", "failed", "warning"):
         for rule_result in rule_results:
-            if _normalize_rule_distinguish_result(rule_result.get("distinguish_result")) == candidate_status:
+            if _normalize_rule_distinguish_result(
+                rule_result.get("distinguish_result"),
+                reason_code=str(
+                    rule_result.get("reason_code") or rule_result.get("reasonCode") or ""
+                ),
+            ) == candidate_status:
                 return rule_result
     if rule_results:
         return rule_results[0]

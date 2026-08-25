@@ -165,12 +165,12 @@
       "content": {
         "expressions": [
           {
-            "id": "b86697f4-3d78-45d2-aa27-328dea50a8ad",
+            "id": "284647ea-8cc1-4e3b-9962-4266ad5e1629",
             "key": "isInvoicType",
             "value": "invoiceType in map(serviceData.expenseInvoiceTypes as c, c.manufacturerBillCode)"
           },
           {
-            "id": "3113c6c8-3665-40c8-9bd9-ad666ca556d7",
+            "id": "f37a1c55-fe0a-42dd-a32b-03a0cebcf74f",
             "key": "isCompanyExists",
             "value": "(instanceComCode ?? \"\") != \"\" and some((serviceData.companyList ?? []) as c, (c.ccode ?? c.cCode ?? c.accountingCode ?? \"\") != \"\" and (c.ccode ?? c.cCode ?? c.accountingCode ?? \"\") == (instanceComCode ?? \"\") and (orgName ?? buyerName ?? \"\") != \"\" and (orgName ?? buyerName ?? \"\") == (c.companyName ?? c.cName ?? c.cname ?? \"\"))"
           },
@@ -190,9 +190,14 @@
             "value": "not($.e01Applicable ?? false) or $.isCompanyExists"
           },
           {
-            "id": "15da20c0-9871-4b41-a5ff-9ae74a68a361",
+            "id": "c9bc7e5d-9c8f-4ba6-b5a4-68d6a91de616",
             "key": "isBuyerCompany",
             "value": "(endsWith((buyerName ?? orgName ?? \"\"), \"公司\") or endsWith((buyerName ?? orgName ?? \"\"), \"企业\") or endsWith((buyerName ?? orgName ?? \"\"), \"集团\") or endsWith((buyerName ?? orgName ?? \"\"), \"事务所\") or endsWith((buyerName ?? orgName ?? \"\"), \"商行\") or endsWith((buyerName ?? orgName ?? \"\"), \"合作社\"))"
+          },
+          {
+            "id": "064c1d6c-6fcc-45e4-9b47-be701b66a3e7",
+            "key": "isTaxExists",
+            "value": "((endsWith((buyerName ?? orgName ?? \"\"), \"公司\") or endsWith((buyerName ?? orgName ?? \"\"), \"企业\") or endsWith((buyerName ?? orgName ?? \"\"), \"集团\") or endsWith((buyerName ?? orgName ?? \"\"), \"事务所\") or endsWith((buyerName ?? orgName ?? \"\"), \"商行\") or endsWith((buyerName ?? orgName ?? \"\"), \"合作社\")) == false) or ((buyerTaxNo ?? buyerTaxNO ?? \"\") != \"\" and (instanceComCode ?? \"\") != \"\" and some((serviceData.companyList ?? []) as c, (c.ccode ?? c.cCode ?? c.accountingCode ?? \"\") == (instanceComCode ?? \"\") and (buyerTaxNo ?? buyerTaxNO ?? \"\") == (c.companyTax ?? c.taxNo ?? c.taxpayerIdentificationNumber ?? \"\")))"
           },
           {
             "id": "entertainment-e02-invoice-type-code",
@@ -205,47 +210,42 @@
             "value": "$.e02InvoiceTypeCode in [1, 2, 3, 4, 5, 7, 11, 12, 13, 15, 19, 23, 25, 26, 27, 28, 29, 72]"
           },
           {
-            "id": "89ecf386-8736-4a73-8882-6d1c11d095d5",
-            "key": "isTaxExists",
-            "value": "((endsWith((buyerName ?? orgName ?? \"\"), \"公司\") or endsWith((buyerName ?? orgName ?? \"\"), \"企业\") or endsWith((buyerName ?? orgName ?? \"\"), \"集团\") or endsWith((buyerName ?? orgName ?? \"\"), \"事务所\") or endsWith((buyerName ?? orgName ?? \"\"), \"商行\") or endsWith((buyerName ?? orgName ?? \"\"), \"合作社\")) == false) or ((buyerTaxNo ?? buyerTaxNO ?? \"\") != \"\" and (instanceComCode ?? \"\") != \"\" and some((serviceData.companyList ?? []) as c, (c.ccode ?? c.cCode ?? c.accountingCode ?? \"\") == (instanceComCode ?? \"\") and (buyerTaxNo ?? buyerTaxNO ?? \"\") == (c.companyTax ?? c.taxNo ?? c.taxpayerIdentificationNumber ?? \"\")))"
-          },
-          {
             "id": "entertainment-e02-tax-check",
             "key": "tax_check",
             "value": "not($.e02Applicable ?? false) or $.isTaxExists"
           },
           {
-            "id": "3c3b4039-5ca7-452d-9fa2-3b258fdd964a",
+            "id": "9fa55675-8415-473f-9465-f03a9d3c7a7f",
             "key": "isAmountEnough",
             "value": "number(serviceData.auditInfo.applyAmount ?? 0) <= number(invoiceAmount ?? 0)"
           },
           {
-            "id": "40b68552-56ed-434d-adb1-d3a848492bb7",
+            "id": "f08f253a-14f9-4d60-b6c6-d14d52bac0f9",
             "key": "isCompanyBlacklist",
             "value": "salerName not in  map(serviceData.companyBlacklist as c, c.value)"
           },
           {
-            "id": "e6b4b957-7a0b-480b-9bf9-1ab5fdd50484",
+            "id": "7cec7410-49de-492f-a973-0ae25bf3e8f8",
             "key": "isWriteOff",
             "value": "invoiceNo not in map((serviceData.invoiceUsageHistory ?? []) as c, c.chequeNo)"
           },
           {
-            "id": "f3b312b1-c6dc-42e1-abc2-a99393121b42",
+            "id": "4ac306cd-8734-4c95-aac9-49786f90f385",
             "key": "isCurrentYearInvoice",
             "value": "(invoiceDate ?? \"\") != \"\" and (serviceData.auditInfo.submitTime ?? \"\") != \"\" and d(invoiceDate).year() == d(serviceData.auditInfo.submitTime).year()"
           },
           {
-            "id": "36efcb73-3a09-4f03-9226-40d31540ba37",
+            "id": "9106a0e5-dce1-432a-b4fe-2371e59bd789",
             "key": "isNotSelfExpense",
             "value": "(serviceData.e15InvoiceType.isApplicable ?? false) == false or (passengerName ?? \"\") == \"\" or (passengerName ?? \"\") != (serviceData.auditInfo.verifiUserName ?? \"\")"
           },
           {
-            "id": "c6d1bd10-87c0-428a-b334-279b39d3c331",
+            "id": "3a697d02-57ca-4e5c-aa53-88e9c027eef8",
             "key": "isGiftCountReasonable",
             "value": "((isLastInvoice ?? true) == false) or (serviceData.entertainment_data.hasGiftItem ?? false) == false or number(serviceData.entertainment_data.giftReceptionCount ?? 0) <= number(totalGoodsCount ?? sum(map((items ?? []) as i, number(i.num ?? i.quantity ?? 0))))"
           },
           {
-            "id": "ba10acfd-3689-45bf-82e0-a6aa7970fca2",
+            "id": "ff9d576a-60ee-4a08-9bdb-7cba1d98d6c1",
             "key": "isInvoiceNumberContinuous",
             "value": "(serviceData.w34InvoiceSerial.isApplicable ?? false) and (invoiceNo ?? \"\") != \"\" and ((serviceData.w34InvoiceSerial.batchHit ?? false) or some((previousW34InvoiceNumbers ?? []) as prev, (prev ?? \"\") != \"\" and abs(number(invoiceNo) - number(prev)) <= 10) or some((serviceData.w34InvoiceSerial.historyNumbers ?? []) as prev, (prev ?? \"\") != \"\" and prev != invoiceNo and abs(number(invoiceNo) - number(prev)) <= 10))"
           },
@@ -265,7 +265,7 @@
             "value": "(serviceData.entertainmentInvoiceSerial.isTaxiInvoice ?? false) and (serviceData.entertainmentInvoiceSerial.lookupFailed ?? false)"
           },
           {
-            "id": "b7589756-18b6-4947-9824-4d8982dd3e34",
+            "id": "b2bb9e24-56ca-4ec0-8ea1-2d1f01900485",
             "key": "isEntertainmentTaxiInvoiceSerialClean",
             "value": "not($.isEntertainmentTaxiSerialLookupFailed or $.isEntertainmentTaxiHistoricalConsecutive or $.isEntertainmentTaxiBatchConsecutive)"
           }
@@ -453,7 +453,7 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 {发票号} 的销货方为 “{销货方名称}”，该销货方在税务或公司风险名单中。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的销货方为 “\" + (salerName ?? \"\") + \"”，该销货方在税务或公司风险名单中。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"【更换发票】该销货方存在税务或公司风险，当前发票不能使用。请联系销货方作废原发票，并提供真实业务对应的合规发票。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
@@ -723,9 +723,9 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 {发票号} 的开票日期为 {开票日期}，本次报销提交年度为 {提交年度}。该发票不是本年度开具的发票。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 的开票日期为 \" + (invoiceDate ?? \"\") + \"，本次报销提交年度为 \" + string(d(serviceData.auditInfo.submitTime).year()) + \"。该发票不是本年度开具的发票。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2.2.3除跨年差旅外,票据不允许跨年核销使用\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【更换发票】请上传本年度{提交年度}开具的发票。若属于跨年差旅等允许例外场景，请补充跨年原因和对应行程/业务说明。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【更换发票】请上传本年度\" + string(d(serviceData.auditInfo.submitTime).year()) + \"开具的发票。若属于跨年差旅等允许例外场景，请补充跨年原因和对应行程/业务说明。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
             "a1b2c3d4-0000-0000-0000-problemcategory0": "\"跨期发票\"",
             "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【重新开票】\""
@@ -885,7 +885,7 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 {发票号} 未通过税局发票真伪查验，系统无法确认该发票为真实有效发票。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 未通过税局发票真伪查验，系统无法确认该发票为真实有效发票。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"【重新查验】如果发票刚开具，请等待 24 小时后重新提交；如果仍查验不通过，请联系开票方确认发票信息，必要时重新开票。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
@@ -904,7 +904,7 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 {发票号} 当前状态为 已作废，已不能作为有效发票报销。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 当前状态为 已作废，已不能作为有效发票报销。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"【重新开票】该发票已作废，不能报销。请联系销货方重新开具有效发票后再上传。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
@@ -923,7 +923,7 @@
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 {发票号} 当前状态为 已红冲，已不能作为有效发票报销。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据 发票号 \" + (invoiceNo ?? \"\") + \" 当前状态为 已红冲，已不能作为有效发票报销。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"【重新开票】该发票已被红冲，不能报销。请联系销货方重新开具未红冲、未作废的有效发票。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
@@ -1028,7 +1028,7 @@
         "hitPolicy": "first",
         "rules": [
           {
-            "_id": "86d92f74-d2fe-403e-892c-c39bf26ba8e8",
+            "_id": "17fad19f-dc8a-4e48-b73c-37d72040b327",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
@@ -1047,7 +1047,7 @@
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
-            "_id": "5cbb8809-ef76-4179-a23d-c30906df9b7d",
+            "_id": "7436aa2b-974f-4843-8750-4d6525d2c8c9",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
@@ -1163,7 +1163,7 @@
         "hitPolicy": "first",
         "rules": [
           {
-            "_id": "651cf020-526a-4316-a594-30d34889f8ab",
+            "_id": "fafb7870-3dd0-46fd-9e2a-284f70dfb85e",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
@@ -1182,7 +1182,7 @@
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
-            "_id": "c610067b-5cb6-4e5f-97bd-ae45b13bcbf4",
+            "_id": "c7bda982-7d7e-463b-9748-e68994f46cc4",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
@@ -1298,7 +1298,7 @@
         "hitPolicy": "first",
         "rules": [
           {
-            "_id": "723a2aff-903f-4dba-a887-ab6489daea28",
+            "_id": "7098ebdb-392e-4b26-a347-92a3cb7f5222",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
@@ -1317,7 +1317,7 @@
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
-            "_id": "ab0a8a37-c743-4331-9638-cc9b20561aae",
+            "_id": "b5f4e12e-7316-4307-bad8-0550b8e0fde2",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
@@ -1433,7 +1433,7 @@
         "hitPolicy": "first",
         "rules": [
           {
-            "_id": "ef513b97-9e15-4cc2-ac47-5cead280ee35",
+            "_id": "436b23d9-96f2-4345-b4d6-3dc196c9ffd3",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
@@ -1452,7 +1452,7 @@
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
-            "_id": "84007976-f793-4a49-9b9b-165795b34121",
+            "_id": "7b633913-df2d-4fb9-b807-1ab69d132789",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
@@ -1568,7 +1568,7 @@
         "hitPolicy": "first",
         "rules": [
           {
-            "_id": "98517efd-ea70-4c25-8414-9087d965f7ba",
+            "_id": "d4964909-ef68-479d-b435-5e5db7de436a",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
@@ -1587,7 +1587,7 @@
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
-            "_id": "0b944cbb-c110-4f6a-a655-be2f96403de5",
+            "_id": "6c099dcc-730d-4e31-971a-ba645cebe1ae",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
@@ -1698,9 +1698,144 @@
       }
     },
     {
+      "type": "decisionTableNode",
+      "content": {
+        "hitPolicy": "first",
+        "rules": [
+          {
+            "_id": "45bb7cc7-9327-41cf-b2dd-f380533b3400",
+            "_description": "",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E34\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查本核销单内出租车发票号码是否存在连号\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
+            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+          },
+          {
+            "_id": "891eb62b-ab14-4fb2-9c22-4fb2f71dfce1",
+            "_description": "",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E34\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查本核销单内出租车发票号码是否存在连号\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
+            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "(serviceData.entertainmentInvoiceSerial.lookupFailed ?? false) ? \"出租车发票历史连号接口查询失败，已自动重试但仍未成功，无法完成 E34 连号稽核，请稍后重试或联系财务处理。\" : (\"本次报销中存在出租车发票连号，发票号 \" + (invoiceNo ?? \"\") + \" 与\" + (serviceData.entertainmentInvoiceSerial.relationDescription ?? \"本核销单中的其他出租车发票\") + \" 存在连号关系，存在异常报销风险。\")",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范\\n所有费用报销须提供真实、合法、合规的票据。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请确认票据是否真实对应本次业务。无法说明合理业务原因的，请删除相关票据；保留提交的，系统将记录并转财务复核。\"",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"连号票据\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【删除票据】【风险记录】\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+          }
+        ],
+        "inputs": [
+          {
+            "id": "dea9a1bc-66ae-47b3-885f-9e9a1bb07571",
+            "name": "出租车发票号码是否存在连号",
+            "field": "isEntertainmentTaxiInvoiceSerialClean"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "f88cbb46-eb13-4ceb-9c68-0983f58e985f",
+            "name": "核销单号",
+            "field": "instance_code"
+          },
+          {
+            "id": "48a29115-f542-44d3-8c02-3ff71e19ee38",
+            "name": "稽核代码",
+            "field": "reason_code"
+          },
+          {
+            "id": "f35ede49-0eae-4dda-b39e-11a11383697a",
+            "name": "识别结果（warning  reject   pass）",
+            "field": "distinguish_result"
+          },
+          {
+            "id": "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e",
+            "name": "稽核内容",
+            "field": "audit_content"
+          },
+          {
+            "id": "14801e5c-ebef-43a4-a56a-23cb5adf4a83",
+            "name": "稽核类型",
+            "field": "audit_type"
+          },
+          {
+            "id": "d9a8e0e2-8a13-4a39-b50e-c339519e811e",
+            "name": "识别内容",
+            "field": "distinguish_content"
+          },
+          {
+            "id": "f47902a7-1dc2-41c9-8375-fa15174317bd",
+            "name": "发票文件主键",
+            "field": "invoice_file_id"
+          },
+          {
+            "id": "629d6a9c-0e78-40c1-baef-0abea4b1e67f",
+            "name": "发票信息主键",
+            "field": "invoice_info_id"
+          },
+          {
+            "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
+            "name": "日志内容",
+            "field": "message"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-regulation0",
+            "name": "制度",
+            "field": "policiesIndex"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
+            "name": "建议",
+            "field": "employeeSuggestionTips"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
+            "name": "问题分类",
+            "field": "problem_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
+            "name": "优化动作分类",
+            "field": "optimization_action_category"
+          },
+          {
+            "id": "a1b2c3d4-0000-0000-0000-createtime0",
+            "name": "创建时间",
+            "field": "create_time"
+          }
+        ],
+        "passThrough": false,
+        "inputField": null,
+        "outputPath": "taxi_invoice_serial_result",
+        "executionMode": "single"
+      },
+      "id": "ent-taxi-invoice-serial-check",
+      "name": "出租车发票连号检查",
+      "position": {
+        "x": 660,
+        "y": 1280
+      }
+    },
+    {
       "type": "functionNode",
       "content": {
-        "source": "export const handler = async (input) => {\n  // 发票内容唯一使用数据准备阶段由 items[*].goodsName 汇总出的单据级 goodsName。\n  const goodsName = String(input.goodsName ?? '');\n  // 用 JSON.stringify 注入，避免商品名称中的反引号或 ${...} 破坏模板字符串。\n  const goodsNameForPrompt = JSON.stringify(goodsName);\n\n  const optimizedPrompt = `# 角色\n你是企业费用制度合规审核专家，负责判断业务招待费发票【项目名称】是否命中公司制度的禁止报销清单。\n\n# 审核范围\n只根据下面给出的发票项目名称判断，不要根据金额、销货方、发票类型或关键词的单独出现做推断。\n公司制度明确禁止报销的项目为：\n1. 黄金（作为贵金属、金条、金币、黄金制品等）；\n2. 珠宝；\n3. 首饰；\n4. 茅台；\n5. 五粮液；\n6. 礼品卡；\n7. 充值卡（包括明确属于预付/储值/充值卡的项目）。\n\n# 语义判断要求（非常重要）\n这是语义审核，不是字符串包含判断：\n- “黄金针菇”是蔬菜，不是黄金，必须通过；\n- “黄金饰品”“黄金手链”“黄金摆件”属于黄金/首饰，必须不通过；\n- “珠宝首饰”“钻石珠宝”等明确属于珠宝或首饰，必须不通过；\n- “茅台酒”“五粮液白酒”明确属于对应品牌，必须不通过；\n- 只要项目名称明确出现品牌“茅台”或“五粮液”，无论后面是白酒、红酒、干红、系列名称或其他商品描述，均视为命中禁止清单；例如“茅台老树S15干红葡萄酒”必须返回 prohibited_item；\n- 仅因出现“黄金”二字但实际是食品、植物、地名或其他普通商品（例如黄金针菇、黄金果），不能判为不通过；\n- 仅有“礼品”二字不等于礼品卡；只有明确是礼品卡、充值卡或预付/储值卡等卡类/资金预存项目时才不通过；\n- 项目名称含义不清、无法确认命中禁止清单时，默认通过；\n- 多个项目名称中只要有一个明确命中禁止清单，就判定不通过。\n\n# 输出要求\n必须只返回一个标准 JSON 对象，不得返回 Markdown、解释、推理过程或其他文字：\n{\n  \"passed\": true 或 false,\n  \"violationType\": \"none\"、\"prohibited_item\" 或 \"recharge_card\"\n}\n\n字段约束：\n- passed=true 时，violationType 必须为 \"none\"；\n- 命中黄金、珠宝、首饰、茅台、五粮液时，violationType 返回 \"prohibited_item\"；\n- 命中礼品卡、充值卡或明确的预付/储值卡时，violationType 返回 \"recharge_card\"。\n\n# 待审核的发票项目名称（JSON 字符串）\n${goodsNameForPrompt}`;\n\n  return {\n    prompt: optimizedPrompt,\n    context: input.context || {}\n  };\n};\n"
+        "source": "export const handler = async (input) => {\n  // 发票内容唯一使用数据准备阶段由 items[*].goodsName 汇总出的单据级 goodsName。\n  const goodsName = String(input.goodsName ?? '');\n  const items = Array.isArray(input.items) ? input.items : [];\n  const rawTotalAmount = input.totalAmount ?? 0;\n  const parsedTotalAmount = parseFloat(rawTotalAmount);\n  const totalAmount = Number.isFinite(parsedTotalAmount) ? parsedTotalAmount : 0;\n  // 用 JSON.stringify 注入，避免商品名称或明细文本破坏模板字符串。\n  const goodsNameForPrompt = JSON.stringify(goodsName);\n  const itemsForPrompt = JSON.stringify(items);\n\n  const optimizedPrompt = `# 角色\n你是企业费用制度合规审核专家，负责判断业务招待费发票【项目名称】是否命中公司制度的禁止报销清单，并计算发票有效可报销金额。\n\n# 审核范围\n只根据下面给出的发票项目名称和明细金额判断，不要根据销货方、发票类型或关键词的单独出现做推断。\n公司制度明确禁止报销的项目为：\n1. 黄金（作为贵金属、金条、金币、黄金制品等）；\n2. 珠宝；\n3. 首饰；\n4. 茅台；\n5. 五粮液；\n6. 礼品卡；\n7. 充值卡（包括明确属于预付/储值/充值卡的项目）。\n\n# 语义判断要求（非常重要）\n这是语义审核，不是字符串包含判断：\n- “黄金针菇”是蔬菜，不是黄金，必须通过；\n- “黄金饰品”“黄金手链”“黄金摆件”属于黄金/首饰，必须不通过；\n- “珠宝首饰”“钻石珠宝”等明确属于珠宝或首饰，必须不通过；\n- “茅台酒”“五粮液白酒”明确属于对应品牌，必须不通过；\n- 只要项目名称明确出现品牌“茅台”或“五粮液”，无论后面是白酒、红酒、干红、系列名称或其他商品描述，均视为命中禁止清单；例如“茅台老树S15干红葡萄酒”必须返回 prohibited_item；\n- 仅因出现“黄金”二字但实际是食品、植物、地名或其他普通商品（例如黄金针菇、黄金果），不能判为不通过；\n- 仅有“礼品”二字不等于礼品卡；只有明确是礼品卡、充值卡或预付/储值卡等卡类/资金预存项目时才不通过；\n- 项目名称含义不清、无法确认命中禁止清单时，默认通过；\n- 多个项目名称中只要有一个明确命中禁止清单，就判定不通过。\n\n# 有效金额计算要求\n- 发票含税总额为 ${totalAmount} 元，这是最终金额上限和金额校验基准；\n- 必须逐项查看 items 中的 goodsName、detailAmount、taxAmount；\n- 标准 OCR 中 detailAmount 通常是不含税金额，单项含税金额应按 detailAmount + taxAmount 计算；若 taxAmount 缺失，则使用 detailAmount；\n- 有效金额 finalAmount = 发票含税总额 - 命中禁止清单项目的含税金额之和，并限制在 0 至发票含税总额之间；\n- 如果所有项目均未命中禁止清单、items 为空或无法确认任何禁止项目，finalAmount 必须等于发票含税总额；\n- 如果整张发票均为禁止项目，finalAmount 返回 0；\n- finalAmount 必须是非负数字，不能省略，不能返回 null、字符串说明或估算值；passed=true 时 finalAmount 必须与发票含税总额一致。\n\n# 输出要求\n必须只返回一个标准 JSON 对象，不得返回 Markdown、解释、推理过程或其他文字：\n{\n  \"passed\": true 或 false,\n  \"violationType\": \"none\"、\"prohibited_item\" 或 \"recharge_card\",\n  \"finalAmount\": 有效可报销金额（数字）\n}\n\n字段约束：\n- passed=true 时，violationType 必须为 \"none\"；\n- 命中黄金、珠宝、首饰、茅台、五粮液时，violationType 返回 \"prohibited_item\"；\n- 命中礼品卡、充值卡或明确的预付/储值卡时，violationType 返回 \"recharge_card\"。\n\n# 待审核的发票项目名称（JSON 字符串）\n${goodsNameForPrompt}\n\n# 待审核的发票明细（JSON 数组；detailAmount 为金额，taxAmount 为税额）\n${itemsForPrompt}`;\n\n  // functionNode 的下游只会拿到本节点返回值，不能依赖 input.prev 或\n  // 自动回溯 request 节点。因此把金额和明细显式透传给 LLM 节点，\n  // 否则网关无法校验 finalAmount，所有 E36 都会被误判为模型失败。\n  return {\n    prompt: optimizedPrompt,\n    context: input.context || {},\n    totalAmount: input.totalAmount ?? null,\n    items,\n    goodsName,\n    invoiceNo: input.invoiceNo ?? '',\n    instance_code: input.instance_code ?? null,\n    invoice_file_id: input.invoice_file_id ?? null,\n    invoice_info_id: input.invoice_info_id ?? null\n  };\n};\n"
       },
       "id": "ent-content-compliance-prompt",
       "name": "招待费内容合规prompt",
@@ -1712,7 +1847,7 @@
     {
       "type": "functionNode",
       "content": {
-        "source": "import http from 'http';\r\n\r\nexport const handler = async (input) => {\r\n  try {\r\n    const context = input && input.context ? input.context : {};\r\n    if (!context.llmGatewayUrl) {\r\n      throw new Error('llmGatewayUrl not injected in context; configure NODE_GATEWAY_URL in .env');\r\n    }\r\n    const LOCAL_LLM_URL = context.llmGatewayUrl;\r\n    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\r\n\r\n    if (!prompt) {\r\n      throw new Error('missing prompt from previous component output');\r\n    }\r\n\r\n    const payload = {\r\n      prompt\r\n    };\r\n\r\n    if (input.systemPrompt || context.systemPrompt) {\r\n      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\r\n    }\r\n\r\n    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\r\n      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\r\n    }\r\n\r\n    if (input.context && input.context.runId) { payload.runId = input.context.runId; }\r\n    if (input.context && input.context.receiptCode) { payload.receiptCode = input.context.receiptCode; }\r\n    if (input.context && input.context.invoiceKey) { payload.invoiceKey = input.context.invoiceKey; }\r\n    const response = await http.post(LOCAL_LLM_URL, payload);\r\n\r\n    if (!response || response.status < 200 || response.status >= 300) {\r\n      throw new Error('local llm service failed at ' + LOCAL_LLM_URL + ': ' + (response && response.status ? response.status : 'unknown'));\r\n    }\r\n\r\n    const result = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});\r\n\r\n    return {\r\n      llm_status: result.llmStatus || 'error',\r\n      llm_result: result.llmResult || null,\r\n      raw_content: result.rawContent || null,\r\n      error_message: result.errorMessage || null\r\n    };\r\n  } catch (error) {\r\n    return {\r\n      llm_status: 'error',\r\n      llm_result: null,\r\n      raw_content: null,\r\n      error_message: error && error.message ? error.message : String(error)\r\n    };\r\n  }\r\n};\r\n"
+        "source": "import http from 'http';\r\n\r\nexport const handler = async (input) => {\r\n  try {\r\n    const context = input && input.context ? input.context : {};\r\n    if (!context.llmGatewayUrl) {\r\n      throw new Error('llmGatewayUrl not injected in context; configure NODE_GATEWAY_URL in .env');\r\n    }\r\n    const LOCAL_LLM_URL = context.llmGatewayUrl;\r\n    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\r\n    const invoiceTotalAmount = input.totalAmount ?? (input.prev && input.prev.totalAmount);\r\n\r\n    if (!prompt) {\r\n      throw new Error('missing prompt from previous component output');\r\n    }\r\n\r\n    const payload = {\r\n      prompt,\r\n      requiredFields: ['passed', 'finalAmount'],\r\n      invoiceTotalAmount,\r\n      requirePassedFinalAmountMatchesTotal: true\r\n    };\r\n\r\n    if (input.systemPrompt || context.systemPrompt) {\r\n      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\r\n    }\r\n\r\n    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\r\n      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\r\n    }\r\n\r\n    if (input.context && input.context.runId) { payload.runId = input.context.runId; }\r\n    if (input.context && input.context.receiptCode) { payload.receiptCode = input.context.receiptCode; }\r\n    if (input.context && input.context.invoiceKey) { payload.invoiceKey = input.context.invoiceKey; }\r\n    const response = await http.post(LOCAL_LLM_URL, payload);\r\n\r\n    if (!response || response.status < 200 || response.status >= 300) {\r\n      throw new Error('local llm service failed at ' + LOCAL_LLM_URL + ': ' + (response && response.status ? response.status : 'unknown'));\r\n    }\r\n\r\n    const result = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});\r\n\r\n    return {\r\n      llm_status: result.llmStatus || 'error',\r\n      llm_result: result.llmResult || null,\r\n      raw_content: result.rawContent || null,\r\n      error_message: result.errorMessage || null\r\n    };\r\n  } catch (error) {\r\n    return {\r\n      llm_status: 'error',\r\n      llm_result: null,\r\n      raw_content: null,\r\n      error_message: error && error.message ? error.message : String(error)\r\n    };\r\n  }\r\n};\r\n"
       },
       "id": "ent-content-compliance-llm",
       "name": "调用llm",
@@ -1726,7 +1861,7 @@
       "content": {
         "expressions": [
           {
-            "id": "fab50322-1801-4b9b-8a6c-37a3699638ec",
+            "id": "9c3989f1-01aa-4f48-b499-7684c6efa976",
             "key": "contentCheckResult",
             "value": "(llm_status ?? \"error\") == \"success\" ? (((llm_result ?? {}).passed == true) ? \"pass\" : (((llm_result ?? {}).violationType == \"recharge_card\") ? \"recharge_card\" : \"prohibited_item\")) : \"error\""
           }
@@ -1749,26 +1884,27 @@
         "hitPolicy": "first",
         "rules": [
           {
-            "_id": "2dfca6e5-38af-442a-a05d-92cac9151587",
+            "_id": "983995c5-bce5-4b4c-b90e-ab771bbb411e",
             "_description": "LLM调用失败",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"error\"",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E36\"",
-            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"FAILED\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
             "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票内容是否含禁止核销内容或充值卡信息\"",
             "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
-            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"模型服务暂时异常，当前内容合规检查未完成，请联系管理员处理。\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"模型服务暂时异常，当前内容合规检查未完成，请联系管理员处理。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"模型服务暂时异常，当前内容合规检查未完成，请稍后重试或联系管理员处理。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【模型异常】请稍后重试；如问题持续，请联系管理员处理。\"",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"模型服务异常\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【稍后重试】【联系管理员】\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "344a0dff-93a3-4ed3-9e24-0cf2cd544911": "null"
           },
           {
-            "_id": "14410e33-0af2-43a0-a581-9b654ccd06a5",
+            "_id": "7db47da7-f47a-4d1e-b597-e703e5a28fe1",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"pass\"",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
@@ -1784,10 +1920,11 @@
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
             "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
             "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "344a0dff-93a3-4ed3-9e24-0cf2cd544911": "llm_result.finalAmount"
           },
           {
-            "_id": "45f29ce5-6860-41b3-9027-c2ac44231149",
+            "_id": "f46dc0c6-b749-4c68-951e-2835a674eba1",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"prohibited_item\"",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
@@ -1803,10 +1940,11 @@
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"【删除发票】删除本票据，不得上传禁止报销范围内的发票\"",
             "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
             "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "344a0dff-93a3-4ed3-9e24-0cf2cd544911": "llm_result.finalAmount"
           },
           {
-            "_id": "c8cf3336-7141-42c7-bbba-d502c4fcf119",
+            "_id": "791bc296-b0ea-4962-9302-49767bbe77aa",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"recharge_card\"",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
@@ -1822,7 +1960,8 @@
             "a1b2c3d4-0000-0000-0000-suggestion0": "\"【删除发票】删除本票据，不得上传礼品卡、充值卡或其他预付/储值卡类发票\"",
             "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
             "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "344a0dff-93a3-4ed3-9e24-0cf2cd544911": "llm_result.finalAmount"
           }
         ],
         "inputs": [
@@ -1833,6 +1972,11 @@
           }
         ],
         "outputs": [
+          {
+            "id": "344a0dff-93a3-4ed3-9e24-0cf2cd544911",
+            "name": "发票可用额度",
+            "field": "invoice_finalAmount"
+          },
           {
             "id": "f88cbb46-eb13-4ceb-9c68-0983f58e985f",
             "name": "核销单号",
@@ -1922,7 +2066,7 @@
         "hitPolicy": "first",
         "rules": [
           {
-            "_id": "0e4a728c-9319-453c-aab1-cc27e7afd780",
+            "_id": "06e1c0f0-8736-4da1-a40d-7a7c12a11b08",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"pass\"",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
@@ -1941,7 +2085,7 @@
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
-            "_id": "5490ddac-95f5-42c6-8d18-48b01912786c",
+            "_id": "fd061253-db3a-4705-9086-366fef7c920c",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"prohibited_item\"",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
@@ -1960,7 +2104,7 @@
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
-            "_id": "e710fa43-8c51-40eb-9329-2058310783d3",
+            "_id": "a1189a86-c599-486d-bbf1-a06aee8b8ea7",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"recharge_card\"",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
@@ -2075,17 +2219,17 @@
       "content": {
         "expressions": [
           {
-            "id": "6d0cd40a-87fa-458e-bc2f-f02311e1b7e9",
+            "id": "f61a5827-0c32-4da4-8930-cec172263130",
             "key": "isHighRiskByRule",
             "value": "contains((serviceData.auditInfo.expenseItemName ?? \"\"), \"营销活动\") and (contains((serviceData.auditInfo.deptName ?? \"\"), \"EBG\") or contains((serviceData.auditInfo.deptName ?? \"\"), \"TBU\")) and contains((goodsName ?? \"\"), \"餐饮\") and number(serviceData.auditInfo.submitTime ?? \"\") - number(invoiceDate ?? \"\") <= 2 and (invoiceTaxRate == \"0%\" or invoiceTaxRate == \"1%\" or invoiceTaxRate == \"3%\") and number(invoiceAmount ?? 0) >= 900"
           },
           {
-            "id": "341954af-88dc-428e-b79f-ae6d804a447e",
+            "id": "1ae990e3-9e5b-4ced-a13c-f663f63ca24a",
             "key": "isRecentlyRegistered",
             "value": "(d(serviceData.salerCompanyInfo.establishDate ?? \"\").isValid() and d(invoiceDate ?? \"\").isValid()) ? (d(invoiceDate).isSameOrAfter(d(serviceData.salerCompanyInfo.establishDate)) and d(invoiceDate).isSameOrBefore(d(serviceData.salerCompanyInfo.establishDate).add(6, \"month\"))) : false"
           },
           {
-            "id": "15ba1559-b2e2-481c-924a-e82ccd6e152a",
+            "id": "de21b7b3-d140-4e46-8138-d5a58ec47e17",
             "key": "needLlmAddressCheck",
             "value": "$.isHighRiskByRule or $.isRecentlyRegistered"
           }
@@ -2117,7 +2261,7 @@
     {
       "type": "functionNode",
       "content": {
-        "source": "import http from 'http';\r\n\r\nexport const handler = async (input) => {\r\n  try {\r\n    // 如果上游标记 skipLlm，直接返回通过\r\n    if (input.skipLlm === true) {\r\n      return {\r\n        llm_status: 'success',\r\n        llm_result: { passed: true, riskReason: '无需检查' },\r\n        raw_content: null,\r\n        error_message: null\r\n      };\r\n    }\r\n    const context = input && input.context ? input.context : {};\r\n    if (!context.llmGatewayUrl) {\r\n      throw new Error('llmGatewayUrl not injected in context; configure NODE_GATEWAY_URL in .env');\r\n    }\r\n    const LOCAL_LLM_URL = context.llmGatewayUrl;\r\n    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\r\n\r\n    if (!prompt) {\r\n      throw new Error('missing prompt from previous component output');\r\n    }\r\n\r\n    const payload = {\r\n      prompt\r\n    };\r\n\r\n    if (input.systemPrompt || context.systemPrompt) {\r\n      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\r\n    }\r\n\r\n    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\r\n      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\r\n    }\r\n\r\n    if (input.context && input.context.runId) { payload.runId = input.context.runId; }\r\n    if (input.context && input.context.receiptCode) { payload.receiptCode = input.context.receiptCode; }\r\n    if (input.context && input.context.invoiceKey) { payload.invoiceKey = input.context.invoiceKey; }\r\n    const response = await http.post(LOCAL_LLM_URL, payload);\r\n\r\n    if (!response || response.status < 200 || response.status >= 300) {\r\n      throw new Error('local llm service failed at ' + LOCAL_LLM_URL + ': ' + (response && response.status ? response.status : 'unknown'));\r\n    }\r\n\r\n    const result = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});\r\n\r\n    return {\r\n      llm_status: result.llmStatus || 'error',\r\n      llm_result: result.llmResult || null,\r\n      raw_content: result.rawContent || null,\r\n      error_message: result.errorMessage || null\r\n    };\r\n  } catch (error) {\r\n    return {\r\n      llm_status: 'error',\r\n      llm_result: null,\r\n      raw_content: null,\r\n      error_message: error && error.message ? error.message : String(error)\r\n    };\r\n  }\r\n};\r\n"
+        "source": "import http from 'http';\r\n\r\nexport const handler = async (input) => {\r\n  try {\r\n    // 如果上游标记 skipLlm，直接返回通过\r\n    if (input.skipLlm === true) {\r\n      return {\r\n        llm_status: 'success',\r\n        llm_result: { passed: true, riskReason: '无需检查' },\r\n        raw_content: null,\r\n        error_message: null\r\n      };\r\n    }\r\n    const context = input && input.context ? input.context : {};\r\n    if (!context.llmGatewayUrl) {\r\n      throw new Error('llmGatewayUrl not injected in context; configure NODE_GATEWAY_URL in .env');\r\n    }\r\n    const LOCAL_LLM_URL = context.llmGatewayUrl;\r\n    const prompt = input.prompt || context.prompt || (input.prev && input.prev.prompt) || '';\r\n\r\n    if (!prompt) {\r\n      throw new Error('missing prompt from previous component output');\r\n    }\r\n\r\n    const payload = {\r\n      prompt,\r\n      requiredFields: ['passed']\r\n    };\r\n\r\n    if (input.systemPrompt || context.systemPrompt) {\r\n      payload.systemPrompt = input.systemPrompt || context.systemPrompt;\r\n    }\r\n\r\n    if (typeof input.temperature === 'number' || typeof context.temperature === 'number') {\r\n      payload.temperature = typeof input.temperature === 'number' ? input.temperature : context.temperature;\r\n    }\r\n\r\n    if (input.context && input.context.runId) { payload.runId = input.context.runId; }\r\n    if (input.context && input.context.receiptCode) { payload.receiptCode = input.context.receiptCode; }\r\n    if (input.context && input.context.invoiceKey) { payload.invoiceKey = input.context.invoiceKey; }\r\n    const response = await http.post(LOCAL_LLM_URL, payload);\r\n\r\n    if (!response || response.status < 200 || response.status >= 300) {\r\n      throw new Error('local llm service failed at ' + LOCAL_LLM_URL + ': ' + (response && response.status ? response.status : 'unknown'));\r\n    }\r\n\r\n    const result = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});\r\n\r\n    return {\r\n      llm_status: result.llmStatus || 'error',\r\n      llm_result: result.llmResult || null,\r\n      raw_content: result.rawContent || null,\r\n      error_message: result.errorMessage || null\r\n    };\r\n  } catch (error) {\r\n    return {\r\n      llm_status: 'error',\r\n      llm_result: null,\r\n      raw_content: null,\r\n      error_message: error && error.message ? error.message : String(error)\r\n    };\r\n  }\r\n};\r\n"
       },
       "id": "ent-fraud-address-llm",
       "name": "虚开发票地址检查调用llm",
@@ -2131,14 +2275,14 @@
       "content": {
         "expressions": [
           {
-            "id": "61d53d3b-22ea-42f9-ba26-0c71b40d9c7b",
+            "id": "02f386c5-a493-46cb-b445-0b0bd807e6bb",
             "key": "llmAddressPassed",
-            "value": "(llm_status ?? \"error\") == \"success\" ? ((llm_result ?? {}).passed == true) : true"
+            "value": "(llm_status ?? \"error\") == \"success\" ? ((llm_result ?? {}).passed == true) : false"
           },
           {
-            "id": "45237546-bbf1-4d49-932c-4f38dc6f7d01",
+            "id": "d5079e6b-b918-4fa7-9320-98660ba83b59",
             "key": "isHighRiskInvoice",
-            "value": "(($.isHighRiskByRule ?? false) or ($.isRecentlyRegistered ?? false) or ((llm_status ?? \"error\") == \"success\" ? ((llm_result ?? {}).passed == false) : false)) ? \"true\" : \"false\""
+            "value": "(llm_status ?? \"error\") != \"success\" ? \"error\" : ((($.isHighRiskByRule ?? false) or ($.isRecentlyRegistered ?? false) or ((llm_result ?? {}).passed == false)) ? \"true\" : \"false\")"
           }
         ],
         "passThrough": true,
@@ -2159,7 +2303,26 @@
         "hitPolicy": "first",
         "rules": [
           {
-            "_id": "cc4d6e76-8e2a-4bd3-bff6-bc0478260adc",
+            "_id": "06dea188-abae-40a5-8901-56a027cd0c5b",
+            "_description": "",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"error\"",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"W31\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"WARNING\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查使用的发票销货方是否为高风险发票（虚开发票预警）\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
+            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"模型服务暂时异常，当前虚开发票预警检查未完成，请稍后重试或联系管理员处理。\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【模型异常】请稍后重试；如问题持续，请联系管理员处理。\"",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"模型服务异常\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【稍后重试】【联系管理员】\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+          },
+          {
+            "_id": "5f95dca2-2470-4105-8ea6-73d0c70c9a6a",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"false\"",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
@@ -2178,7 +2341,7 @@
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
           },
           {
-            "_id": "aa5e745b-1744-4029-958d-41c3dd78deab",
+            "_id": "af43ab08-8708-489c-ab26-7b65d512c267",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"true\"",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
@@ -2287,387 +2450,252 @@
         "x": 675,
         "y": 1600
       }
-    },
-    {
-      "type": "decisionTableNode",
-      "content": {
-        "hitPolicy": "first",
-        "rules": [
-          {
-            "_id": "0737e904-cfad-4cea-8243-00b63e909e18",
-            "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
-            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
-            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E34\"",
-            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查出租车发票号码是否连续或连票\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
-            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
-            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
-            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
-            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
-          },
-          {
-            "_id": "2effb426-4faa-4690-8664-823de961281f",
-            "_description": "",
-            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "false",
-            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
-            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E34\"",
-            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查出租车发票号码是否连续或连票\"",
-            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
-            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
-            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
-            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "(serviceData.entertainmentInvoiceSerial.lookupFailed ?? false) ? \"出租车发票历史连号接口查询失败，已自动重试但仍未成功，无法完成 E34 连号稽核，请稍后重试或联系财务处理。\" : (\"本次报销中存在出租车发票连号，发票号 \" + (invoiceNo ?? \"\") + \" 与\" + (serviceData.entertainmentInvoiceSerial.relationDescription ?? \"历史库或本次核销单中的其他出租车发票\") + \" 存在连号关系，存在异常报销风险。\")",
-            "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范\\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请确认票据是否真实对应本次业务。无法说明合理业务原因的，请删除相关票据；保留提交的，系统将记录并转财务复核。\"",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"连号票据\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【删除票据】【风险记录】\"",
-            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
-          }
-        ],
-        "inputs": [
-          {
-            "id": "dea9a1bc-66ae-47b3-885f-9e9a1bb07571",
-            "name": "出租车发票号码是否存在连号",
-            "field": "isEntertainmentTaxiInvoiceSerialClean"
-          }
-        ],
-        "outputs": [
-          {
-            "id": "f88cbb46-eb13-4ceb-9c68-0983f58e985f",
-            "name": "核销单号",
-            "field": "instance_code"
-          },
-          {
-            "id": "48a29115-f542-44d3-8c02-3ff71e19ee38",
-            "name": "稽核代码",
-            "field": "reason_code"
-          },
-          {
-            "id": "f35ede49-0eae-4dda-b39e-11a11383697a",
-            "name": "识别结果（warning  reject   pass）",
-            "field": "distinguish_result"
-          },
-          {
-            "id": "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e",
-            "name": "稽核内容",
-            "field": "audit_content"
-          },
-          {
-            "id": "14801e5c-ebef-43a4-a56a-23cb5adf4a83",
-            "name": "稽核类型",
-            "field": "audit_type"
-          },
-          {
-            "id": "d9a8e0e2-8a13-4a39-b50e-c339519e811e",
-            "name": "识别内容",
-            "field": "distinguish_content"
-          },
-          {
-            "id": "f47902a7-1dc2-41c9-8375-fa15174317bd",
-            "name": "发票文件主键",
-            "field": "invoice_file_id"
-          },
-          {
-            "id": "629d6a9c-0e78-40c1-baef-0abea4b1e67f",
-            "name": "发票信息主键",
-            "field": "invoice_info_id"
-          },
-          {
-            "id": "509fd9ba-3996-4e4a-9021-df6513ed6807",
-            "name": "日志内容",
-            "field": "message"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-regulation0",
-            "name": "制度",
-            "field": "policiesIndex"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-suggestion0",
-            "name": "建议",
-            "field": "employeeSuggestionTips"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-problemcategory0",
-            "name": "问题分类",
-            "field": "problem_category"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-optimizationactioncategory0",
-            "name": "优化动作分类",
-            "field": "optimization_action_category"
-          },
-          {
-            "id": "a1b2c3d4-0000-0000-0000-createtime0",
-            "name": "创建时间",
-            "field": "create_time"
-          }
-        ],
-        "passThrough": false,
-        "inputField": null,
-        "outputPath": "taxi_invoice_serial_result",
-        "executionMode": "single"
-      },
-      "id": "ent-taxi-invoice-serial-check",
-      "name": "出租车发票连号检查",
-      "position": {
-        "x": 660,
-        "y": 1280
-      }
     }
   ],
   "edges": [
     {
-      "id": "b71939bb-b436-4498-a6ae-51dad7605999",
+      "id": "d035c491-6942-49b7-bcab-c6a62a54cb0a",
       "sourceId": "9948bfb0-d9fb-416d-b9a2-b22a875094f0",
       "targetId": "c67dcb33-2750-4a43-8af7-8346612c04a9",
       "type": "edge"
     },
     {
-      "id": "a66f1aea-8156-42f7-841c-f2511aa9465b",
+      "id": "a0f1fe81-1199-4f84-b5ee-e097be521536",
       "sourceId": "c67dcb33-2750-4a43-8af7-8346612c04a9",
       "targetId": "d3046965-dbaf-41cd-ba93-0d957fe67ec8",
       "type": "edge"
     },
     {
-      "id": "54c7d4b4-aebd-4fea-af8d-370dbb86db1f",
+      "id": "fc4399ca-56cc-4b2d-a121-fdcd0fe5cd74",
       "sourceId": "d3046965-dbaf-41cd-ba93-0d957fe67ec8",
       "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
       "type": "edge"
     },
     {
-      "id": "c968c637-bd3f-43ad-91ab-d75d4c20e430",
+      "id": "42cb8110-5555-4971-b9f9-980b431eff2b",
       "sourceId": "c67dcb33-2750-4a43-8af7-8346612c04a9",
       "targetId": "d13f7062-96e4-4d74-a552-dfcc60d98ff4",
       "type": "edge"
     },
     {
-      "id": "0f6ad137-26bc-479c-8f7b-f67e857232b5",
+      "id": "03b86647-d4c4-4f81-b159-b4bc213d6df2",
       "sourceId": "d13f7062-96e4-4d74-a552-dfcc60d98ff4",
       "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
       "type": "edge"
     },
     {
-      "id": "073ef9cc-7f74-4ce8-b67a-add6a831c742",
+      "id": "f4666338-a487-440a-9f48-879d70858653",
       "sourceId": "c67dcb33-2750-4a43-8af7-8346612c04a9",
       "targetId": "invoice_type_check",
       "type": "edge"
     },
     {
-      "id": "a6a81d6c-8f3f-4a8d-9808-be843162194e",
+      "id": "c2b8d47e-c825-49de-855b-0344ab902b4a",
       "sourceId": "invoice_type_check",
       "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
       "type": "edge"
     },
     {
-      "id": "0ce8114a-aa22-4e5e-8dc3-20d9676b445b",
+      "id": "81cf1c18-6050-4631-8422-c5fb1a52d083",
       "sourceId": "c67dcb33-2750-4a43-8af7-8346612c04a9",
       "targetId": "dcc29290-4d5e-4eb9-8e77-eee31820529a",
       "type": "edge"
     },
     {
-      "id": "9aae5166-a013-431d-96f8-a9d1d257904f",
+      "id": "53467553-c2e5-46a7-9dbc-749a5e963d13",
       "sourceId": "dcc29290-4d5e-4eb9-8e77-eee31820529a",
       "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
       "type": "edge"
     },
     {
-      "id": "9f8ac35c-7866-4ecd-b82e-3489a7357745",
+      "id": "e5a8b699-2a27-4557-bd05-d687288f2a6e",
       "sourceId": "c67dcb33-2750-4a43-8af7-8346612c04a9",
       "targetId": "0fdb068f-749a-4c67-a89f-54adb83084d6",
       "type": "edge"
     },
     {
-      "id": "13e63239-1ceb-4257-9132-04f7bf60527f",
+      "id": "7d274d8d-fd3b-4bf7-a874-27735884fd86",
       "sourceId": "0fdb068f-749a-4c67-a89f-54adb83084d6",
       "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
       "type": "edge"
     },
     {
-      "id": "1c23a208-9856-4414-9777-1ccdbd58a545",
+      "id": "e3fbde54-68cf-4af9-b08c-d926b3a3c6b6",
       "sourceId": "c67dcb33-2750-4a43-8af7-8346612c04a9",
       "targetId": "2ea2f963-44fc-4130-9632-af048b76d0b1",
       "type": "edge"
     },
     {
-      "id": "d4490d3e-f1ad-432c-943c-07fd95ded574",
+      "id": "13828d73-6222-4c59-8f5b-43b7911193a7",
       "sourceId": "2ea2f963-44fc-4130-9632-af048b76d0b1",
       "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
       "type": "edge"
     },
     {
-      "id": "b087ce3c-30cf-4b26-b834-f6848b1ead66",
+      "id": "4584628f-c400-47b7-8d51-8cb66c92d4bf",
       "sourceId": "c67dcb33-2750-4a43-8af7-8346612c04a9",
       "targetId": "a4cf2236-f43d-44a3-86ef-b90fd2ce0d33",
       "type": "edge"
     },
     {
-      "id": "b135b158-70f2-4d48-a92d-b211a0640577",
+      "id": "6205fa31-354e-4368-bc2d-19a8e5cbd5b7",
       "sourceId": "a4cf2236-f43d-44a3-86ef-b90fd2ce0d33",
       "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
       "type": "edge"
     },
     {
-      "id": "41ce2aa4-f579-4388-9fab-06b0a6d43399",
+      "id": "f6ee83a4-343e-4fc5-9ed4-55da48825768",
       "sourceId": "c67dcb33-2750-4a43-8af7-8346612c04a9",
       "targetId": "ent-self-expense-check",
       "type": "edge"
     },
     {
-      "id": "a78d5886-c894-4b6c-a1ce-76b91c078a69",
+      "id": "c0ce0fbb-ad5a-486f-815d-aacf08e68d56",
       "sourceId": "ent-self-expense-check",
       "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
       "type": "edge"
     },
     {
-      "id": "0fd447f7-49d2-42fd-a818-99648fd5c8d4",
+      "id": "84995071-a42d-4e3b-91aa-8603bdbb9e25",
       "sourceId": "c67dcb33-2750-4a43-8af7-8346612c04a9",
       "targetId": "ent-gift-count-check",
       "type": "edge"
     },
     {
-      "id": "2644680e-d0eb-4440-a83a-57f21ae8af44",
+      "id": "a9c1e482-5f98-4686-ad52-10f347654a1d",
       "sourceId": "ent-gift-count-check",
       "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
       "type": "edge"
     },
     {
-      "id": "ae44e843-7760-4ae1-9ecc-6d83159703ee",
+      "id": "3e56773a-8148-41d2-8f5e-84e28b6fa7e0",
       "sourceId": "c67dcb33-2750-4a43-8af7-8346612c04a9",
       "targetId": "ent-invoice-number-check",
       "type": "edge"
     },
     {
-      "id": "31b56571-20c8-47bb-99b8-8675f319f369",
+      "id": "b0d3db46-b3da-4773-8c45-01323c73bc73",
       "sourceId": "ent-invoice-number-check",
       "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
       "type": "edge"
     },
     {
-      "id": "c14027ee-6e4f-419e-a266-964bcac339f1",
-      "sourceId": "9948bfb0-d9fb-416d-b9a2-b22a875094f0",
-      "targetId": "f10e41a3-a2b4-479f-8fdb-4d3da38d777d",
-      "type": "edge"
-    },
-    {
-      "id": "ecb65afe-9826-4f0d-8fc7-87024ae23656",
-      "sourceId": "f10e41a3-a2b4-479f-8fdb-4d3da38d777d",
-      "targetId": "3e42eda0-70e0-4df2-8abc-6f2dbe4f2535",
-      "type": "edge"
-    },
-    {
-      "id": "8949ec6c-ef59-4f00-a9f6-f7e473418dee",
-      "sourceId": "3e42eda0-70e0-4df2-8abc-6f2dbe4f2535",
-      "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
-      "type": "edge"
-    },
-    {
-      "id": "6b269fac-005d-4b8a-bfcc-bf6e14eb5cec",
-      "sourceId": "9948bfb0-d9fb-416d-b9a2-b22a875094f0",
-      "targetId": "ent-content-compliance-prompt",
-      "type": "edge"
-    },
-    {
-      "id": "1820f4de-021b-484a-9046-06d945d80ce1",
-      "sourceId": "ent-content-compliance-prompt",
-      "targetId": "ent-content-compliance-llm",
-      "type": "edge"
-    },
-    {
-      "id": "ba98700d-9f1c-49c1-a520-4af93427983b",
-      "sourceId": "ent-content-compliance-llm",
-      "targetId": "ent-content-compliance-postprocess",
-      "type": "edge"
-    },
-    {
-      "id": "0615a5c1-1f51-431f-8a3a-c1e9351885ac",
-      "sourceId": "9948bfb0-d9fb-416d-b9a2-b22a875094f0",
-      "targetId": "ent-content-compliance-postprocess",
-      "type": "edge"
-    },
-    {
-      "id": "2e664d87-ab6f-4bdd-98da-7db30c17a309",
-      "sourceId": "ent-content-compliance-postprocess",
-      "targetId": "ent-content-compliance-check",
-      "type": "edge"
-    },
-    {
-      "id": "c9fd6e44-9787-4511-81b0-6859e8d4dc9c",
-      "sourceId": "ent-content-compliance-check",
-      "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
-      "type": "edge"
-    },
-    {
-      "id": "f9ad7433-2ba3-4543-9793-c23ccb1d9f85",
-      "sourceId": "ent-content-compliance-postprocess",
-      "targetId": "ent-recharge-card-check",
-      "type": "edge"
-    },
-    {
-      "id": "aa967224-75ca-4808-b819-29e2c2291ff6",
-      "sourceId": "ent-recharge-card-check",
-      "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
-      "type": "edge"
-    },
-    {
-      "id": "6a5d89ac-c3c0-40bc-9957-deabda6f3065",
-      "sourceId": "9948bfb0-d9fb-416d-b9a2-b22a875094f0",
-      "targetId": "ent-fraud-preprocess",
-      "type": "edge"
-    },
-    {
-      "id": "ae81e327-b512-4bb4-ab7c-9f2f9bcbf5a6",
-      "sourceId": "ent-fraud-preprocess",
-      "targetId": "ent-fraud-address-prompt",
-      "type": "edge"
-    },
-    {
-      "id": "2ba98d73-7581-4366-8e06-37d537317683",
-      "sourceId": "ent-fraud-address-prompt",
-      "targetId": "ent-fraud-address-llm",
-      "type": "edge"
-    },
-    {
-      "id": "44c12864-ad9c-4ff5-a448-51e0dbc84220",
-      "sourceId": "ent-fraud-address-llm",
-      "targetId": "ent-fraud-postprocess",
-      "type": "edge"
-    },
-    {
-      "id": "558f0405-51d8-46ba-8aec-ae1581a96dc3",
-      "sourceId": "9948bfb0-d9fb-416d-b9a2-b22a875094f0",
-      "targetId": "ent-fraud-postprocess",
-      "type": "edge"
-    },
-    {
-      "id": "bd947578-9888-4e4e-9dd4-92aeeb0bc716",
-      "sourceId": "ent-fraud-postprocess",
-      "targetId": "ent-fraud-check",
-      "type": "edge"
-    },
-    {
-      "id": "56a52f0e-5242-4d2e-82b9-15e34d2cc0a2",
-      "sourceId": "ent-fraud-check",
-      "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
-      "type": "edge"
-    },
-    {
-      "id": "8cd3b52e-3ac5-45f1-9260-97dc4e46bd54",
+      "id": "b8c3cb88-f869-448a-bd39-c651dbbc02f1",
       "sourceId": "c67dcb33-2750-4a43-8af7-8346612c04a9",
       "targetId": "ent-taxi-invoice-serial-check",
       "type": "edge"
     },
     {
-      "id": "c99c1325-be9c-4dc2-ab11-8b46c0fd1090",
+      "id": "eacb1ac2-6115-470b-92be-7137b42a6152",
       "sourceId": "ent-taxi-invoice-serial-check",
+      "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
+      "type": "edge"
+    },
+    {
+      "id": "c3b1f1b4-bab3-4ab8-9f3c-00da001d62ed",
+      "sourceId": "9948bfb0-d9fb-416d-b9a2-b22a875094f0",
+      "targetId": "f10e41a3-a2b4-479f-8fdb-4d3da38d777d",
+      "type": "edge"
+    },
+    {
+      "id": "e7aa45ed-1f9d-4317-829f-8a864530775e",
+      "sourceId": "f10e41a3-a2b4-479f-8fdb-4d3da38d777d",
+      "targetId": "3e42eda0-70e0-4df2-8abc-6f2dbe4f2535",
+      "type": "edge"
+    },
+    {
+      "id": "0a49c9ea-a379-4c0d-887d-da669ce98034",
+      "sourceId": "3e42eda0-70e0-4df2-8abc-6f2dbe4f2535",
+      "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
+      "type": "edge"
+    },
+    {
+      "id": "44436cc1-b83c-48d0-8db4-499ce4780225",
+      "sourceId": "9948bfb0-d9fb-416d-b9a2-b22a875094f0",
+      "targetId": "ent-content-compliance-prompt",
+      "type": "edge"
+    },
+    {
+      "id": "1b0d1fc4-7019-4125-ac2c-8a4738d6ba47",
+      "sourceId": "ent-content-compliance-prompt",
+      "targetId": "ent-content-compliance-llm",
+      "type": "edge"
+    },
+    {
+      "id": "1e030d17-d876-4e42-a38d-876278a74ab4",
+      "sourceId": "ent-content-compliance-llm",
+      "targetId": "ent-content-compliance-postprocess",
+      "type": "edge"
+    },
+    {
+      "id": "3b8526e8-b3a7-4666-ba63-5c7ed8eecad0",
+      "sourceId": "9948bfb0-d9fb-416d-b9a2-b22a875094f0",
+      "targetId": "ent-content-compliance-postprocess",
+      "type": "edge"
+    },
+    {
+      "id": "59ddcdd4-6fc9-4a99-8982-04604b0c596d",
+      "sourceId": "ent-content-compliance-postprocess",
+      "targetId": "ent-content-compliance-check",
+      "type": "edge"
+    },
+    {
+      "id": "2abcc7bc-0677-49cc-94a8-2838139d4657",
+      "sourceId": "ent-content-compliance-check",
+      "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
+      "type": "edge"
+    },
+    {
+      "id": "d873f919-8467-4963-8a81-ebd96e82b5c7",
+      "sourceId": "ent-content-compliance-postprocess",
+      "targetId": "ent-recharge-card-check",
+      "type": "edge"
+    },
+    {
+      "id": "d8aaab7d-888a-4d22-9607-e2067a236f3f",
+      "sourceId": "ent-recharge-card-check",
+      "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
+      "type": "edge"
+    },
+    {
+      "id": "5db9f2c9-8346-412d-b849-ad233d194e21",
+      "sourceId": "9948bfb0-d9fb-416d-b9a2-b22a875094f0",
+      "targetId": "ent-fraud-preprocess",
+      "type": "edge"
+    },
+    {
+      "id": "9bc74958-a311-47d5-b5ca-9955e4dffec4",
+      "sourceId": "ent-fraud-preprocess",
+      "targetId": "ent-fraud-address-prompt",
+      "type": "edge"
+    },
+    {
+      "id": "eda04e55-e0a7-4cc6-b7cb-8a3b88dc9d4c",
+      "sourceId": "ent-fraud-address-prompt",
+      "targetId": "ent-fraud-address-llm",
+      "type": "edge"
+    },
+    {
+      "id": "df5aa8de-a4a3-49eb-9c74-e52ad3e8e7cc",
+      "sourceId": "ent-fraud-address-llm",
+      "targetId": "ent-fraud-postprocess",
+      "type": "edge"
+    },
+    {
+      "id": "dbb7bc9d-5177-4b84-93b7-0cceff748f83",
+      "sourceId": "9948bfb0-d9fb-416d-b9a2-b22a875094f0",
+      "targetId": "ent-fraud-postprocess",
+      "type": "edge"
+    },
+    {
+      "id": "215a32dd-3db6-4fbc-91b5-bf667714aedf",
+      "sourceId": "ent-fraud-postprocess",
+      "targetId": "ent-fraud-check",
+      "type": "edge"
+    },
+    {
+      "id": "0415d976-6318-4c18-a6ff-097bb01a6923",
+      "sourceId": "ent-fraud-check",
       "targetId": "e109e75a-d107-4fd0-a8b3-e3dae7fad15b",
       "type": "edge"
     }

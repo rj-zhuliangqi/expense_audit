@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 from collections.abc import Mapping
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs
@@ -31,6 +32,12 @@ class EvaluateLlmRequest(BaseModel):
     run_id: str | None = Field(default=None, alias="runId")
     receipt_code: str | None = Field(default=None, alias="receiptCode")
     invoice_key: str | None = Field(default=None, alias="invoiceKey")
+    required_fields: list[str] = Field(default_factory=list, alias="requiredFields")
+    invoice_total_amount: Any = Field(default=None, alias="invoiceTotalAmount")
+    require_passed_final_amount_matches_total: bool = Field(
+        default=False,
+        alias="requirePassedFinalAmountMatchesTotal",
+    )
 
 
 class EvaluateLlmResponse(BaseModel):
@@ -137,23 +144,41 @@ def _build_error_message(
 def _is_number_like(value: Any) -> bool:
     if isinstance(value, bool):
         return False
-    if isinstance(value, (int, float)):
-        return True
-    if isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return False
-        try:
-            float(text)
-        except ValueError:
-            return False
-        return True
-    return False
+    if not isinstance(value, (int, float, str, Decimal)):
+        return False
+    try:
+        parsed = Decimal(str(value).replace(",", "").strip())
+    except (InvalidOperation, TypeError, ValueError):
+        return False
+    return parsed.is_finite()
 
 
-def _validate_llm_result(result: Any) -> str | None:
+def _to_decimal_number(value: Any) -> Decimal | None:
+    if not _is_number_like(value):
+        return None
+    try:
+        parsed = Decimal(str(value).replace(",", "").strip())
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    return parsed if parsed.is_finite() else None
+
+
+def _validate_llm_result(
+    result: Any,
+    *,
+    required_fields: list[str] | None = None,
+    invoice_total_amount: Any = None,
+    require_passed_final_amount_matches_total: bool = False,
+) -> str | None:
     if not isinstance(result, Mapping):
         return "llmResult must be a JSON object"
+
+    for field_name in required_fields or []:
+        field = str(field_name or "").strip()
+        if not field:
+            continue
+        if field not in result or result.get(field) is None:
+            return f"llmResult.{field} is required"
 
     # 对常用字段做轻量类型约束，不限制业务字段扩展。
     if "passed" in result and not isinstance(result.get("passed"), bool):
@@ -166,6 +191,25 @@ def _validate_llm_result(result: Any) -> str | None:
         return "llmResult.remarkPhone must be a string"
     if "matchReason" in result and not isinstance(result.get("matchReason"), str):
         return "llmResult.matchReason must be a string"
+
+    if require_passed_final_amount_matches_total:
+        total_amount = _to_decimal_number(invoice_total_amount)
+        if total_amount is None or total_amount < 0:
+            return "invoiceTotalAmount must be a finite non-negative number"
+
+        final_amount = _to_decimal_number(result.get("finalAmount"))
+        if final_amount is None:
+            return "llmResult.finalAmount must be a finite non-negative number"
+        if final_amount < 0:
+            return "llmResult.finalAmount must be non-negative"
+
+        # 票面金额按分计量，允许极小的序列化误差，但不允许模型返回
+        # 超出发票金额或 passed=true 却只返回部分金额。
+        tolerance = Decimal("0.005")
+        if final_amount > total_amount + tolerance:
+            return "llmResult.finalAmount cannot exceed invoiceTotalAmount"
+        if result.get("passed") is True and abs(final_amount - total_amount) > tolerance:
+            return "llmResult.finalAmount must equal invoiceTotalAmount when passed is true"
 
     return None
 
@@ -346,7 +390,14 @@ def register_node_gateway_routes(app: FastAPI) -> None:
                     continue
                 break
 
-            validation_error = _validate_llm_result(parsed)
+            validation_error = _validate_llm_result(
+                parsed,
+                required_fields=request.required_fields,
+                invoice_total_amount=request.invoice_total_amount,
+                require_passed_final_amount_matches_total=(
+                    request.require_passed_final_amount_matches_total
+                ),
+            )
             if validation_error:
                 last_error_type = "invalid_result_format"
                 last_error = f"invalid llm result format: {validation_error}"
