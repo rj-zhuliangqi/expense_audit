@@ -1295,12 +1295,12 @@ def _normalize_model_failure_rule_result(value: Mapping[str, Any]) -> dict[str, 
         result["message"] = result.get("message") or (
             "礼品数量与接待人数的匹配结果需要人工复核。"
         )
-    elif reason_code in {"E17", "E32", "W32", "E34", "E36"} and (status == "failed" or model_failure):
+    elif reason_code in {"E17", "W40", "W32", "E34", "E36"} and (status == "failed" or model_failure):
         # E17/E34/E36 都依赖 LLM 完成内容或金额判断，模型失败时必须
         # 显式拒绝，不能沿用旧图的 FAILED 或因缺少结果而默认 PASS。
         failure_messages = {
             "E17": "模型服务暂时异常，当前充值卡检查未完成，请稍后重试或联系管理员处理。",
-            "E32": "模型服务暂时异常，当前账单年份检查未完成，请稍后重试或联系管理员处理。",
+            "W40": "模型服务暂时异常，当前账单年份检查未完成，请稍后重试或联系管理员处理。",
             "W32": "模型服务暂时异常，当前手机号检查未完成，请稍后重试或联系管理员处理。",
             "E34": "模型服务暂时异常，当前发票内容金额检查未完成，请稍后重试或联系管理员处理。",
             "E36": "模型服务暂时异常，当前内容合规检查未完成，请稍后重试或联系管理员处理。",

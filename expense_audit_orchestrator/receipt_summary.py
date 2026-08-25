@@ -612,10 +612,10 @@ def _is_model_failure_rule(
     status: str,
     rule_result: Mapping[str, Any],
 ) -> bool:
-    # These rules depend on an external LLM.  E32/W32 are the telecom
+    # These rules depend on an external LLM.  W40/W32 are the telecom
     # billing-period/phone checks; E17/E34/E36 are content/amount checks;
     # W31 is a weak fraud warning.
-    if reason_code not in {"E17", "E32", "W32", "E34", "E36", "W31"}:
+    if reason_code not in {"E17", "W40", "W32", "E34", "E36", "W31"}:
         return False
     rule_text = " ".join(
         str(rule_result.get(key) or "")
@@ -797,7 +797,7 @@ def _audit_status_flags(processed_receipt: Mapping[str, Any]) -> dict[str, bool]
         if reason_code == "W33" and status in {"reject", "failed"}:
             flags["warning"] = True
             continue
-        if reason_code in {"E17", "E32", "W32", "E34", "E36", "W31"} and _is_model_failure_rule(
+        if reason_code in {"E17", "W40", "W32", "E34", "E36", "W31"} and _is_model_failure_rule(
             reason_code, status, audit_row
         ):
             if reason_code == "W31":
