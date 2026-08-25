@@ -109,6 +109,8 @@ def _build_status_notice(flags: Mapping[str, bool]) -> str:
     are retained in the final advice.
     """
     notices: list[str] = []
+    if flags.get("external_error"):
+        notices.append("存在业务费用明细接口异常，请稍后重试或联系管理员处理")
     if flags.get("model_error"):
         notices.append("存在模型服务异常，请稍后重试或联系管理员处理")
     if flags.get("reject"):
@@ -477,7 +479,10 @@ def _is_model_failure_rule(
     status: str,
     rule_result: Mapping[str, Any],
 ) -> bool:
-    if reason_code not in {"E36", "W31"}:
+    # These rules depend on an external LLM.  E32/W32 are the telecom
+    # billing-period/phone checks; E17/E34/E36 are content/amount checks;
+    # W31 is a weak fraud warning.
+    if reason_code not in {"E17", "E32", "W32", "E34", "E36", "W31"}:
         return False
     rule_text = " ".join(
         str(rule_result.get(key) or "")
@@ -493,7 +498,26 @@ def _is_model_failure_rule(
 
 
 def _audit_status_flags(processed_receipt: Mapping[str, Any]) -> dict[str, bool]:
-    flags = {"reject": False, "warning": False, "failed": False, "model_error": False}
+    flags = {
+        "reject": False,
+        "warning": False,
+        "failed": False,
+        "model_error": False,
+        "external_error": False,
+    }
+
+    # W33 依赖业务费用明细接口。接口异常时即使旧图没有返回 W33 规则，
+    # 汇总也必须保留 WARNING，不能落到“本次发票全部通过”。
+    service_data = processed_receipt.get("serviceData")
+    if isinstance(service_data, Mapping):
+        entertainment_data = service_data.get("entertainment_data")
+        if isinstance(entertainment_data, Mapping):
+            lookup_status = str(
+                entertainment_data.get("giftDetailLookupStatus") or ""
+            ).strip().lower()
+            if lookup_status == "error":
+                flags["external_error"] = True
+                flags["warning"] = True
 
     # E31 是核销单级规则，不一定出现在 invoiceResults 的 decisionOutput 中。
     # 应用层已经根据有效发票金额写入 isAmountSufficient，汇总必须同步读取，
@@ -640,7 +664,7 @@ def _audit_status_flags(processed_receipt: Mapping[str, Any]) -> dict[str, bool]
         if reason_code == "W33" and status in {"reject", "failed"}:
             flags["warning"] = True
             continue
-        if reason_code in {"E36", "W31"} and _is_model_failure_rule(
+        if reason_code in {"E17", "E32", "W32", "E34", "E36", "W31"} and _is_model_failure_rule(
             reason_code, status, audit_row
         ):
             if reason_code == "W31":

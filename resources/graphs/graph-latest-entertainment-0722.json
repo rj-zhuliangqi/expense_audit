@@ -242,7 +242,7 @@
           {
             "id": "3a697d02-57ca-4e5c-aa53-88e9c027eef8",
             "key": "isGiftCountReasonable",
-            "value": "((isLastInvoice ?? true) == false) or (serviceData.entertainment_data.hasGiftItem ?? false) == false or number(serviceData.entertainment_data.giftReceptionCount ?? 0) <= number(totalGoodsCount ?? sum(map((items ?? []) as i, number(i.num ?? i.quantity ?? 0))))"
+            "value": "(serviceData.entertainment_data.giftDetailLookupStatus ?? \"success\") == \"error\" ? \"error\" : ((((isLastInvoice ?? true) == false) or (serviceData.entertainment_data.hasGiftItem ?? false) == false or number(serviceData.entertainment_data.giftReceptionCount ?? 0) <= number(totalGoodsCount ?? sum(map((items ?? []) as i, number(i.num ?? i.quantity ?? 0))))) ? \"true\" : \"false\")"
           },
           {
             "id": "ff9d576a-60ee-4a08-9bdb-7cba1d98d6c1",
@@ -1433,6 +1433,25 @@
         "hitPolicy": "first",
         "rules": [
           {
+            "_id": "e5a34be4-ceeb-4379-a48f-8992bff1bcef",
+            "_description": "",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"error\"",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"W33\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"WARNING\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查【项目类别】为赠送纪念品中接待人数量与发票中购买商品数量的合理性\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"staff-behavior\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
+            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"业务招待费业务费用明细接口异常，无法确认【项目类别】及赠送纪念品接待人数，W33 稽核未完成：\"+(serviceData.entertainment_data.giftDetailLookupError??\"请稍后重试或联系管理员处理。\")",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【接口异常】请稍后重试；如问题持续，请联系管理员处理。\"",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"业务费用明细接口异常\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【稍后重试】【联系管理员】\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+          },
+          {
             "_id": "436b23d9-96f2-4345-b4d6-3dc196c9ffd3",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
@@ -2065,6 +2084,25 @@
       "content": {
         "hitPolicy": "first",
         "rules": [
+          {
+            "_id": "febd9ec3-7a65-4f76-95fa-9816b47e2fee",
+            "_description": "",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"error\"",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E17\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票内容是否包含充值卡、预付卡或预存类项目\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
+            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"模型服务暂时异常，当前充值卡检查未完成，请稍后重试或联系管理员处理。\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【模型异常】请稍后重试；如问题持续，请联系管理员处理。\"",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"模型服务异常\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【稍后重试】【联系管理员】\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime"
+          },
           {
             "_id": "06e1c0f0-8736-4da1-a40d-7a7c12a11b08",
             "_description": "",

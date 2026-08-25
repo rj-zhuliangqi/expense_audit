@@ -69,7 +69,7 @@ class TelecomE32BillingPeriodGraphTests(unittest.TestCase):
 
         self.assertEqual(result, "20241112-20241112")
 
-    def test_postprocess_falls_back_when_llm_billing_period_is_empty_or_fails(self) -> None:
+    def test_postprocess_falls_back_for_empty_success_but_marks_llm_failure(self) -> None:
         expression = self._postprocess_expression("billingPeriod")
 
         empty_result = zen.evaluate_expression(
@@ -90,7 +90,7 @@ class TelecomE32BillingPeriodGraphTests(unittest.TestCase):
         )
 
         self.assertEqual(empty_result, "20241112-20241112")
-        self.assertEqual(failed_result, "20241112-20241112")
+        self.assertEqual(failed_result, "error")
 
     def test_postprocess_falls_back_to_regex_when_llm_phone_is_empty(self) -> None:
         expression = self._postprocess_expression("remarkPhone")

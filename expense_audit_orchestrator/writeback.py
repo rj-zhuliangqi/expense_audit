@@ -94,6 +94,7 @@ def assemble_result_audit_info(
     total_goods_count = _coerce_receipt_number(
         processed_receipt.get("totalGoodsCount")
     )
+    gift_lookup_error = _resolve_gift_detail_lookup_error(service_data)
 
     # Receipt-level amount context used to build the final E31 message with real
     # totals (有效发票合计金额 / 报销金额 / 缺少金额). Sourced from the orchestrator's
@@ -120,6 +121,7 @@ def assemble_result_audit_info(
             is_gift_count_reasonable=is_gift_count_reasonable,
             gift_reception_count=gift_reception_count,
             total_goods_count=total_goods_count,
+            gift_lookup_error=gift_lookup_error,
             audit_rule_catalog=audit_rule_catalog,
             expense_profile=expense_profile,
         ),
@@ -134,6 +136,7 @@ def assemble_result_audit_info(
             is_gift_count_reasonable=is_gift_count_reasonable,
             gift_reception_count=gift_reception_count,
             total_goods_count=total_goods_count,
+            gift_lookup_error=gift_lookup_error,
             expense_profile=expense_profile,
         ),
         "auditInvoiceFiles": _build_audit_invoice_files(service_data),
@@ -384,6 +387,73 @@ def _override_w33_rule_result(
     return overridden
 
 
+def _override_w33_lookup_error_rule_result(
+    rule_result: Mapping[str, Any],
+    *,
+    error: str,
+) -> dict[str, Any]:
+    """Keep W33 as WARNING when its business-fee-detail lookup failed."""
+    overridden = dict(rule_result)
+    message = str(error or "请稍后重试或联系管理员处理。")
+    overridden["distinguish_result"] = "WARNING"
+    overridden["distinguishResult"] = "WARNING"
+    overridden["message"] = overridden.get("message") or (
+        "业务招待费业务费用明细接口异常，无法确认【项目类别】及赠送纪念品接待人数，"
+        f"W33 稽核未完成：{message}"
+    )
+    overridden["policiesIndex"] = overridden.get("policiesIndex") or ""
+    overridden["employeeSuggestionTips"] = overridden.get("employeeSuggestionTips") or (
+        "【接口异常】请稍后重试；如问题持续，请联系管理员处理。"
+    )
+    overridden["problem_category"] = overridden.get("problem_category") or "业务费用明细接口异常"
+    overridden["optimization_action_category"] = (
+        overridden.get("optimization_action_category") or "【稍后重试】【联系管理员】"
+    )
+    return overridden
+
+
+def _override_w33_lookup_error_decision_output(
+    decision_output: Mapping[str, Any],
+    *,
+    error: str,
+) -> dict[str, Any]:
+    """Override or synthesize W33 in invoice-info writeback for lookup errors."""
+    overridden_output = dict(decision_output)
+    found = False
+    for key, value in decision_output.items():
+        if not isinstance(value, Mapping):
+            continue
+        reason_code = str(value.get("reason_code") or value.get("reasonCode") or "").upper()
+        if reason_code == "W33":
+            overridden_output[key] = _override_w33_lookup_error_rule_result(
+                value, error=error
+            )
+            found = True
+    if not found:
+        overridden_output["gift_count_result"] = _override_w33_lookup_error_rule_result(
+            {
+                "reason_code": "W33",
+                "audit_content": "检查【项目类别】为赠送纪念品中接待人数量与发票中购买商品数量的合理性",
+                "audit_type": "staff-behavior",
+            },
+            error=error,
+        )
+    return overridden_output
+
+
+def _resolve_gift_detail_lookup_error(service_data: Mapping[str, Any]) -> str | None:
+    entertainment_data = service_data.get("entertainment_data")
+    if not isinstance(entertainment_data, Mapping):
+        return None
+    status = str(entertainment_data.get("giftDetailLookupStatus") or "").strip().lower()
+    if status != "error":
+        return None
+    return str(
+        entertainment_data.get("giftDetailLookupError")
+        or "业务费用明细接口返回异常。"
+    ).strip()
+
+
 def _override_w33_decision_output(
     decision_output: Mapping[str, Any],
     *,
@@ -418,6 +488,7 @@ def _build_audit_logs(
     is_gift_count_reasonable: bool | None = None,
     gift_reception_count: float | None = None,
     total_goods_count: float | None = None,
+    gift_lookup_error: str | None = None,
     audit_rule_catalog: AuditRuleCatalog | None = None,
     expense_profile: str | None = None,
 ) -> list[dict[str, Any]]:
@@ -466,6 +537,10 @@ def _build_audit_logs(
                             is_reasonable=bool(is_gift_count_reasonable),
                             gift_reception_count=gift_reception_count,
                             total_goods_count=total_goods_count,
+                        )
+                    elif gift_lookup_error:
+                        rule_result = _override_w33_lookup_error_rule_result(
+                            rule_result, error=gift_lookup_error
                         )
 
                 # createTime 取图内各稽核点输出的 create_time（来自 context.executionTime），
@@ -540,27 +615,48 @@ def _build_audit_logs(
                         ),
                         "createTime": None,
                     }
-                    if reason_code == "W33" and is_gift_count_reasonable is not None:
-                        overridden_w33 = _override_w33_rule_result(
-                            {"distinguish_result": "PASS"},
-                            is_reasonable=bool(is_gift_count_reasonable),
-                            gift_reception_count=gift_reception_count,
-                            total_goods_count=total_goods_count,
-                        )
-                        catalog_rule_result.update(
-                            {
-                                "distinguishResult": _normalize_rule_distinguish_result(
-                                    overridden_w33.get("distinguish_result"),
-                                    reason_code="W33",
-                                ),
-                                "message": overridden_w33.get("message", ""),
-                                "specificProblemDes": overridden_w33.get("message", ""),
-                                "policiesIndex": overridden_w33.get("policiesIndex", ""),
-                                "employeeSuggestionTips": overridden_w33.get(
-                                    "employeeSuggestionTips", ""
-                                ),
-                            }
-                        )
+                    if reason_code == "W33":
+                        if is_gift_count_reasonable is not None:
+                            overridden_w33 = _override_w33_rule_result(
+                                {"distinguish_result": "PASS"},
+                                is_reasonable=bool(is_gift_count_reasonable),
+                                gift_reception_count=gift_reception_count,
+                                total_goods_count=total_goods_count,
+                            )
+                        elif gift_lookup_error:
+                            overridden_w33 = _override_w33_lookup_error_rule_result(
+                                {"distinguish_result": "PASS"},
+                                error=gift_lookup_error,
+                            )
+                        else:
+                            overridden_w33 = None
+                        if overridden_w33 is not None:
+                            catalog_rule_result.update(
+                                {
+                                    "distinguishResult": _normalize_rule_distinguish_result(
+                                        overridden_w33.get("distinguish_result"),
+                                        reason_code="W33",
+                                    ),
+                                    "message": overridden_w33.get("message", ""),
+                                    "specificProblemDes": overridden_w33.get("message", ""),
+                                    "policiesIndex": overridden_w33.get("policiesIndex", ""),
+                                    "employeeSuggestionTips": overridden_w33.get(
+                                        "employeeSuggestionTips", ""
+                                    ),
+                                    "problemTags": _get_rule_tag(
+                                        overridden_w33,
+                                        "problem_category",
+                                        "problemCategory",
+                                        "problemTags",
+                                    ),
+                                    "suggestionTags": _get_rule_tag(
+                                        overridden_w33,
+                                        "optimization_action_category",
+                                        "optimizationActionCategory",
+                                        "suggestionTags",
+                                    ),
+                                }
+                            )
                     invoice_logs.append(catalog_rule_result)
             audit_logs.extend(invoice_logs)
             continue
@@ -670,6 +766,7 @@ def _build_audit_invoice_infos(
     is_gift_count_reasonable: bool | None = None,
     gift_reception_count: float | None = None,
     total_goods_count: float | None = None,
+    gift_lookup_error: str | None = None,
     expense_profile: str | None = None,
 ) -> list[dict[str, Any]]:
     invoice_infos: list[dict[str, Any]] = []
@@ -697,6 +794,10 @@ def _build_audit_invoice_infos(
                 is_reasonable=bool(is_gift_count_reasonable),
                 gift_reception_count=gift_reception_count,
                 total_goods_count=total_goods_count,
+            )
+        elif is_last and gift_lookup_error:
+            decision_output = _override_w33_lookup_error_decision_output(
+                decision_output, error=gift_lookup_error
             )
 
         ignore_codes = [] if is_last else ["E31", "W33"]
@@ -1178,12 +1279,19 @@ def _normalize_model_failure_rule_result(value: Mapping[str, Any]) -> dict[str, 
         result["message"] = result.get("message") or (
             "礼品数量与接待人数的匹配结果需要人工复核。"
         )
-    elif reason_code == "E36" and (status == "failed" or model_failure):
+    elif reason_code in {"E17", "E32", "W32", "E34", "E36"} and (status == "failed" or model_failure):
+        # E17/E34/E36 都依赖 LLM 完成内容或金额判断，模型失败时必须
+        # 显式拒绝，不能沿用旧图的 FAILED 或因缺少结果而默认 PASS。
+        failure_messages = {
+            "E17": "模型服务暂时异常，当前充值卡检查未完成，请稍后重试或联系管理员处理。",
+            "E32": "模型服务暂时异常，当前账单年份检查未完成，请稍后重试或联系管理员处理。",
+            "W32": "模型服务暂时异常，当前手机号检查未完成，请稍后重试或联系管理员处理。",
+            "E34": "模型服务暂时异常，当前发票内容金额检查未完成，请稍后重试或联系管理员处理。",
+            "E36": "模型服务暂时异常，当前内容合规检查未完成，请稍后重试或联系管理员处理。",
+        }
         result["distinguish_result"] = "REJECT"
         result["distinguishResult"] = "REJECT"
-        result["message"] = result.get("message") or (
-            "模型服务暂时异常，当前内容合规检查未完成，请稍后重试或联系管理员处理。"
-        )
+        result["message"] = result.get("message") or failure_messages[reason_code]
         result["policiesIndex"] = result.get("policiesIndex") or ""
         result["employeeSuggestionTips"] = result.get("employeeSuggestionTips") or (
             "【模型异常】请稍后重试；如问题持续，请联系管理员处理。"

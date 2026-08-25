@@ -406,20 +406,35 @@ def build_entertainment_receipt_enricher(
         audit_info = audit_info if isinstance(audit_info, Mapping) else {}
         instance_code = str(audit_info.get("instanceCode") or "").strip()
         if not instance_code:
-            return {}
+            # 没有核销单号时无法确认项目类别，不能把“无法查询”误判成
+            # “不是赠送纪念品”。W33 会据此输出 WARNING 并提示人工处理。
+            return {
+                "giftDetailLookupStatus": "error",
+                "giftDetailLookupError": "缺少核销单号，无法查询业务费用明细。",
+                "businessFeeDetails": [],
+                "giftBusinessFeeDetails": [],
+                "hasGiftItem": False,
+                "giftReceptionCount": 0,
+            }
 
+        lookup_status = "success"
+        lookup_error = ""
         try:
             details = _normalize_business_fee_details(
                 api_client.fetch_business_fee_details(instance_code)
             )
-        except Exception as exc:  # 外部数据缺失时保持非阻断，避免误报整单失败
+        except Exception as exc:
+            # 外部接口异常必须显式进入 W33 WARNING，不能降级成“无赠送纪念品”
+            # 后再返回 PASS；否则接口故障会被隐藏。
+            lookup_status = "error"
+            lookup_error = str(exc) or "业务费用明细接口返回异常。"
             _logger.warning(
-                "获取业务招待费业务费用明细失败，W33 按无适用赠送纪念品明细处理",
+                "获取业务招待费业务费用明细失败，W33 标记为 WARNING",
                 extra={
-                    "event": "entertainment.business_fee_details.fallback",
+                    "event": "entertainment.business_fee_details.error",
                     "receipt_code": receipt_code,
                     "instance_code": instance_code,
-                    "error": str(exc),
+                    "error": lookup_error,
                 },
             )
             details = []
@@ -439,6 +454,8 @@ def build_entertainment_receipt_enricher(
 
         return {
             "instanceCode": instance_code,
+            "giftDetailLookupStatus": lookup_status,
+            "giftDetailLookupError": lookup_error,
             "businessFeeDetails": details,
             "giftBusinessFeeDetails": gift_details,
             "hasGiftItem": bool(gift_details),
@@ -448,7 +465,7 @@ def build_entertainment_receipt_enricher(
     return enrich
 
 
-# 兼容旧调用方：没有核销单号时仍返回空 dict，不触发网络请求。
+# 兼容旧调用方：没有核销单号时不触发网络请求，但显式返回 W33 查询异常。
 def entertainment_receipt_enricher(
     receipt_code: str,
     service_data: Mapping[str, Any],

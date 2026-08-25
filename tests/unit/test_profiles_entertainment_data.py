@@ -92,15 +92,34 @@ class EntertainmentDataTests(unittest.TestCase):
         self.assertEqual(result["giftReceptionCount"], 10)
         self.assertEqual(len(result["giftBusinessFeeDetails"]), 2)
 
-    def test_enricher_without_instance_code_does_not_call_service(self) -> None:
+    def test_enricher_without_instance_code_marks_w33_lookup_as_error(self) -> None:
         class FailingClient:
             def fetch_business_fee_details(self, instance_code):
                 raise AssertionError("should not be called")
 
-        self.assertEqual(
-            build_entertainment_receipt_enricher(client=FailingClient())("R", {}),
-            {},
+        result = build_entertainment_receipt_enricher(client=FailingClient())("R", {})
+
+        self.assertEqual(result["giftDetailLookupStatus"], "error")
+        self.assertIn("缺少核销单号", result["giftDetailLookupError"])
+        self.assertFalse(result["hasGiftItem"])
+
+    def test_enricher_marks_business_fee_detail_service_error(self) -> None:
+        class FailingClient:
+            def fetch_business_fee_details(self, instance_code):
+                raise RuntimeError("business fee detail service unavailable")
+
+        result = build_entertainment_receipt_enricher(client=FailingClient())(
+            "R",
+            {"auditInfo": {"instanceCode": "INS-ERROR"}},
         )
+
+        self.assertEqual(result["giftDetailLookupStatus"], "error")
+        self.assertEqual(
+            result["giftDetailLookupError"],
+            "business fee detail service unavailable",
+        )
+        self.assertFalse(result["hasGiftItem"])
+        self.assertEqual(result["giftReceptionCount"], 0)
 
     def test_w34_enricher_queries_history_with_expected_arguments_and_filters_self(self) -> None:
         calls = []

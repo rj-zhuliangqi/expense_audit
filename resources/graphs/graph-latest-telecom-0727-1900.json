@@ -1168,6 +1168,25 @@
         "hitPolicy": "first",
         "rules": [
           {
+            "_id": "ef229c25-b074-48e7-bb82-49f355b3731c",
+            "_description": "LLM调用失败",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"error\"",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E32\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查票据账单年份是否与报销年份一致\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"verification-form\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"模型服务暂时异常，当前手机号账期识别未完成，无法确认票据账单年份，请稍后重试或联系管理员处理。\"",
+            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"模型服务暂时异常，当前手机号账期识别未完成，无法确认票据账单年份，请稍后重试或联系管理员处理。\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【模型异常】请稍后重试；如问题持续，请联系管理员处理。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"模型服务异常\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【稍后重试】【联系管理员】\""
+          },
+          {
             "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
@@ -1685,6 +1704,25 @@
         "hitPolicy": "first",
         "rules": [
           {
+            "_id": "895647d9-6b0d-462e-affc-1b16be1704c7",
+            "_description": "LLM调用失败",
+            "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"error\"",
+            "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
+            "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"W32\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查员工使用发票的手机号与飞书备案的手机号相同\"",
+            "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"staff-behavior\"",
+            "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"模型服务暂时异常，当前手机号识别未完成，无法确认账单手机号，请稍后重试或联系管理员处理。\"",
+            "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
+            "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"模型服务暂时异常，当前手机号识别未完成，无法确认账单手机号，请稍后重试或联系管理员处理。\"",
+            "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【模型异常】请稍后重试；如问题持续，请联系管理员处理。\"",
+            "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"模型服务异常\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【稍后重试】【联系管理员】\""
+          },
+          {
             "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
             "_description": "",
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "true",
@@ -1850,12 +1888,12 @@
           {
             "id": "a0b1bb1e-67e3-4458-a80b-b264500bdbf4",
             "key": "isInvoiceYearMatched",
-            "value": "llm_status == \"success\" ? (llm_result.isInvoiceYearMatched ?? (fallbackIsInvoiceYearMatched ?? false)) : (fallbackIsInvoiceYearMatched ?? false)"
+            "value": "llm_status == \"success\" ? (llm_result.isInvoiceYearMatched ?? (fallbackIsInvoiceYearMatched ?? false)) : \"error\""
           },
           {
             "id": "32dbb6be-b04b-49dd-9247-304869d26f83",
             "key": "isSamePhone",
-            "value": "$.remarkPhone == serviceData.auditInfo.verifiUserPhone"
+            "value": "llm_status == \"success\" ? $.remarkPhone == serviceData.auditInfo.verifiUserPhone : \"error\""
           },
           {
             "id": "88a57be4-bd55-4efc-a5b6-2593eebfae84",
@@ -1865,7 +1903,7 @@
           {
             "id": "billing-period-extracted-for-feedback",
             "key": "billingPeriod",
-            "value": "llm_status == \"success\" ? (len(llm_result.billingPeriod ?? \"\") > 0 ? llm_result.billingPeriod : (billingPeriodExtracted ?? billingPeriod ?? \"\")) : (billingPeriodExtracted ?? billingPeriod ?? \"\")"
+            "value": "llm_status == \"success\" ? (len(llm_result.billingPeriod ?? \"\") > 0 ? llm_result.billingPeriod : (billingPeriodExtracted ?? billingPeriod ?? \"\")) : \"error\""
           }
         ],
         "passThrough": true,
@@ -1966,7 +2004,7 @@
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"error\"",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E17\"",
-            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"FAILED\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
             "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票内容是否含充值卡信息等\"",
             "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"模型服务暂时异常，当前充值卡检查未完成，请联系管理员处理。\"",
@@ -1974,10 +2012,10 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"模型服务暂时异常，当前充值卡检查未完成，请联系管理员处理。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【模型异常】请稍后重试；如问题持续，请联系管理员处理。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"模型服务异常\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【稍后重试】【联系管理员】\""
           },
           {
             "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
@@ -2122,17 +2160,17 @@
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E34\"",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票内容是否属于通讯费报销项目，是否存在异常消费\"",
-            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"FAILED\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"expense-item\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"模型服务暂时异常，当前发票内容金额检查未完成，请联系管理员处理。\"",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"模型服务暂时异常，当前发票内容金额检查未完成，请联系管理员处理。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【模型异常】请稍后重试；如问题持续，请联系管理员处理。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"模型服务异常\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【稍后重试】【联系管理员】\""
           },
           {
             "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",

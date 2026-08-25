@@ -344,6 +344,77 @@ class ReceiptSummaryTests(unittest.TestCase):
             "发票有效可报销金额95.25元|发票待补充金额4.75元",
         )
 
+    def test_external_gift_detail_failure_cannot_be_summarized_as_pass(self) -> None:
+        prepared_receipt = {
+            "serviceData": {
+                "auditInfo": {"applyAmount": "100.00"},
+                "entertainment_data": {
+                    "giftDetailLookupStatus": "error",
+                    "giftDetailLookupError": "业务费用明细服务不可用",
+                },
+            },
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-LOOKUP-ERROR",
+                    "preparedInput": {"invoiceNo": "INV-LOOKUP-ERROR", "totalAmount": "100.00"},
+                }
+            ],
+        }
+        processed_receipt = {
+            "serviceData": prepared_receipt["serviceData"],
+            "invoiceResults": [
+                {
+                    "invoiceKey": "FID-LOOKUP-ERROR",
+                    "executionStatus": "SUCCEEDED",
+                    "decisionStatus": "passed",
+                    "decisionOutput": {"invoice_finalAmount": "100.00"},
+                }
+            ],
+        }
+
+        advice = build_ai_audit_advice(prepared_receipt, processed_receipt)
+
+        self.assertIsNotNone(advice)
+        self.assertIn("业务费用明细接口异常", advice)
+        self.assertIn("WARNING", advice)
+        self.assertNotIn("本次发票全部通过", advice)
+
+    def test_prebuilt_model_failure_rules_are_visible_in_final_advice(self) -> None:
+        prepared_receipt = {
+            "serviceData": {"auditInfo": {"applyAmount": "100.00"}},
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-MODEL-ERROR",
+                    "preparedInput": {"invoiceNo": "INV-MODEL-ERROR", "totalAmount": "100.00"},
+                }
+            ],
+        }
+
+        for reason_code, expected_status in (
+            ("E17", "REJECT"),
+            ("E32", "REJECT"),
+            ("W32", "REJECT"),
+            ("E34", "REJECT"),
+            ("E36", "REJECT"),
+            ("W31", "WARNING"),
+        ):
+            with self.subTest(reason_code=reason_code):
+                processed_receipt = {
+                    "invoiceResults": [],
+                    "auditLogs": [
+                        {
+                            "reasonCode": reason_code,
+                            "distinguishResult": expected_status,
+                            "message": "模型服务暂时异常，请稍后重试或联系管理员处理。",
+                        }
+                    ],
+                }
+                advice = build_ai_audit_advice(prepared_receipt, processed_receipt)
+
+                self.assertIn("模型服务异常", advice)
+                self.assertIn(expected_status, advice)
+                self.assertNotIn("本次发票全部通过", advice)
+
 
 if __name__ == "__main__":
     unittest.main()

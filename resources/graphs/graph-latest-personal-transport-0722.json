@@ -1460,7 +1460,7 @@
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"error\"",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E17\"",
-            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"FAILED\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
             "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票内容是否含充值卡信息等\"",
             "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"模型服务暂时异常，当前充值卡检查未完成，请联系管理员处理。\"",
@@ -1468,10 +1468,10 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"模型服务暂时异常，当前充值卡检查未完成，请联系管理员处理。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【模型异常】请稍后重试；如问题持续，请联系管理员处理。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"模型服务异常\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【稍后重试】【联系管理员】\""
           },
           {
             "_id": "8482efe3-134a-44bb-a699-5ea4c45c0d3d",
@@ -2154,7 +2154,7 @@
             "dea9a1bc-66ae-47b3-885f-9e9a1bb07571": "\"error\"",
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E36\"",
-            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"FAILED\"",
+            "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
             "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票内容是否属于交通费报销项目\"",
             "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"模型服务暂时异常，当前发票内容项目检查未完成，请联系管理员处理。\"",
@@ -2162,10 +2162,10 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"模型服务暂时异常，当前发票内容项目检查未完成，请联系管理员处理。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【模型异常】请稍后重试；如问题持续，请联系管理员处理。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\""
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"模型服务异常\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【稍后重试】【联系管理员】\""
           },
           {
             "_id": "baff5691-3495-4d68-b677-cf805844b6c5",

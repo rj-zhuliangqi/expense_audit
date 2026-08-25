@@ -207,6 +207,9 @@ class ReceiptAuditService:
         previous_invoice_numbers: list[str] = []
         previous_w34_invoice_numbers: list[str] = []
         gift_count_context = _resolve_gift_count_context(prepared_receipt)
+        gift_lookup_status, gift_lookup_error = _resolve_gift_count_lookup_status(
+            prepared_receipt
+        )
         cumulative_goods_count = 0.0
         invoice_preparations = prepared_receipt["invoicePreparations"]
         amount_resolution_unknown = False
@@ -323,10 +326,18 @@ class ReceiptAuditService:
                     "hasGiftItem": has_gift_item,
                     "giftReceptionCount": gift_reception_count,
                     "totalGoodsCount": normalized_goods_count,
+                    # 业务费用明细接口异常时，项目类别/接待人数均不可确认。
+                    # 不能把 hasGiftItem=False 的降级值当成 W33 PASS。
                     "isGiftCountReasonable": (
-                        not has_gift_item
-                        or gift_reception_count <= cumulative_goods_count
+                        None
+                        if gift_lookup_status == "error"
+                        else (
+                            not has_gift_item
+                            or gift_reception_count <= cumulative_goods_count
+                        )
                     ),
+                    "giftDetailLookupStatus": gift_lookup_status,
+                    "giftDetailLookupError": gift_lookup_error,
                 }
             )
         # 核销单级金额汇总：所有发票跑完后生成，避免依赖最后一张发票。
@@ -607,6 +618,32 @@ def _goods_quantity_total(prepared_input: Mapping[str, Any]) -> float:
         if quantity is not None:
             total += quantity
     return total
+
+
+def _resolve_gift_count_lookup_status(
+    prepared_receipt: Mapping[str, Any],
+) -> tuple[str | None, str]:
+    """Return the business-fee-detail lookup status used by W33.
+
+    Older prepared receipts do not carry an explicit status.  If they do carry
+    the W33 fields, treat them as a successful lookup for backwards
+    compatibility; a newly prepared receipt writes ``error`` explicitly when
+    the external service is unavailable.
+    """
+    service_data = prepared_receipt.get("serviceData")
+    if not isinstance(service_data, Mapping):
+        return None, ""
+    entertainment_data = service_data.get("entertainment_data")
+    if not isinstance(entertainment_data, Mapping):
+        return None, ""
+    if "hasGiftItem" not in entertainment_data and "giftReceptionCount" not in entertainment_data:
+        return None, ""
+
+    status = str(entertainment_data.get("giftDetailLookupStatus") or "success").strip().lower()
+    if status not in {"success", "error"}:
+        status = "error"
+    error = str(entertainment_data.get("giftDetailLookupError") or "").strip()
+    return status, error
 
 
 def _resolve_gift_count_context(

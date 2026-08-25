@@ -259,11 +259,11 @@ class PersonalTransportMessageTests(unittest.TestCase):
             "invoice_info_id": "INFO-E36-FAIL",
         })
 
-        # 测试环境不配置 LLM 网关，E36 会进入 FAILED；即使 LLM 调用失败，
+        # 测试环境不配置 LLM 网关，E36 必须以 REJECT 暴露模型异常；
         # 决策表仍必须保留原始发票主键，避免回写成 null。
         result = evaluate_prepared_input(self.decision, prepared, trace=True)
         e36 = self._rule(result, "E36")
-        self.assertEqual(e36["distinguish_result"], "FAILED")
+        self.assertEqual(e36["distinguish_result"], "REJECT")
         self.assertEqual(e36["instance_code"], "REC-E36-FAIL")
         self.assertEqual(e36["invoice_file_id"], "FILE-E36-FAIL")
         self.assertEqual(e36["invoice_info_id"], "INFO-E36-FAIL")
@@ -306,7 +306,10 @@ class PersonalTransportMessageTests(unittest.TestCase):
         )
         e36_reject = next(
             rule for rule in e36_node["content"]["rules"]
-            if rule.get("f35ede49-0eae-4dda-b39e-11a11383697a") == '"REJECT"'
+            if (
+                rule.get("f35ede49-0eae-4dda-b39e-11a11383697a") == '"REJECT"'
+                and rule.get("dea9a1bc-66ae-47b3-885f-9e9a1bb07571") == "false"
+            )
         )
         e36_message = e36_reject[MESSAGE_FIELD_ID]
         for fragment in ("*经营租赁*租赁服务", "共享单车", "共享电单车", "停车占道费"):
