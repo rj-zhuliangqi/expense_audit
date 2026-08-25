@@ -95,6 +95,21 @@ class GetProfileTelecomAssetDirTests(unittest.TestCase):
         self.assertEqual(result["personalTransportInvoiceTypeCode"], "72")
         self.assertEqual(result["personalTransportAllowedInvoiceTypeCodes"], ["72"])
 
+    def test_telecom_profile_loads_finance_audit_risk_catalog(self) -> None:
+        profile = get_profile("telecom")
+
+        self.assertEqual(profile.audit_risk_catalog["W28"]["riskLevel"], "medium_low")
+        self.assertEqual(profile.audit_risk_catalog["W32"]["riskLevel"], "high")
+        self.assertEqual(profile.audit_risk_catalog["E32"]["riskLevel"], "blocking")
+
+    def test_entertainment_profile_loads_finance_audit_risk_catalog(self) -> None:
+        profile = get_profile("entertainment")
+
+        self.assertEqual(profile.audit_risk_catalog["W33"]["riskLevel"], "medium_low")
+        self.assertEqual(profile.audit_risk_catalog["W34"]["riskLevel"], "high")
+        self.assertEqual(profile.audit_risk_catalog["W31"]["riskLevel"], "high")
+        self.assertEqual(profile.audit_risk_catalog["E36"]["riskLevel"], "blocking")
+
     def test_graph_path_env_override(self) -> None:
         """图路径支持通过 .env 环境变量覆盖，无需改代码。"""
         import importlib

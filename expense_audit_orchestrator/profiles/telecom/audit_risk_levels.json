@@ -1,0 +1,21 @@
+{
+  "_comment": "通讯费稽核点风险等级。E 开头编码固定为阻断；W 开头编码在此配置为 high 或 medium_low。新增 W 编码时必须同步增加配置。",
+  "rules": {
+    "E35": {"riskLevel": "blocking"},
+    "E01": {"riskLevel": "blocking"},
+    "E02": {"riskLevel": "blocking"},
+    "E31": {"riskLevel": "blocking"},
+    "E09": {"riskLevel": "blocking"},
+    "E05": {"riskLevel": "blocking"},
+    "E33": {"riskLevel": "blocking"},
+    "E32": {"riskLevel": "blocking"},
+    "E19": {"riskLevel": "blocking"},
+    "E17": {"riskLevel": "blocking"},
+    "E34": {"riskLevel": "blocking"},
+    "W28": {"riskLevel": "medium_low"},
+    "W32": {"riskLevel": "high"},
+    "SYS-001": {"riskLevel": "blocking"},
+    "SYS-003": {"riskLevel": "blocking"},
+    "SYS-004": {"riskLevel": "blocking"}
+  }
+}

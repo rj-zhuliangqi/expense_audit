@@ -336,6 +336,60 @@ class ReceiptSummaryTests(unittest.TestCase):
             "本单高风险 1 项、中低风险 1 项，阻断 1 项，已通过 2 项稽核项。",
         )
 
+    def test_finance_summary_supports_telecom_and_entertainment_profiles(self) -> None:
+        audit_logs = [
+            {"reasonCode": "W28", "distinguishResult": "WARNING"},
+            {"reasonCode": "W32", "distinguishResult": "REJECT"},
+            {"reasonCode": "E32", "distinguishResult": "REJECT"},
+            {"reasonCode": "E01", "distinguishResult": "PASS"},
+        ]
+        telecom_summary = build_ai_audit_summary_finance(
+            {},
+            {},
+            audit_logs=audit_logs,
+            audit_risk_catalog={
+                "W28": {"riskLevel": "medium_low"},
+                "W32": {"riskLevel": "high"},
+            },
+            expense_profile="telecom",
+        )
+        self.assertEqual(
+            telecom_summary,
+            "本单高风险 1 项、中低风险 1 项，阻断 1 项，已通过 1 项稽核项。",
+        )
+
+        entertainment_summary = build_ai_audit_summary_finance(
+            {},
+            {},
+            audit_logs=[
+                {"reasonCode": "W33", "distinguishResult": "WARNING"},
+                {"reasonCode": "W34", "distinguishResult": "WARNING"},
+                {"reasonCode": "W31", "distinguishResult": "PASS"},
+                {"reasonCode": "E36", "distinguishResult": "REJECT"},
+            ],
+            audit_risk_catalog={
+                "W33": {"riskLevel": "medium_low"},
+                "W34": {"riskLevel": "high"},
+                "W31": {"riskLevel": "high"},
+            },
+            expense_profile="entertainment",
+        )
+        self.assertEqual(
+            entertainment_summary,
+            "本单高风险 1 项、中低风险 1 项，阻断 1 项，已通过 1 项稽核项。",
+        )
+
+    def test_finance_summary_is_not_added_for_travel_profile(self) -> None:
+        summary = build_ai_audit_summary_finance(
+            {},
+            {},
+            audit_logs=[{"reasonCode": "E01", "distinguishResult": "REJECT"}],
+            audit_risk_catalog={"E01": {"riskLevel": "blocking"}},
+            expense_profile="travel",
+        )
+
+        self.assertIsNone(summary)
+
     def test_finance_summary_forces_all_e_codes_to_blocking_and_unconfigured_w_to_high(self) -> None:
         summary = build_ai_audit_summary_finance(
             {},
