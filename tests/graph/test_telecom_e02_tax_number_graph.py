@@ -37,7 +37,7 @@ class TelecomE02TaxNumberGraphTests(unittest.TestCase):
     def test_e02_uses_tax_number_expression_not_personal_header_check(self) -> None:
         self.assertEqual(
             self.tax_node["content"]["inputs"][0]["field"],
-            "isTaxExists",
+            "tax_check",
         )
 
     def test_matching_company_tax_number_passes_e02(self) -> None:

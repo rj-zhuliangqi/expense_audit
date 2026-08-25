@@ -180,6 +180,21 @@
             "value": "(buyerTaxNo ?? \"\") != \"\" and (buyerTaxNo ?? \"\") == (filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].companyTax ?? \"\")"
           },
           {
+            "id": "telecom-e02-invoice-type-code",
+            "key": "e02InvoiceTypeCode",
+            "value": "(type(invoiceType) == \"number\") ? invoiceType : ((type(invoiceType) == \"string\" and trim(invoiceType) != \"\" and matches(trim(invoiceType), \"^[+-]?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))([eE][+-]?[0-9]+)?$\")) ? number(trim(invoiceType)) : -1)"
+          },
+          {
+            "id": "telecom-e02-applicable",
+            "key": "e02Applicable",
+            "value": "$.e02InvoiceTypeCode in [1, 2, 3, 4, 5, 7, 11, 12, 13, 15, 19, 23, 25, 26, 27, 28, 29, 72]"
+          },
+          {
+            "id": "telecom-e02-tax-check",
+            "key": "tax_check",
+            "value": "not($.e02Applicable ?? false) or $.isTaxExists"
+          },
+          {
             "id": "f86cf5db-4ebb-4ae1-9a21-2166e5b50098",
             "key": "isAmountEnough",
             "value": "number(serviceData.auditInfo.applyAmount ?? 0) <= number(totalAmount ?? 0)"
@@ -229,7 +244,7 @@
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E01\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票购买方抬头是否为员工本人或核销单所属公司\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票购买方抬头是否符合员工所属财务体系公司或允许的个人通讯费范围\"",
             "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
@@ -248,14 +263,14 @@
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"E01\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"REJECT\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票购买方抬头是否为员工本人或核销单所属公司\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查发票购买方抬头是否符合员工所属财务体系公司或允许的个人通讯费范围\"",
             "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据购货方名称为 “\" + (buyerName ?? \"\") + \"”，不符合通讯费抬头要求：个人抬头必须为核销员工本人，企业抬头必须与核销单所属公司一致。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"票据购货方名称为 “\" + (buyerName ?? \"\") + \"”，不符合通讯费抬头要求：公司抬头必须属于员工所属财务体系公司；个人抬头必须为员工本人且运营商及省市在允许范围内。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2.1.1员工需要确保票据中公司信息的准确性。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"若使用个人抬头，请确认购货方为核销员工本人 “\" + (serviceData.auditInfo.verifiUserName ?? \"\") + \"”；若使用公司抬头，请按核销单所属公司 “\" + (filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].companyName ?? filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].cName ?? filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].cname ?? orgName ?? \"\") + \"”重新开票。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"公司抬头请使用员工所属财务体系公司的名称；个人抬头请确认购货方为核销员工本人 “\" + (serviceData.auditInfo.verifiUserName ?? \"\") + \"”，且运营商及省市在通讯费允许范围内，重新开票后上传。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
             "a1b2c3d4-0000-0000-0000-problemcategory0": "\"抬头不符\"",
             "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【重新开票】\""
@@ -364,7 +379,7 @@
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"W28\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"PASS\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查个人抬头发票的运营商及城市是否在通讯费允许范围内\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查个人抬头发票是否为员工本人且运营商及城市在通讯费允许范围内\"",
             "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
@@ -383,16 +398,16 @@
             "f88cbb46-eb13-4ceb-9c68-0983f58e985f": "instance_code",
             "48a29115-f542-44d3-8c02-3ff71e19ee38": "\"W28\"",
             "f35ede49-0eae-4dda-b39e-11a11383697a": "\"WARNING\"",
-            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查个人抬头发票的运营商及城市是否在通讯费允许范围内\"",
+            "ae1e04a0-7a6d-4a62-ba4b-734954c8ed5e": "\"检查个人抬头发票是否为员工本人且运营商及城市在通讯费允许范围内\"",
             "14801e5c-ebef-43a4-a56a-23cb5adf4a83": "\"general-rules\"",
             "d9a8e0e2-8a13-4a39-b50e-c339519e811e": "\"\"",
             "f47902a7-1dc2-41c9-8375-fa15174317bd": "invoice_file_id",
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
-            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"个人抬头发票的销方 “\" + (salerName ?? \"\") + \"”不在通讯费允许的运营商及城市范围内，请确认运营商和城市/省份是否符合报销范围。\"",
+            "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"个人抬头发票购货方为员工本人，且销方 “\" + (salerName ?? \"\") + \"”属于通讯费允许的运营商及城市范围，按规则记录 W28 预警。\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\\n4.1.3.3员工应使用运营商开具的月结费用发票(国际通讯费用票据以当地实际情况为准)在额度内实报实销。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"请确认个人抬头通讯费的运营商及城市/省份在允许范围内；如不符合，请按制度更换为允许范围内的通讯费发票。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"个人抬头通讯费已确认购货方为员工本人，且运营商及城市在允许范围内，请留意 W28 预警记录。\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"运营商/地区不符\"",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"个人抬头\"",
             "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【业务确认】\""
           }
         ],
@@ -534,8 +549,8 @@
         "inputs": [
           {
             "id": "dea9a1bc-66ae-47b3-885f-9e9a1bb07571",
-            "name": "票据类型",
-            "field": "isTaxExists"
+            "name": "票种适用时发票购买方纳税人识别号是否与财务体系公司一致",
+            "field": "tax_check"
           }
         ],
         "outputs": [
@@ -1676,14 +1691,34 @@
             "value": "(serviceData.auditInfo.verifiUserName ?? \"\") != \"\" and ((buyerName ?? \"\") == (serviceData.auditInfo.verifiUserName ?? \"\") or (buyerName ?? \"\") == ((serviceData.auditInfo.verifiUserName ?? \"\") + \"（个人）\") or (buyerName ?? \"\") == ((serviceData.auditInfo.verifiUserName ?? \"\") + \" (个人)\") or (buyerName ?? \"\") == ((serviceData.auditInfo.verifiUserName ?? \"\") + \"(个人)\") or (buyerName ?? \"\") == ((serviceData.auditInfo.verifiUserName ?? \"\") + \" （个人）\") or (buyerName ?? \"\") == ((serviceData.auditInfo.verifiUserName ?? \"\") + \"个人\"))"
           },
           {
+            "id": "telecom-e01-invoice-type-code",
+            "key": "e01InvoiceTypeCode",
+            "value": "(type(invoiceType) == \"number\") ? invoiceType : ((type(invoiceType) == \"string\" and trim(invoiceType) != \"\" and matches(trim(invoiceType), \"^[+-]?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))([eE][+-]?[0-9]+)?$\")) ? number(trim(invoiceType)) : -1)"
+          },
+          {
+            "id": "telecom-e01-applicable",
+            "key": "e01Applicable",
+            "value": "$.e01InvoiceTypeCode in [1, 2, 3, 4, 5, 7, 11, 12, 13, 15, 19, 21, 23, 25, 26, 27, 28, 29, 72]"
+          },
+          {
+            "id": "telecom-w28-invoice-type-code",
+            "key": "w28InvoiceTypeCode",
+            "value": "(type(invoiceType) == \"number\") ? invoiceType : ((type(invoiceType) == \"string\" and trim(invoiceType) != \"\" and matches(trim(invoiceType), \"^[+-]?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))([eE][+-]?[0-9]+)?$\")) ? number(trim(invoiceType)) : -1)"
+          },
+          {
+            "id": "telecom-w28-applicable",
+            "key": "w28Applicable",
+            "value": "$.w28InvoiceTypeCode in [1, 2, 3, 4, 5, 7, 11, 12, 13, 15, 19, 21, 23, 25, 26, 27, 28, 29, 72]"
+          },
+          {
             "id": "99145f04-7d00-4d80-bcc8-4c1ce810915a",
             "key": "header_check",
-            "value": "$.is_company ? $.is_in_company_list:$.is_same_peple"
+            "value": "not($.e01Applicable ?? false) or ($.is_company ? $.is_in_company_list : ($.is_in_telecom_list and $.is_same_peple))"
           },
           {
             "id": "9db2de79-bbf9-41cc-a7b6-03595332fede",
             "key": "header_personal_check",
-            "value": "$.is_company or ($.is_same_peple == false) or $.is_in_telecom_list"
+            "value": "not($.w28Applicable ?? false) or ($.is_company or ($.is_same_peple == false) or (not($.is_in_telecom_list)))"
           }
         ],
         "passThrough": true,
