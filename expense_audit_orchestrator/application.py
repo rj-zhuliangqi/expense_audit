@@ -5,6 +5,7 @@ from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
+import re
 from typing import TYPE_CHECKING, Any
 
 from expense_audit_orchestrator.runtime_client import DEFAULT_GRAPH_PATH, GraphRuntimeClient
@@ -1261,19 +1262,6 @@ def _collect_invoice_number(
         previous_invoice_numbers.append(invoice_no)
 
 
-_TRAVEL_DOCUMENT_RULE_CODES = frozenset(
-    {
-        "E38",
-        "E23",
-        "E30",
-        "E25",
-        "E31",
-        "E32",
-        "TRAVEL-TAX-001",
-        "TRAVEL-TRAIN-001",
-    }
-)
-
 
 def _travel_audit_from_service_data(service_data: Any) -> dict[str, Any] | None:
     if not isinstance(service_data, dict):
@@ -1366,13 +1354,17 @@ def _update_travel_invoice_context(
             travel_audit["taxInfo"] = tax_info
             form_tax = _coerce_number(tax_info.get("formInputTax"))
             states = dict(travel_audit.get("ruleStates") or {})
-            states["travel_tax_amount"] = (
+            tax_state = (
                 "missing"
                 if form_tax is None
                 else "pass"
                 if abs(invoice_tax_total - form_tax) <= 0.01
                 else "warning"
             )
+            # r37 is the stable Feishu source-row state for E39. Keep the
+            # descriptive legacy key for old prepared receipts.
+            states["r37"] = tax_state
+            states["travel_tax_amount"] = tax_state
             travel_audit["ruleStates"] = states
         service_data["travelAudit"] = travel_audit
         container["serviceData"] = service_data
@@ -1401,23 +1393,9 @@ def _update_receipt_travel_context(
     service_data["travelAudit"] = travel_audit
 
 
-_TRAVEL_DOCUMENT_RULE_KEYS = frozenset(
-    {
-        "e38_city_transport_amount",
-        "e23_role_city_transport",
-        "e30_station_vehicle",
-        "e25_meal_meeting_subsidy",
-        "e31_subsidy_amount",
-        "self_driving_amount",
-        "e31_other_transport_amount",
-        "e31_train_amount",
-        "e31_vaccine_amount",
-        "e31_network_card_amount",
-        "e31_refund_change_amount",
-        "e31_baggage_amount",
-        "travel_tax_amount",
-    }
-)
+_TRAVEL_DOCUMENT_SOURCE_ROWS = frozenset({
+    2, 3, 5, 6, 7, 9, 12, 16, 18, 19, 20, 24, 37,
+})
 
 
 def _decision_output_rule_key(output_key: Any) -> str:
@@ -1429,9 +1407,25 @@ def _decision_output_rule_key(output_key: Any) -> str:
     return text
 
 
+def _travel_rule_source_row(rule_key: str) -> int | None:
+    match = re.match(r"^travel_r(\d{2})(?:_|$)", rule_key)
+    return int(match.group(1)) if match else None
+
+
+def _is_travel_document_rule_key(rule_key: str) -> bool:
+    source_row = _travel_rule_source_row(rule_key)
+    return source_row in _TRAVEL_DOCUMENT_SOURCE_ROWS
+
+
 def _extract_document_rule_context(
     invoice_result: Mapping[str, Any],
 ) -> tuple[list[str], list[str]]:
+    """Extract document-level exceptions by stable rule key, not code.
+
+    E20/E31/E39 are intentionally repeated in the Feishu sheet. The full
+    ``travel_rXX_...`` key is therefore the only safe deduplication identity;
+    ``raisedRuleCodes`` remains a compatibility summary only.
+    """
     decision_output = invoice_result.get("decisionOutput")
     if not isinstance(decision_output, Mapping):
         return [], []
@@ -1440,27 +1434,24 @@ def _extract_document_rule_context(
     for output_key, value in decision_output.items():
         if not isinstance(value, Mapping):
             continue
-        code = value.get("reason_code") or value.get("reasonCode")
         result = str(value.get("distinguish_result") or value.get("distinguishResult") or "").upper()
-        normalized_code = str(code or "").strip()
-        if not normalized_code or result in {"", "PASS"}:
+        if result in {"", "PASS"}:
             continue
+        normalized_code = str(value.get("reason_code") or value.get("reasonCode") or "").strip()
         rule_key = _decision_output_rule_key(output_key)
-        if rule_key in _TRAVEL_DOCUMENT_RULE_KEYS:
+        if not normalized_code or not _is_travel_document_rule_key(rule_key):
+            continue
+        if rule_key not in keys:
             keys.append(rule_key)
+        if normalized_code not in codes:
             codes.append(normalized_code)
-        # Fake/legacy runtimes may omit the canonical node output key.  The
-        # tax rule has a unique document-level code, so retain code context;
-        # ambiguous E31/E32 must not be inferred without the rule key.
-        elif normalized_code == "TRAVEL-TAX-001":
-            keys.append("travel_tax_amount")
-            codes.append(normalized_code)
-    return list(dict.fromkeys(codes)), list(dict.fromkeys(keys))
+    return codes, keys
 
 
 def _extract_document_rule_codes(invoice_result: Mapping[str, Any]) -> list[str]:
     """Backward-compatible code-only view of document-level exceptions."""
     return _extract_document_rule_context(invoice_result)[0]
+
 
 
 def _resolve_initial_apply_amount(prepared_receipt: Mapping[str, Any]) -> float | None:

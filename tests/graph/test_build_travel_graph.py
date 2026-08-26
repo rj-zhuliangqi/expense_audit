@@ -23,16 +23,16 @@ class TravelGraphBuildTests(unittest.TestCase):
 
     def test_graph_shape_and_standard_outputs(self) -> None:
         self.assertEqual(self.graph["contentType"], "application/vnd.gorules.decision")
-        self.assertEqual(len(self.graph["nodes"]), 38)
-        self.assertEqual(len(self.graph["edges"]), 69)
+        self.assertEqual(len(self.graph["nodes"]), 42)
+        self.assertEqual(len(self.graph["edges"]), 77)
 
         nodes = {node["id"]: node for node in self.graph["nodes"]}
         self.assertIn("travel_audit_preprocess", nodes)
-        self.assertIn("travel_w39_travel_scene_check", nodes)
+        self.assertIn("travel_travel_r31_检查票据归属的业务场景_check", nodes)
         self.assertIn("travel_content_classification_llm", nodes)
 
         decision_nodes = [node for node in self.graph["nodes"] if node["type"] == "decisionTableNode"]
-        self.assertEqual(len(decision_nodes), 32)
+        self.assertEqual(len(decision_nodes), 36)
         expected_fields = {
             "instance_code",
             "reason_code",
@@ -45,6 +45,8 @@ class TravelGraphBuildTests(unittest.TestCase):
             "message",
             "policiesIndex",
             "employeeSuggestionTips",
+            "problem_category",
+            "optimization_action_category",
             "create_time",
         }
         for node in decision_nodes:
@@ -79,7 +81,7 @@ class TravelGraphBuildTests(unittest.TestCase):
             for value in result["decisionOutput"].values()
             if isinstance(value, dict) and str(value.get("reason_code", "")).startswith(("E", "W", "sys", "TRAVEL"))
         ]
-        self.assertEqual(len(travel_results), 32)
+        self.assertEqual(len(travel_results), 36)
         self.assertTrue(all(value["distinguish_result"] == "WARNING" for value in travel_results))
         self.assertTrue(any(
             "人工复核" in value.get("message", "")
@@ -144,7 +146,10 @@ class TravelGraphBuildTests(unittest.TestCase):
             }
         )
         self.assertEqual(self._rule(result, "W39")["distinguish_result"], "WARNING")
-        self.assertEqual(self._rule(result, "TRAVEL-TAX-001")["distinguish_result"], "WARNING")
+        self.assertEqual(
+            self._rule(result, "E39", "检查发票可抵扣税额和表单税额是否相等")["distinguish_result"],
+            "WARNING",
+        )
         self.assertEqual(result["checkStatus"], "warning")
 
     def test_rule_state_placeholders_cover_complex_travel_checks(self) -> None:
@@ -165,7 +170,7 @@ class TravelGraphBuildTests(unittest.TestCase):
         self.assertEqual(self._rule(result, "E25")["distinguish_result"], "REJECT")
         self.assertEqual(self._rule(result, "E20", "检查自购/月结火车票的票据行程与核销单中差旅行程日期是否一致")["distinguish_result"], "REJECT")
         self.assertEqual(
-            result["decisionOutput"]["travel_e29_train_passenger_result"]["distinguish_result"],
+            result["decisionOutput"]["travel_travel_r13_检查是否代他人核销差旅费_result"]["distinguish_result"],
             "REJECT",
         )
         self.assertEqual(self._rule(result, "E32", "检查是否为二等座及以下")["distinguish_result"], "REJECT")
@@ -248,16 +253,16 @@ class TravelGraphBuildTests(unittest.TestCase):
 
     def test_monthly_train_is_checked_for_each_invoice(self) -> None:
         result = self._evaluate({"selfBoughtMonthlyTrain": True})
-        self.assertEqual(self._rule(result, "TRAVEL-TRAIN-001")["distinguish_result"], "REJECT")
+        self.assertEqual(self._rule(result, "E41")["distinguish_result"], "REJECT")
 
         # Row 32 is explicitly a per-ticket rule in the CSV.  A non-primary
         # invoice must not be suppressed by document-level dedup metadata.
         still_checked = self._evaluate({
             "selfBoughtMonthlyTrain": True,
             "primaryInvoice": False,
-            "raisedRuleCodes": ["TRAVEL-TRAIN-001"],
+            "raisedRuleCodes": ["E41"],
         })
-        self.assertEqual(self._rule(still_checked, "TRAVEL-TRAIN-001")["distinguish_result"], "REJECT")
+        self.assertEqual(self._rule(still_checked, "E41")["distinguish_result"], "REJECT")
 
     def test_multi_invoice_tax_total_is_evaluated_by_the_graph(self) -> None:
         passed = self._evaluate({
@@ -265,23 +270,32 @@ class TravelGraphBuildTests(unittest.TestCase):
             "taxInfo": {"invoiceDeductibleTaxTotal": 3, "formInputTax": 3},
             "ruleStates": {"travel_tax_amount": "pass"},
         })
-        self.assertEqual(self._rule(passed, "TRAVEL-TAX-001")["distinguish_result"], "PASS")
+        self.assertEqual(
+            self._rule(passed, "E39", "检查发票可抵扣税额和表单税额是否相等")["distinguish_result"],
+            "PASS",
+        )
 
         warning = self._evaluate({
             "primaryInvoice": True,
             "taxInfo": {"invoiceDeductibleTaxTotal": 3, "formInputTax": 4},
             "ruleStates": {"travel_tax_amount": "warning"},
         })
-        self.assertEqual(self._rule(warning, "TRAVEL-TAX-001")["distinguish_result"], "WARNING")
+        self.assertEqual(
+            self._rule(warning, "E39", "检查发票可抵扣税额和表单税额是否相等")["distinguish_result"],
+            "WARNING",
+        )
 
         deduped = self._evaluate({
             "primaryInvoice": False,
-            "raisedRuleCodes": ["TRAVEL-TAX-001"],
-            "raisedRuleKeys": ["travel_tax_amount"],
+            "raisedRuleCodes": ["E39"],
+            "raisedRuleKeys": ["travel_r37_检查发票可抵扣税额和表单税额是否相等"],
             "taxInfo": {"invoiceDeductibleTaxTotal": 3, "formInputTax": 4},
             "ruleStates": {"travel_tax_amount": "warning"},
         })
-        self.assertEqual(self._rule(deduped, "TRAVEL-TAX-001")["distinguish_result"], "PASS")
+        self.assertEqual(
+            self._rule(deduped, "E39", "检查发票可抵扣税额和表单税额是否相等")["distinguish_result"],
+            "PASS",
+        )
 
 
 if __name__ == "__main__":

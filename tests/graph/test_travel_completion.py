@@ -21,12 +21,13 @@ class _CapturingRuntime:
         del graph_path, graph_content
         self.inputs.append(copy.deepcopy(prepared_input))
         tax_info = prepared_input["serviceData"]["travelAudit"]["taxInfo"]
-        state = prepared_input["serviceData"]["travelAudit"]["ruleStates"].get("travel_tax_amount")
+        states = prepared_input["serviceData"]["travelAudit"]["ruleStates"]
+        state = states.get("r37", states.get("travel_tax_amount"))
         return {
             "checkStatus": "warning" if state == "warning" else "passed",
             "decisionOutput": {
-                "travel_tax_result": {
-                    "reason_code": "TRAVEL-TAX-001",
+                "travel_travel_r37_检查发票可抵扣税额和表单税额是否相等_result": {
+                    "reason_code": "E39",
                     "distinguish_result": "WARNING" if state == "warning" else "PASS",
                     "invoice_tax_total": tax_info.get("invoiceDeductibleTaxTotal"),
                 }
@@ -210,8 +211,11 @@ class TravelCompletionTests(unittest.TestCase):
         self.assertFalse(second["primaryInvoice"])
         self.assertEqual(first["taxInfo"]["invoiceDeductibleTaxTotal"], 3)
         self.assertEqual(second["taxInfo"]["invoiceDeductibleTaxTotal"], 3)
-        self.assertEqual(second["raisedRuleCodes"], ["TRAVEL-TAX-001"])
-        self.assertEqual(second["raisedRuleKeys"], ["travel_tax_amount"])
+        self.assertEqual(second["raisedRuleCodes"], ["E39"])
+        self.assertEqual(
+            second["raisedRuleKeys"],
+            ["travel_r37_检查发票可抵扣税额和表单税额是否相等"],
+        )
         self.assertEqual(result["invoiceCount"], 2)
 
 
