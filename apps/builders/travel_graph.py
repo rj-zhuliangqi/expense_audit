@@ -3,9 +3,9 @@
 The travel graph is generated from ``resources/reference/travel_rules.csv``.
 The CSV is an offline snapshot of the Feishu rule sheet; the graph builder
 never needs a Feishu login or network access.  Every source row becomes its
-own decision table, including rows that share a reason code.  The output path
-contains the stable ``rule_key`` so the application can distinguish each source
-rule even when legacy Feishu text contains a repeated base code.
+own decision table and carries one unique normalized reason code.  The output
+path contains the stable ``rule_key`` so the application can distinguish each
+source rule independently of the display code.
 """
 from __future__ import annotations
 
@@ -56,11 +56,10 @@ STD_OUTPUTS = [
     ("a1b2c3d4-0000-0000-0000-createtime0", "创建时间", "create_time"),
 ]
 INPUT_NAMESPACE = uuid.UUID("f3e9c4b3-e0f2-4d29-9b37-bf2bb3f355e0")
-# Feishu currently reuses these public codes across two source rows.  The
-# stable rule_key/outputPath, rather than the public code, is the backend
-# identity for those rows.  Other repeated legacy codes are normalized with
-# explicit occurrence suffixes by the snapshot synchronizer.
-_REUSED_PUBLIC_CODES = frozenset({"E32", "E39"})
+# The synchronizer consumes only active Feishu rich-text fragments and
+# normalizes each source row to one unique public code.  ``rule_key`` and
+# ``outputPath`` still identify the source row, while ``reason_code`` remains
+# the single backend-facing code for that audit point.
 
 # Rows whose business result is document-level.  The row number is stable even
 # if the text/code in the Feishu sheet is edited later.
@@ -151,14 +150,19 @@ def _load_csv_rows(source_path: Path | str | None = None) -> list[dict[str, str]
 
     # The normalized snapshot is the backend-facing identity map.  A code may
     # appear in several decision-table outcome rows inside one node (PASS /
-    # REJECT / WARNING).  E32/E39 are also reused across source rows per the
-    # current Feishu sheet; rule_key/outputPath remains the precise identity.
+    # REJECT / WARNING), but it must identify exactly one source rule.
     code_owner: dict[str, str] = {}
     for row in rows:
         rule_key = row.get("rule_key") or row.get("source_row") or "unknown"
-        for code in _normalized_codes(row):
+        codes = _normalized_codes(row)
+        if len(codes) != 1:
+            raise ValueError(
+                f"travel rule {rule_key!r} must contain exactly one normalized "
+                f"reason code, got {codes!r}"
+            )
+        for code in codes:
             previous = code_owner.get(code)
-            if previous is not None and previous != rule_key and code not in _REUSED_PUBLIC_CODES:
+            if previous is not None and previous != rule_key:
                 raise ValueError(
                     f"duplicate normalized travel reason code {code!r}: "
                     f"{previous} and {rule_key}"
@@ -176,7 +180,12 @@ def _build_definitions(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
     for index, row in enumerate(rows, start=1):
         source_row = int(row.get("source_row") or index + 1)
         behavior = dict(_BEHAVIOR.get(source_row) or {"state": f"r{source_row:02d}", "formula": "missing"})
-        codes = _normalized_codes(row) or ["UNKNOWN"]
+        codes = _normalized_codes(row)
+        if len(codes) != 1:
+            raise ValueError(
+                f"travel rule {row.get('rule_key') or source_row!r} must contain "
+                f"exactly one normalized reason code, got {codes!r}"
+            )
         definition = {
             "row": index,
             "source_row": source_row,
@@ -433,13 +442,11 @@ def _make_decision_node(definition: dict[str, Any], row: dict[str, str]) -> dict
     add("pass", "PASS", code)
 
     if definition["source_row"] == 10:
-        # The source E cell contains two final codes for this one audit point:
-        # the application/theory overage and the insufficient invoice amount.
-        # Keep both exact normalized codes instead of reverting to old codes.
-        theory_code = definition["codes"][0]
-        invoice_code = definition["codes"][1] if len(definition["codes"]) > 1 else definition["codes"][0]
-        add("reject_theory", "REJECT", theory_code, message=failure)
-        add("reject_invoice", "REJECT", invoice_code, message=failure)
+        # The current Feishu E cell keeps only E31-1 active; the former E32
+        # self-driving amount code is struck through and must not be emitted.
+        # Both executable failure states therefore use the one active code.
+        add("reject_theory", "REJECT", code, message=failure)
+        add("reject_invoice", "REJECT", code, message=failure)
     elif definition["source_row"] == 32:
         # E05's public messages include the duplicate source; preserve the
         # existing common-invoice output contract.
@@ -450,8 +457,8 @@ def _make_decision_node(definition: dict[str, Any], row: dict[str, str]) -> dict
         ):
             add(state, "REJECT", code, message=message, message_is_expression=True)
     elif definition["source_row"] == 37:
-        # The tax check deliberately reuses E39 but a mismatch is a warning:
-        # the amount may require finance review rather than automatic rejection.
+        # The active Feishu code is W36; a mismatch is a warning because the
+        # amount may require finance review rather than automatic rejection.
         add("warning", "WARNING", code, message=failure)
     else:
         state = "warning" if definition["mode"] == "warning" else "reject"

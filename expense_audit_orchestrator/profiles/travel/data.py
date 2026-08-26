@@ -734,8 +734,9 @@ def _build_receipt_rule_states(
         # 发票金额在 invoice enricher 中补入；仅有申请金额不能冒充有效票据金额。
         states["self_driving_amount"] = "missing"
 
-    # The graph uses stable source-row aliases (r02..r37) so repeated reason
-    # codes remain independent. Keep descriptive names for old fixtures.
+    # The graph uses stable source-row aliases (r02..r37) so each Feishu
+    # source rule remains independently addressable. Keep descriptive names
+    # for old fixtures.
     _copy_travel_rule_state_aliases(states)
     return states
 

@@ -1361,7 +1361,7 @@ def _update_travel_invoice_context(
                 if abs(invoice_tax_total - form_tax) <= 0.01
                 else "warning"
             )
-            # r37 is the stable Feishu source-row state for E39. Keep the
+            # r37 is the stable Feishu source-row state for W36. Keep the
             # descriptive legacy key for old prepared receipts.
             states["r37"] = tax_state
             states["travel_tax_amount"] = tax_state
@@ -1422,10 +1422,9 @@ def _extract_document_rule_context(
 ) -> tuple[list[str], list[str]]:
     """Extract document-level exceptions by stable rule key, not code.
 
-    The historical Feishu sheet contains repeated base-code text in some
-    legacy rows, while the normalized snapshot assigns each source rule a
-    unique suffixed code. The full ``travel_rXX_...`` key remains the safe
-    deduplication identity; ``raisedRuleCodes`` is a compatibility summary.
+    The normalized snapshot assigns each Feishu source rule one unique code.
+    The full ``travel_rXX_...`` key remains the safe deduplication identity;
+    ``raisedRuleCodes`` is a compatibility summary.
     """
     decision_output = invoice_result.get("decisionOutput")
     if not isinstance(decision_output, Mapping):
