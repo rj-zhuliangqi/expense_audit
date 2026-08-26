@@ -158,7 +158,7 @@ class EntertainmentRuleTagTests(unittest.TestCase):
             self.assertIn("problem_category", fields, node["id"])
             self.assertIn("optimization_action_category", fields, node["id"])
 
-    def test_e15_e17_e34_reject_rules_populate_tags_in_builder_and_graph(self) -> None:
+    def test_e15_e17_e42_reject_rules_populate_tags_in_builder_and_graph(self) -> None:
         expected = {
             "ent-self-expense-check": ('"本人费用"', '"【删除发票】"'),
             "ent-recharge-card-check": ('"充值消费"', '"【删除发票】【重新开票】"'),

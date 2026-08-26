@@ -176,7 +176,7 @@ def fetch_taxi_invoice_serial_numbers(
     service_url: str = DEFAULT_AUDIT_SERVICE_URL,
     timeout: float | None = None,
 ) -> list[str]:
-    """查询个人交通费 E34 使用的历史出租车发票连号。
+    """查询个人交通费 E42 使用的历史出租车发票连号。
 
     ``accounting_code`` 仅为兼容发票连号 provider 的调用签名保留，
     出租车专用接口不接收该查询参数。

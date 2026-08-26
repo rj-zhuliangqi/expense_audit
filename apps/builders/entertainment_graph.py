@@ -4,7 +4,7 @@
 基于通讯费 `resources/graphs/graph-latest-telecom-0727-1900.json` 的结构，为业务招待费生成新的 graph：
 - 复用通用稽核节点（E35/E31/E33/sys-001-004/E09/E05/E17）
 - 删除通讯费旧版节点，并重建业务招待费所需的 E01 抬头检查
-- 新增业务招待费特有节点（E36 禁止内容、E15 员工本人费用、W33 礼品数量、W34 发票连续或近似、E34 出租车发票连号、W31 虚开发票预警）
+- 新增业务招待费特有节点（E36 禁止内容、E15 员工本人费用、W33 礼品数量、W34 发票连续或近似、E42 出租车发票连号、W31 虚开发票预警）
 - 泛化判断用 LLM+prompt 解决，不用规则
 
 用法:
@@ -338,7 +338,7 @@ ENTERTAINMENT_PREPROCESS_EXPRESSIONS = [
         "value": '(serviceData.w34InvoiceSerial.isApplicable ?? false) and (invoiceNo ?? "") != "" and ((serviceData.w34InvoiceSerial.batchHit ?? false) or some((previousW34InvoiceNumbers ?? []) as prev, (prev ?? "") != "" and abs(number(invoiceNo) - number(prev)) <= 10) or some((serviceData.w34InvoiceSerial.historyNumbers ?? []) as prev, (prev ?? "") != "" and prev != invoiceNo and abs(number(invoiceNo) - number(prev)) <= 10))',
     },
     {
-        # E34：出租车发票去掉后两位后，前六位一致即视为连号。
+        # E42：出租车发票去掉后两位后，前六位一致即视为连号。
         # 历史库命中、本核销单内存在同前缀出租车发票，或历史查询失败时均不通过。
         "id": _new_uuid(),
         "key": "isEntertainmentTaxiHistoricalConsecutive",
@@ -563,13 +563,13 @@ def _build_invoice_number_check_node() -> dict:
 
 
 def _build_taxi_invoice_serial_check_node() -> dict:
-    """本核销单内出租车发票连号检查 E34。"""
+    """本核销单内出租车发票连号检查 E42。"""
     node_id = "ent-taxi-invoice-serial-check"
     audit_content = "检查本核销单内出租车发票号码是否存在连号"
     rules = [
         _std_rule_row(
             input_value="true",
-            reason_code="E34",
+            reason_code="E42",
             distinguish_result="PASS",
             audit_content=audit_content,
             audit_type="general-rules",
@@ -579,11 +579,11 @@ def _build_taxi_invoice_serial_check_node() -> dict:
         ),
         _std_rule_row(
             input_value="false",
-            reason_code="E34",
+            reason_code="E42",
             distinguish_result="REJECT",
             audit_content=audit_content,
             audit_type="general-rules",
-            message='(serviceData.entertainmentInvoiceSerial.lookupFailed ?? false) ? "出租车发票历史连号接口查询失败，已自动重试但仍未成功，无法完成 E34 连号稽核，请稍后重试或联系财务处理。" : ("本次报销中存在出租车发票连号，发票号 " + (invoiceNo ?? "") + " 与" + (serviceData.entertainmentInvoiceSerial.relationDescription ?? "本核销单中的其他出租车发票") + " 存在连号关系，存在异常报销风险。")',
+            message='(serviceData.entertainmentInvoiceSerial.lookupFailed ?? false) ? "出租车发票历史连号接口查询失败，已自动重试但仍未成功，无法完成 E42 连号稽核，请稍后重试或联系财务处理。" : ("本次报销中存在出租车发票连号，发票号 " + (invoiceNo ?? "") + " 与" + (serviceData.entertainmentInvoiceSerial.relationDescription ?? "本核销单中的其他出租车发票") + " 存在连号关系，存在异常报销风险。")',
             policies_index='"《锐捷网络员工费用管理与报销制度》\\n5.2票据使用规范\\n所有费用报销须提供真实、合法、合规的票据。"',
             suggestion='"请确认票据是否真实对应本次业务。无法说明合理业务原因的，请删除相关票据；保留提交的，系统将记录并转财务复核。"',
             problem_category="连号票据",
@@ -1304,7 +1304,7 @@ def build_entertainment_graph(source_path: Path | str | None = None) -> dict:
     nodes.append(_build_self_expense_check_node())      # E15
     nodes.append(_build_gift_count_check_node())        # W33
     nodes.append(_build_invoice_number_check_node())    # W34
-    nodes.append(_build_taxi_invoice_serial_check_node())  # E34
+    nodes.append(_build_taxi_invoice_serial_check_node())  # E42
 
     # --- Phase 3: LLM 内容合规节点改造 ---
     # 删除旧的充值卡检查prompt、调用llm、后处理、充值卡检查节点

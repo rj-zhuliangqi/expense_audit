@@ -11,7 +11,7 @@ from expense_audit_orchestrator.paths import OFFICIAL_GRAPH_PATHS
 GRAPH_PATH = OFFICIAL_GRAPH_PATHS["entertainment"]
 
 
-class E34EntertainmentInvoiceGraphTests(unittest.TestCase):
+class E42EntertainmentInvoiceGraphTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.decision = load_decision(GRAPH_PATH)
@@ -34,7 +34,7 @@ class E34EntertainmentInvoiceGraphTests(unittest.TestCase):
             relation_description = "本次核销单其他出租车发票号 12345602"
 
         return {
-            "receipt": {"code": "REC-ENT-E34-001"},
+            "receipt": {"code": "REC-ENT-E42-001"},
             "context": {},
             "invoiceNo": invoice_no,
             "invoiceType": "8" if is_taxi else "餐饮服务",
@@ -51,7 +51,7 @@ class E34EntertainmentInvoiceGraphTests(unittest.TestCase):
                 "companyBlacklist": [],
                 "invoiceUsageHistory": [],
                 "auditInfo": {
-                    "instanceCode": "INSTANCE-E34-001",
+                    "instanceCode": "INSTANCE-E42-001",
                     "instanceComCode": "",
                     "applyAmount": 100,
                     "submitTime": "2026-01-01",
@@ -96,7 +96,7 @@ class E34EntertainmentInvoiceGraphTests(unittest.TestCase):
                     ),
                     trace=False,
                 )
-                rule = self._rule(result, "E34")
+                rule = self._rule(result, "E42")
                 self.assertEqual(rule["distinguish_result"], "REJECT")
                 self.assertIn("发票号 12345601", rule["message"])
                 self.assertNotIn("{发票号}", rule["message"])
@@ -107,7 +107,7 @@ class E34EntertainmentInvoiceGraphTests(unittest.TestCase):
             self._prepared(is_taxi=True, lookup_failed=True),
             trace=False,
         )
-        rule = self._rule(result, "E34")
+        rule = self._rule(result, "E42")
 
         self.assertEqual(rule["distinguish_result"], "REJECT")
         self.assertIn("历史连号接口查询失败", rule["message"])
@@ -119,7 +119,7 @@ class E34EntertainmentInvoiceGraphTests(unittest.TestCase):
             self._prepared(is_taxi=True, history_hit=True, batch_hit=True),
             trace=False,
         )
-        rule = self._rule(result, "E34")
+        rule = self._rule(result, "E42")
 
         self.assertEqual(rule["distinguish_result"], "REJECT")
         self.assertIn("本次核销单其他出租车发票号 12345602", rule["message"])
@@ -131,7 +131,7 @@ class E34EntertainmentInvoiceGraphTests(unittest.TestCase):
             self._prepared(is_taxi=True),
             trace=False,
         )
-        self.assertEqual(self._rule(result, "E34")["distinguish_result"], "PASS")
+        self.assertEqual(self._rule(result, "E42")["distinguish_result"], "PASS")
 
     def test_non_taxi_passes_even_if_flags_are_true(self) -> None:
         result = evaluate_prepared_input(
@@ -144,7 +144,7 @@ class E34EntertainmentInvoiceGraphTests(unittest.TestCase):
             ),
             trace=False,
         )
-        self.assertEqual(self._rule(result, "E34")["distinguish_result"], "PASS")
+        self.assertEqual(self._rule(result, "E42")["distinguish_result"], "PASS")
 
     def test_existing_w34_rule_is_preserved(self) -> None:
         graph = json.loads(GRAPH_PATH.read_text(encoding="utf-8"))
