@@ -67,6 +67,7 @@ class EorE31WritebackAndSummaryTests(unittest.TestCase):
         self.assertEqual(eor_payload["auditLogs"][0]["reasonCode"], "E31")
         self.assertEqual(eor_payload["auditLogs"][0]["distinguishResult"], "warning")
         self.assertEqual(eor_payload["auditInvoiceInfos"][0]["reasonCode"], "E31")
+        self.assertEqual(eor_payload["isEor"], "1")
 
         normal_prepared, normal_processed = _writeback_fixture("0")
         normal_payload = assemble_result_audit_info(
@@ -75,6 +76,18 @@ class EorE31WritebackAndSummaryTests(unittest.TestCase):
             expense_profile="telecom",
         )
         self.assertEqual(normal_payload["auditLogs"][0]["distinguishResult"], "reject")
+        self.assertEqual(normal_payload["isEor"], "0")
+
+    def test_is_eor_writeback_normalizes_boolean_values(self) -> None:
+        prepared, processed = _writeback_fixture("false")
+        prepared["serviceData"]["auditInfo"]["isEor"] = False
+        processed["serviceData"]["auditInfo"]["isEor"] = False
+        payload = assemble_result_audit_info(
+            prepared,
+            processed,
+            expense_profile="entertainment",
+        )
+        self.assertEqual(payload["isEor"], "0")
 
     def test_eor_e31_is_high_risk_and_overall_advice_is_warning(self) -> None:
         prepared, processed = _writeback_fixture("1")

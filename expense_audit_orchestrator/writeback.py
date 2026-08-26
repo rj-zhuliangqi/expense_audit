@@ -106,6 +106,7 @@ def assemble_result_audit_info(
     service_data["auditInfo"] = audit_info
     instance_code = _get_string_value(audit_info, "instanceCode") or receipt_code
     is_eor = _is_eor_enabled(audit_info, expense_profile)
+    normalized_is_eor = _normalize_is_eor_value(audit_info.get("isEor"))
 
     invoice_pairs = _pair_invoices(prepared_receipt, processed_receipt)
     is_amount_sufficient = processed_receipt.get("isAmountSufficient")
@@ -178,6 +179,11 @@ def assemble_result_audit_info(
         "auditTruthCheckResultItems": _build_audit_truthcheck_result_items(instance_code, invoice_pairs),
         "auditTruthCheckResultItemCols": _build_audit_truthcheck_result_item_cols(instance_code, invoice_pairs),
     }
+    # IsEor 是核销单原始业务字段，不是模型输出。E31 的图内判断依赖它，
+    # 回写接口也会同步更新 form_masterinfo.IsEor，因此只允许以数据库兼容的
+    # 单字符值回写，禁止把 Python bool 或 ``"true"/"false"`` 直接传给后端。
+    if normalized_is_eor is not None:
+        result["isEor"] = normalized_is_eor
     # 核销单级金额汇总：优先使用编排层已计算的值；兼容直接调用
     # assemble_result_audit_info 的场景时，在回写前按同一套 Decimal 规则补算。
     ai_audit_summary = processed_receipt.get("aiAuditSummary")
@@ -1216,8 +1222,21 @@ def _is_eor_enabled(audit_info: Mapping[str, Any], expense_profile: str | None) 
     normalized_profile = (expense_profile or "").strip().lower().replace("-", "_")
     if normalized_profile not in {"telecom", "personal_transport", "entertainment"}:
         return False
-    value = audit_info.get("isEor")
-    return str(value).strip().lower() in {"1", "true"}
+    return _normalize_is_eor_value(audit_info.get("isEor")) == "1"
+
+
+def _normalize_is_eor_value(value: Any) -> str | None:
+    """Normalize the source IsEor flag to the one-character API/DB format."""
+    if isinstance(value, bool):
+        return "1" if value else "0"
+    if value is None:
+        return None
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true"}:
+        return "1"
+    if normalized in {"0", "false"}:
+        return "0"
+    return None
 
 
 def _resolve_expense_profile_name(*sources: Mapping[str, Any]) -> str | None:

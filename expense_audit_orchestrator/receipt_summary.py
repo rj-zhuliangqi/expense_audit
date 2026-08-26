@@ -404,10 +404,18 @@ def extract_valid_invoice_final_amount(
 
 
 def _extract_decision_final_amount(decision_output: Mapping[str, Any]) -> Decimal | None:
+    # 不同费用流程图的内容审核节点使用不同的输出路径：
+    # 交通/通讯费历史图使用 ``invoice_content_valid_result``，业务招待费
+    # 当前图使用 ``content_compliance_result``。金额字段本身仍然是
+    # ``invoice_finalAmount``，这里统一兼容，避免 E36 的有效金额在汇总层丢失。
     candidates: list[Any] = [decision_output.get("invoice_finalAmount")]
-    content_valid_result = decision_output.get("invoice_content_valid_result")
-    if isinstance(content_valid_result, Mapping):
-        candidates.append(content_valid_result.get("invoice_finalAmount"))
+    for result_key in (
+        "invoice_content_valid_result",
+        "content_compliance_result",
+    ):
+        result = decision_output.get(result_key)
+        if isinstance(result, Mapping):
+            candidates.append(result.get("invoice_finalAmount"))
 
     for candidate in candidates:
         amount = _to_decimal(candidate)
