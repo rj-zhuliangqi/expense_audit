@@ -224,7 +224,7 @@ def _build_entertainment_profile(
         },
         invoice_enrichers={
             "e15InvoiceType": build_e15_invoice_type_enricher(),
-            # W34 使用通用跨核销单发票连号接口；E34 使用出租车专用历史接口，
+            # W34 使用通用跨核销单发票连号接口；E42 使用出租车专用历史接口，
             # 并在应用层补充本核销单内出租车发票连号关系。
             "w34InvoiceSerial": build_w34_invoice_serial_enricher(
                 service_url=service_url,

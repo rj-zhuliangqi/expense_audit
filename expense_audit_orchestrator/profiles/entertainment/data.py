@@ -180,9 +180,9 @@ def build_entertainment_taxi_invoice_serial_enricher(
     service_url: str | None = None,
     provider: InvoiceSerialNumberProvider | None = None,
 ) -> Callable[[str, str, dict[str, Any], dict[str, Any]], dict[str, Any]]:
-    """构造 E34 的出租车历史及本核销单连号数据准备。
+    """构造 E42 的出租车历史及本核销单连号数据准备。
 
-    E34 使用出租车专用的 ``invoice-serial-number-taxi`` 历史接口，并由
+    E42 使用出租车专用的 ``invoice-serial-number-taxi`` 历史接口，并由
     应用层继续聚合本核销单内的出租车发票。历史接口返回空列表且本单无
     连号时通过；查询失败会保留 ``lookupFailed``，交由流程图拒绝，避免
     把接口故障静默当成无连号。
@@ -229,9 +229,9 @@ def build_entertainment_taxi_invoice_serial_enricher(
             except Exception as exc:
                 lookup_failed = True
                 _logger.warning(
-                    "业务招待费 E34 出租车发票历史连号查询失败，降级为空列表",
+                    "业务招待费 E42 出租车发票历史连号查询失败，降级为空列表",
                     extra={
-                        "event": "data_prep.entertainment_e34_taxi_invoice_serial.fallback",
+                        "event": "data_prep.entertainment_e42_taxi_invoice_serial.fallback",
                         "receipt_code": receipt_code,
                         "instance_code": instance_code,
                         "cheque_no": invoice_no,

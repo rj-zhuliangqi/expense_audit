@@ -77,6 +77,8 @@ class GetProfileTelecomAssetDirTests(unittest.TestCase):
         self.assertEqual(profile.audit_risk_catalog["E01"]["riskLevel"], "blocking")
         self.assertEqual(profile.audit_risk_catalog["W29"]["riskLevel"], "medium_low")
         self.assertEqual(profile.audit_risk_catalog["W36"]["riskLevel"], "high")
+        self.assertEqual(profile.audit_risk_catalog["E42"]["riskLevel"], "blocking")
+        self.assertNotIn("E34", profile.audit_risk_catalog)
         invoice_enricher = profile.invoice_enrichers["personalTransportInvoiceType"]
         result = invoice_enricher(
             "R",
@@ -109,6 +111,13 @@ class GetProfileTelecomAssetDirTests(unittest.TestCase):
         self.assertEqual(profile.audit_risk_catalog["W34"]["riskLevel"], "high")
         self.assertEqual(profile.audit_risk_catalog["W31"]["riskLevel"], "high")
         self.assertEqual(profile.audit_risk_catalog["E36"]["riskLevel"], "blocking")
+        self.assertEqual(profile.audit_risk_catalog["E42"]["riskLevel"], "blocking")
+        self.assertNotIn("E34", profile.audit_risk_catalog)
+        self.assertEqual(
+            profile.audit_rule_catalog["E42"]["auditContent"],
+            "检查本核销单内出租车发票号码是否存在连号",
+        )
+        self.assertNotIn("E34", profile.audit_rule_catalog)
 
     def test_graph_path_env_override(self) -> None:
         """图路径支持通过 .env 环境变量覆盖，无需改代码。"""

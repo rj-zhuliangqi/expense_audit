@@ -189,7 +189,7 @@ class EntertainmentDataTests(unittest.TestCase):
         self.assertEqual(result["historyNumbers"], [])
         self.assertFalse(result["historyHit"])
 
-    def test_e34_taxi_enricher_uses_taxi_history_interface_by_default(self) -> None:
+    def test_e42_taxi_enricher_uses_taxi_history_interface_by_default(self) -> None:
         with patch.object(
             audit_client,
             "fetch_taxi_invoice_serial_numbers",
@@ -197,7 +197,7 @@ class EntertainmentDataTests(unittest.TestCase):
         ) as taxi_provider, patch.object(
             audit_client,
             "fetch_invoice_serial_numbers",
-            side_effect=AssertionError("E34 must not query generic W34 history interface"),
+            side_effect=AssertionError("E42 must not query generic W34 history interface"),
         ):
             enricher = build_entertainment_taxi_invoice_serial_enricher(
                 service_url="https://service.example"
@@ -225,7 +225,7 @@ class EntertainmentDataTests(unittest.TestCase):
         self.assertTrue(result["historyHit"])
         self.assertFalse(result["lookupFailed"])
 
-    def test_e34_taxi_enricher_marks_history_lookup_failure(self) -> None:
+    def test_e42_taxi_enricher_marks_history_lookup_failure(self) -> None:
         def provider(*args):
             raise RuntimeError("service unavailable")
 
@@ -240,7 +240,7 @@ class EntertainmentDataTests(unittest.TestCase):
         self.assertFalse(result["historyHit"])
         self.assertTrue(result["lookupFailed"])
 
-    def test_e34_short_taxi_invoice_does_not_query_history(self) -> None:
+    def test_e42_short_taxi_invoice_does_not_query_history(self) -> None:
         def provider(*args):
             raise AssertionError(f"short invoice must not query history: {args}")
 

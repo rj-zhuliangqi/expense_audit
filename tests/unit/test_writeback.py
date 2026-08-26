@@ -10,6 +10,70 @@ from expense_audit_orchestrator.profiles.telecom.writeback import telecom_compli
 
 
 class WritebackAssemblerTests(unittest.TestCase):
+    def test_taxi_serial_rule_writes_back_as_e42_for_transport_and_entertainment(self) -> None:
+        prepared_input = {
+            "invoiceNo": "12345601",
+            "serviceData": {
+                "currentInvoiceInfo": {"aiiid": "AIIID-E42-001"},
+                "currentAuditInvoiceFile": {"afiid": "AFID-E42-001", "fid": "FID-E42-001"},
+            },
+        }
+        prepared_receipt = {
+            "receiptCode": "REC-E42-001",
+            "serviceData": {"auditInfo": {"instanceCode": "REC-E42-001"}},
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-E42-001",
+                    "invoiceFile": {"fid": "FID-E42-001"},
+                    "preparedInput": prepared_input,
+                }
+            ],
+        }
+        processed_receipt = {
+            "receiptCode": "REC-E42-001",
+            "invoiceResults": [
+                {
+                    "invoiceKey": "FID-E42-001",
+                    "preparedInput": prepared_input,
+                    "decisionOutput": {
+                        "taxi_serial_result": {
+                            "reason_code": "E42",
+                            "distinguish_result": "REJECT",
+                            "audit_content": "检查出租车发票号码是否存在连号",
+                            "audit_type": "general-rules",
+                            "message": "出租车发票存在连号风险",
+                            "policiesIndex": "",
+                            "employeeSuggestionTips": "请确认票据是否真实对应本次业务。",
+                            "problem_category": "连号票据",
+                            "optimization_action_category": "【删除票据】【风险记录】",
+                        }
+                    },
+                    "decisionStatus": "reject",
+                    "executionStatus": "SUCCEEDED",
+                }
+            ],
+        }
+
+        for expense_profile in ("personal_transport", "entertainment"):
+            with self.subTest(expense_profile=expense_profile):
+                payload = assemble_result_audit_info(
+                    prepared_receipt,
+                    processed_receipt,
+                    expense_profile=expense_profile,
+                )
+                e42_logs = [
+                    log for log in payload["auditLogs"] if log["reasonCode"] == "E42"
+                ]
+                self.assertEqual(len(e42_logs), 1)
+                self.assertEqual(e42_logs[0]["distinguishResult"], "reject")
+                self.assertNotIn(
+                    "E34", {log["reasonCode"] for log in payload["auditLogs"]}
+                )
+                self.assertEqual(
+                    payload["auditInvoiceInfos"][0]["reasonCode"],
+                    "E42",
+                )
+
     def test_assemble_result_audit_info_maps_current_receipt_sources(self) -> None:
         prepared_receipt = {
             "receiptCode": "REC-WRITEBACK-001",

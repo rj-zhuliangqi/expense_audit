@@ -85,7 +85,7 @@
 | 本人姓名检查 | E15 | 阻断(REJECT) | `isPassengerNameMatch` | `passengerName` + `verifiUserName` |
 | 出行人信息检查 | W29 | 标记(WARNING) | `hasPassengerInfo` | `passengerName` + 票据类型 + 发票内容 |
 | 出行人本人检查 | E37 | 阻断(REJECT) | `isDigitalPassengerNameMatch` | `passengerName` + 核销人姓名 + 票据类型 + 发票内容 |
-| 出租车发票连票检查 | E34 | 阻断(REJECT) | `isTaxiConsecutive` | 历史连票接口 + 同核销单出租车发票连票关系 |
+| 出租车发票连票检查 | E42 | 阻断(REJECT) | `isTaxiConsecutive` | 历史连票接口 + 同核销单出租车发票连票关系 |
 | 发票内容项目检查 | E36 | 阻断(REJECT) | `isTravelContent` | `contents`（硬编码关键词） |
 
 ---
@@ -94,7 +94,7 @@
 
 1. **OCR 字段对齐**：确认 `passengerName` 字段名及适用票种，与 OCR 团队对齐
 2. **票种清单配置**：在审计服务中为交通费费用项配置上述 8 种票种
-3. **出租车连票检查**：E34 已由 `expense_audit_orchestrator` 在数据准备阶段查询历史连票，并在执行前注入同核销单出租车发票关系；问题文案会展示关联发票号
+3. **出租车连票检查**：E42 已由 `expense_audit_orchestrator` 在数据准备阶段查询历史连票，并在执行前注入同核销单出租车发票关系；问题文案会展示关联发票号
 4. **内容关键词动态化**：当前硬编码在图中，后续可改为 `serviceData` enricher（类似 `telecom_list`）
 5. **travel profile 注册**：本次仅改图 JSON，`profiles/travel` 代码注册留待后续
 
