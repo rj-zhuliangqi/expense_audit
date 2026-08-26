@@ -151,6 +151,7 @@ def _build_travel_profile(
         build_travel_receipt_enricher,
         travel_invoice_enricher,
     )
+    from .personal_transport.data import build_taxi_invoice_serial_enricher
     from .travel.writeback import (
         travel_audit_travels_builder,
         travel_compliance_rule,
@@ -163,7 +164,14 @@ def _build_travel_profile(
         receipt_enrichers={
             "travelAudit": build_travel_receipt_enricher(service_url=service_url),
         },
-        invoice_enrichers={"travelAudit": travel_invoice_enricher},
+        invoice_enrichers={
+            "travelAudit": travel_invoice_enricher,
+            # 差旅费沿用个人交通费的出租车发票历史连号查询和前缀规则；
+            # 应用层会在全部发票准备完成后补充本核销单 batchHit。
+            "taxiInvoiceSerial": build_taxi_invoice_serial_enricher(
+                service_url=service_url,
+            ),
+        },
         compliance_rule=travel_compliance_rule,
         audit_travels_builder=travel_audit_travels_builder,
         form_invoice_tax_views_builder=travel_form_invoice_tax_views_builder,
