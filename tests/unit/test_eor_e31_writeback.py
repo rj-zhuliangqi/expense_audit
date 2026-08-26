@@ -1,4 +1,5 @@
 import unittest
+from typing import Any
 
 from expense_audit_orchestrator.receipt_summary import (
     build_ai_audit_advice,
@@ -7,7 +8,11 @@ from expense_audit_orchestrator.receipt_summary import (
 from expense_audit_orchestrator.writeback import assemble_result_audit_info
 
 
-def _writeback_fixture(is_eor: str) -> tuple[dict, dict]:
+def _writeback_fixture(
+    is_eor: Any = "0",
+    *,
+    include_is_eor: bool = True,
+) -> tuple[dict, dict]:
     service_data = {
         "auditInfo": {
             "instanceCode": "REC-EOR-WRITEBACK-001",
@@ -53,6 +58,8 @@ def _writeback_fixture(is_eor: str) -> tuple[dict, dict]:
         "validInvoiceTotal": 40,
         "isAmountSufficient": False,
     }
+    if not include_is_eor:
+        service_data["auditInfo"].pop("isEor", None)
     return prepared, processed
 
 
@@ -79,15 +86,67 @@ class EorE31WritebackAndSummaryTests(unittest.TestCase):
         self.assertEqual(normal_payload["isEor"], "0")
 
     def test_is_eor_writeback_normalizes_boolean_values(self) -> None:
-        prepared, processed = _writeback_fixture("false")
-        prepared["serviceData"]["auditInfo"]["isEor"] = False
-        processed["serviceData"]["auditInfo"]["isEor"] = False
-        payload = assemble_result_audit_info(
-            prepared,
-            processed,
-            expense_profile="entertainment",
-        )
-        self.assertEqual(payload["isEor"], "0")
+        for profile, value, expected in (
+            ("telecom", True, "1"),
+            ("personal_transport", False, "0"),
+            ("entertainment", "true", "1"),
+        ):
+            with self.subTest(profile=profile, value=value):
+                prepared, processed = _writeback_fixture(value)
+                payload = assemble_result_audit_info(
+                    prepared,
+                    processed,
+                    expense_profile=profile,
+                )
+                self.assertEqual(payload["isEor"], expected)
+
+    def test_is_eor_legacy_key_aliases_are_normalized(self) -> None:
+        for profile, key in (
+            ("telecom", "IsEor"),
+            ("personal_transport", "isEOR"),
+            ("entertainment", "is_eor"),
+        ):
+            with self.subTest(profile=profile, key=key):
+                prepared, processed = _writeback_fixture("0")
+                audit_info = prepared["serviceData"]["auditInfo"]
+                audit_info.pop("isEor")
+                audit_info[key] = True
+                payload = assemble_result_audit_info(
+                    prepared,
+                    processed,
+                    expense_profile=profile,
+                )
+                self.assertEqual(payload["isEor"], "1")
+
+    def test_missing_is_eor_defaults_to_non_eor_for_all_supported_profiles(self) -> None:
+        for profile in ("telecom", "personal_transport", "entertainment"):
+            with self.subTest(profile=profile):
+                prepared, processed = _writeback_fixture(include_is_eor=False)
+                payload = assemble_result_audit_info(
+                    prepared,
+                    processed,
+                    expense_profile=profile,
+                )
+                self.assertEqual(payload["isEor"], "0")
+                self.assertEqual(
+                    payload["auditLogs"][0]["distinguishResult"],
+                    "reject",
+                )
+
+    def test_eor_e31_warning_behavior_applies_to_telecom_and_personal_transport(self) -> None:
+        for profile in ("telecom", "personal_transport", "entertainment"):
+            with self.subTest(profile=profile):
+                prepared, processed = _writeback_fixture("1")
+                payload = assemble_result_audit_info(
+                    prepared,
+                    processed,
+                    expense_profile=profile,
+                )
+                self.assertEqual(payload["isEor"], "1")
+                self.assertEqual(
+                    payload["auditLogs"][0]["distinguishResult"],
+                    "warning",
+                )
 
     def test_eor_e31_is_high_risk_and_overall_advice_is_warning(self) -> None:
         prepared, processed = _writeback_fixture("1")

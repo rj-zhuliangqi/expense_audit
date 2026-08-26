@@ -11,9 +11,10 @@ from collections.abc import Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from .is_eor import is_eor_profile, resolve_is_eor_value
+
 
 _FINANCE_SUMMARY_PROFILES = frozenset({"personal_transport", "telecom", "entertainment"})
-_EOR_E31_PROFILES = frozenset({"personal_transport", "telecom", "entertainment"})
 _FINANCE_RISK_BLOCKING = "blocking"
 _FINANCE_RISK_HIGH = "high"
 _FINANCE_RISK_MEDIUM_LOW = "medium_low"
@@ -896,8 +897,7 @@ def _is_eor_enabled(
     expense_profile: str | None,
 ) -> bool:
     """Return whether EOR semantics apply to this receipt's E31 rule."""
-    normalized_profile = str(expense_profile or "").strip().lower().replace("-", "_")
-    if normalized_profile not in _EOR_E31_PROFILES:
+    if not is_eor_profile(expense_profile):
         return False
 
     for receipt in (prepared_receipt, processed_receipt):
@@ -905,9 +905,9 @@ def _is_eor_enabled(
         if not isinstance(service_data, Mapping):
             continue
         audit_info = service_data.get("auditInfo")
-        if not isinstance(audit_info, Mapping) or "isEor" not in audit_info:
-            continue
-        return str(audit_info.get("isEor") or "").strip().lower() in {"1", "true"}
+        normalized = resolve_is_eor_value(audit_info)
+        if normalized is not None:
+            return normalized == "1"
     return False
 
 
