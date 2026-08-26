@@ -63,28 +63,39 @@ class TravelGraphBuildTests(unittest.TestCase):
             self.assertIn(definition["name"], names)
         self.assertEqual(len(rows), len(build_travel_graph.RULE_DEFINITIONS))
 
-    def test_latest_codes_are_unique_and_keep_occurrence_suffixes(self) -> None:
+    def test_latest_codes_keep_explicit_suffixes_and_reuse_only_e32_e39(self) -> None:
         rows = build_travel_graph._load_csv_rows()
         codes = [code for row in rows for code in build_travel_graph._normalized_codes(row)]
         self.assertEqual(len(rows), 36)
-        self.assertEqual(len(codes), 37)  # self-driving has E32-1 and E31-1
-        self.assertEqual(len(codes), len(set(codes)))
+        self.assertEqual(len(codes), 37)  # self-driving has E32 and E31-1
+        self.assertEqual(codes.count("E20-1"), 1)
+        self.assertEqual(codes.count("E20-2"), 1)
+        self.assertEqual(codes.count("E20-3"), 1)
+        self.assertEqual(codes.count("E20-4"), 1)
+        self.assertEqual(codes.count("E20-5"), 1)
+        self.assertEqual(codes.count("E32"), 2)
+        self.assertEqual(codes.count("E39"), 2)
+        self.assertNotIn("E20", codes)
+        self.assertNotIn("E32-1", codes)
+        self.assertNotIn("E32-2", codes)
+        self.assertNotIn("E39-1", codes)
+        self.assertNotIn("E39-2", codes)
         self.assertEqual(
             codes,
             [
-                "E38", "E42", "E23", "E20-1", "E30", "E25", "E39-1",
-                "E20-2", "E32-1", "E31-1", "E29-1", "E20", "E31-2",
-                "E29-2", "E20-3", "E32-2", "E31-3", "E41", "E20-4",
+                "E38", "E42", "E23", "E20-1", "E30", "E25", "E39",
+                "E20-2", "E32", "E31-1", "E29-1", "E20-5", "E31-2",
+                "E29-2", "E20-3", "E32", "E31-3", "E41", "E20-4",
                 "E31-4", "E31-5", "E31-6", "W37", "W35", "W38",
                 "E31-7", "E17", "sys-001", "E09", "sys-003", "sys-004",
-                "E05", "W39", "E01", "E02", "E33", "E39-2",
+                "E05", "W39", "E01", "E02", "E33", "E39",
             ],
         )
         self.assertNotIn("E34", codes)
         self.assertNotIn("TRAVEL-TAX-001", codes)
         self.assertNotIn("TRAVEL-TRAIN-001", codes)
 
-    def test_each_normalized_code_belongs_to_one_decision_node(self) -> None:
+    def test_rule_keys_distinguish_reused_e32_e39_codes(self) -> None:
         code_nodes: dict[str, set[str]] = {}
         for node in self.graph["nodes"]:
             if node["type"] != "decisionTableNode":
@@ -92,7 +103,20 @@ class TravelGraphBuildTests(unittest.TestCase):
             for rule in node["content"]["rules"]:
                 code = json.loads(rule["48a29115-f542-44d3-8c02-3ff71e19ee38"])
                 code_nodes.setdefault(code, set()).add(node["id"])
-        self.assertTrue(all(len(node_ids) == 1 for node_ids in code_nodes.values()))
+        self.assertEqual(len(code_nodes["E32"]), 2)
+        self.assertEqual(len(code_nodes["E39"]), 2)
+        self.assertTrue(
+            all(
+                len(node_ids) == 1
+                for code, node_ids in code_nodes.items()
+                if code not in {"E32", "E39"}
+            )
+        )
+        self.assertNotIn("E20", code_nodes)
+        self.assertNotIn("E32-1", code_nodes)
+        self.assertNotIn("E32-2", code_nodes)
+        self.assertNotIn("E39-1", code_nodes)
+        self.assertNotIn("E39-2", code_nodes)
         self.assertNotIn("E34", code_nodes)
         self.assertNotIn("TRAVEL-TAX-001", code_nodes)
         self.assertNotIn("TRAVEL-TRAIN-001", code_nodes)
@@ -181,7 +205,7 @@ class TravelGraphBuildTests(unittest.TestCase):
         )
         self.assertEqual(self._rule(result, "W39")["distinguish_result"], "WARNING")
         self.assertEqual(
-            self._rule(result, "E39-2", "检查发票可抵扣税额和表单税额是否相等")["distinguish_result"],
+            self._rule(result, "E39", "检查发票可抵扣税额和表单税额是否相等")["distinguish_result"],
             "WARNING",
         )
         self.assertEqual(result["checkStatus"], "warning")
@@ -207,7 +231,7 @@ class TravelGraphBuildTests(unittest.TestCase):
             result["decisionOutput"]["travel_travel_r14_检查是否代他人核销差旅费_result"]["distinguish_result"],
             "REJECT",
         )
-        self.assertEqual(self._rule(result, "E32-2", "检查是否为二等座及以下")["distinguish_result"], "REJECT")
+        self.assertEqual(self._rule(result, "E32", "检查是否为二等座及以下")["distinguish_result"], "REJECT")
         self.assertEqual(self._rule(result, "W35")["distinguish_result"], "WARNING")
         self.assertEqual(self._rule(result, "W38")["distinguish_result"], "WARNING")
 
@@ -305,7 +329,7 @@ class TravelGraphBuildTests(unittest.TestCase):
             "ruleStates": {"travel_tax_amount": "pass"},
         })
         self.assertEqual(
-            self._rule(passed, "E39-2", "检查发票可抵扣税额和表单税额是否相等")["distinguish_result"],
+            self._rule(passed, "E39", "检查发票可抵扣税额和表单税额是否相等")["distinguish_result"],
             "PASS",
         )
 
@@ -315,19 +339,19 @@ class TravelGraphBuildTests(unittest.TestCase):
             "ruleStates": {"travel_tax_amount": "warning"},
         })
         self.assertEqual(
-            self._rule(warning, "E39-2", "检查发票可抵扣税额和表单税额是否相等")["distinguish_result"],
+            self._rule(warning, "E39", "检查发票可抵扣税额和表单税额是否相等")["distinguish_result"],
             "WARNING",
         )
 
         deduped = self._evaluate({
             "primaryInvoice": False,
-            "raisedRuleCodes": ["E39-2"],
+            "raisedRuleCodes": ["E39"],
             "raisedRuleKeys": ["travel_r37_检查发票可抵扣税额和表单税额是否相等"],
             "taxInfo": {"invoiceDeductibleTaxTotal": 3, "formInputTax": 4},
             "ruleStates": {"travel_tax_amount": "warning"},
         })
         self.assertEqual(
-            self._rule(deduped, "E39-2", "检查发票可抵扣税额和表单税额是否相等")["distinguish_result"],
+            self._rule(deduped, "E39", "检查发票可抵扣税额和表单税额是否相等")["distinguish_result"],
             "PASS",
         )
 

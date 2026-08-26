@@ -148,6 +148,11 @@ _REASON_CODE_RE = re.compile(
     r"(?<![A-Za-z0-9])((?:sys-\d{3}|[EW]\d{2}(?:-\d+)?))(?![A-Za-z0-9])"
 )
 
+# These codes are intentionally reused by the Feishu rules.  Their public
+# code remains E32/E39; the graph/application use rule_key to distinguish the
+# separate source rows.  Do not manufacture occurrence suffixes for them.
+REUSED_PUBLIC_CODES = {"E32", "E39"}
+
 
 def _normalize_codes(text: str) -> str:
     # Code text is embedded in the employee-facing error column.  Prefer the
@@ -185,8 +190,12 @@ def normalize_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
     normalized: list[dict[str, str]] = []
     # The E column is the source of truth.  Preserve codes that already carry
     # an explicit occurrence suffix (for example E20-1/E20-2), and assign a
-    # deterministic, non-colliding suffix only to legacy unsuffixed duplicates.
-    # The raw E-cell text remains in reason_code_source for auditability.
+    # deterministic suffix to legacy unsuffixed duplicates.  If a bare code
+    # sits beside an explicit family (E20-1..E20-4), continue that family so
+    # the snapshot exposes E20-5 rather than a second bare E20.  E32/E39 are
+    # intentional public-code reuses from Feishu and stay unsuffixed; their
+    # stable rule_key values distinguish the source rules.  The raw E-cell
+    # text remains in reason_code_source for auditability.
     parsed_by_row: list[tuple[dict[str, str], list[str]]] = [
         (row, _normalize_codes(row["员工端显示报错问题"]).split("|"))
         for row in rows
@@ -203,7 +212,15 @@ def normalize_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
                 base_counts[code] = base_counts.get(code, 0) + 1
 
     used_codes = set(reserved_codes)
-    next_suffix: dict[str, int] = {}
+    explicit_suffixes: dict[str, set[int]] = {}
+    for code in reserved_codes:
+        match = re.match(r"^(.*)-(\d+)$", code)
+        if match:
+            explicit_suffixes.setdefault(match.group(1), set()).add(int(match.group(2)))
+    next_suffix: dict[str, int] = {
+        base: (max(suffixes) + 1 if suffixes else 1)
+        for base, suffixes in explicit_suffixes.items()
+    }
     for row, parsed_codes in parsed_by_row:
         audit_content = row["审核时看什么"]
         reason_source = row["员工端显示报错问题"]
@@ -211,6 +228,15 @@ def normalize_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
         for code in parsed_codes:
             if code.startswith("sys-") or re.search(r"-\d+$", code):
                 normalized_code = code
+            elif code in REUSED_PUBLIC_CODES:
+                normalized_code = code
+            elif code in explicit_suffixes:
+                suffix = next_suffix.get(code, 1)
+                normalized_code = f"{code}-{suffix}"
+                while normalized_code in used_codes:
+                    suffix += 1
+                    normalized_code = f"{code}-{suffix}"
+                next_suffix[code] = suffix + 1
             elif base_counts.get(code, 0) > 1:
                 suffix = next_suffix.get(code, 1)
                 normalized_code = f"{code}-{suffix}"
@@ -221,7 +247,11 @@ def normalize_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
             else:
                 normalized_code = code
 
-            if normalized_code in used_codes and normalized_code not in reserved_codes:
+            if (
+                normalized_code in used_codes
+                and normalized_code not in reserved_codes
+                and normalized_code not in REUSED_PUBLIC_CODES
+            ):
                 raise RuntimeError(
                     f"Duplicate normalized reason code {normalized_code!r} in Feishu row {row['source_row']}"
                 )
