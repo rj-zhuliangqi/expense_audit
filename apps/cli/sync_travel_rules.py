@@ -77,7 +77,45 @@ def _run_json(command: list[str]) -> dict[str, Any]:
     return payload
 
 
-def _read_sheet() -> tuple[list[str], list[dict[str, str]]]:
+def _cell_value(cell: Any) -> str:
+    if not isinstance(cell, dict):
+        return ""
+    value = cell.get("value")
+    return "" if value is None else str(value)
+
+
+def _is_struck(style: Any) -> bool:
+    if not isinstance(style, dict):
+        return False
+    line = str(style.get("font_line") or "").strip().lower()
+    return line in {"line-through", "strikethrough", "strike-through"}
+
+
+def _active_cell_text(cell: Any) -> str:
+    """Return only rich-text fragments that are not struck through.
+
+    Feishu keeps retired rule codes in the cell value and marks those
+    fragments with ``font_line: line-through``.  Reading only ``value``
+    therefore resurrects codes that are visually disabled.
+    """
+    if not isinstance(cell, dict):
+        return ""
+    rich_text = cell.get("rich_text")
+    if isinstance(rich_text, list) and rich_text:
+        parts: list[str] = []
+        for fragment in rich_text:
+            if not isinstance(fragment, dict) or _is_struck(fragment.get("style")):
+                continue
+            text = fragment.get("text")
+            if text is not None:
+                parts.append(str(text))
+        return "".join(parts)
+    if _is_struck(cell.get("cell_styles")):
+        return ""
+    return _cell_value(cell)
+
+
+def _read_sheet() -> tuple[list[str], list[dict[str, Any]]]:
     node = _run_json([
         "lark-cli",
         "wiki",
@@ -120,22 +158,25 @@ def _read_sheet() -> tuple[list[str], list[dict[str, str]]]:
     if not cells:
         raise RuntimeError("Feishu sheet returned no cells")
 
-    def cell_value(cell: Any) -> str:
-        if not isinstance(cell, dict):
-            return ""
-        value = cell.get("value")
-        return "" if value is None else str(value)
-
-    headers = [cell_value(cell) for cell in cells[0]]
+    headers = [_cell_value(cell) for cell in cells[0]]
     if headers != EXPECTED_HEADERS:
         raise RuntimeError(f"Unexpected travel sheet headers: {headers!r}")
 
-    rows: list[dict[str, str]] = []
+    rows: list[dict[str, Any]] = []
     for row_index, row in zip(row_indices[1:], cells[1:]):
-        values = [cell_value(row[index]) if index < len(row) else "" for index in range(len(headers))]
+        cell_values = [row[index] if index < len(row) else {} for index in range(len(headers))]
+        values = [_cell_value(cell) for cell in cell_values]
         if not any(values):
             continue
-        rows.append({header: value for header, value in zip(headers, values)} | {"source_row": str(row_index)})
+        row_values: dict[str, Any] = {
+            header: value for header, value in zip(headers, values)
+        }
+        # E is the employee-facing error/code column.  Keep its complete raw
+        # value in the B:J snapshot and retain the active rich-text projection
+        # only as an internal synchronizer field.
+        row_values["_active_reason_code_source"] = _active_cell_text(cell_values[4])
+        row_values["source_row"] = str(row_index)
+        rows.append(row_values)
     return headers, rows
 
 
@@ -147,12 +188,6 @@ def _slug(value: str) -> str:
 _REASON_CODE_RE = re.compile(
     r"(?<![A-Za-z0-9])((?:sys-\d{3}|[EW]\d{2}(?:-\d+)?))(?![A-Za-z0-9])"
 )
-
-# These codes are intentionally reused by the Feishu rules.  Their public
-# code remains E32/E39; the graph/application use rule_key to distinguish the
-# separate source rows.  Do not manufacture occurrence suffixes for them.
-REUSED_PUBLIC_CODES = {"E32", "E39"}
-
 
 def _normalize_codes(text: str) -> str:
     # Code text is embedded in the employee-facing error column.  Prefer the
@@ -167,12 +202,8 @@ def _normalize_codes(text: str) -> str:
             preferred = "E42"
         if preferred == "E33" and "E41" in text:
             preferred = "E41"
-        if preferred == "W36" and "E39" in text:
-            preferred = "E39"
         if "E42" in text and "出租车" in text:
             preferred = "E42"
-        if "E39" in text and "增值税" in text:
-            preferred = "E39"
         return preferred
 
     codes = _REASON_CODE_RE.findall(text)
@@ -180,26 +211,37 @@ def _normalize_codes(text: str) -> str:
         codes = [code for code in codes if code != "E34"]
         codes.append("E42")
     if "E39" in codes and "W36" in codes and "增值税" in text:
-        codes = [code for code in codes if code != "W36"]
+        # The latest Feishu row strikes through E39 and leaves W36 active.
+        codes = [code for code in codes if code != "E39"]
     if not codes:
         raise RuntimeError(f"Could not parse reason code from: {text!r}")
     return "|".join(dict.fromkeys(codes))
 
 
-def normalize_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+def normalize_rows(rows: list[dict[str, Any]]) -> list[dict[str, str]]:
     normalized: list[dict[str, str]] = []
-    # The E column is the source of truth.  Preserve codes that already carry
-    # an explicit occurrence suffix (for example E20-1/E20-2), and assign a
-    # deterministic suffix to legacy unsuffixed duplicates.  If a bare code
-    # sits beside an explicit family (E20-1..E20-4), continue that family so
-    # the snapshot exposes E20-5 rather than a second bare E20.  E32/E39 are
-    # intentional public-code reuses from Feishu and stay unsuffixed; their
-    # stable rule_key values distinguish the source rules.  The raw E-cell
-    # text remains in reason_code_source for auditability.
-    parsed_by_row: list[tuple[dict[str, str], list[str]]] = [
-        (row, _normalize_codes(row["员工端显示报错问题"]).split("|"))
-        for row in rows
-    ]
+    # The E column is the source of truth.  Parse only the active rich-text
+    # fragments so a struck-through retired code cannot become executable.
+    # Preserve explicit suffixes (E20-1/E20-2, E31-1, ...), and continue an
+    # existing family when Feishu still contains a bare code (E20 -> E20-5).
+    # Every source row must resolve to exactly one active code.  The complete
+    # raw E-cell text remains in reason_code_source for auditability.
+    parsed_by_row: list[tuple[dict[str, Any], list[str]]] = []
+    for row in rows:
+        active_source = row.get("_active_reason_code_source")
+        source_text = str(
+            active_source
+            if active_source is not None
+            else row.get("员工端显示报错问题")
+            or ""
+        )
+        parsed_codes = _normalize_codes(source_text).split("|")
+        if len(parsed_codes) != 1:
+            raise RuntimeError(
+                f"Expected exactly one active reason code in Feishu row "
+                f"{row.get('source_row', '?')}, got {parsed_codes!r}: {source_text!r}"
+            )
+        parsed_by_row.append((row, parsed_codes))
     base_counts: dict[str, int] = {}
     reserved_codes: set[str] = set()
     for _row, parsed_codes in parsed_by_row:
@@ -223,12 +265,10 @@ def normalize_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
     }
     for row, parsed_codes in parsed_by_row:
         audit_content = row["审核时看什么"]
-        reason_source = row["员工端显示报错问题"]
+        reason_source = str(row["员工端显示报错问题"])
         normalized_codes: list[str] = []
         for code in parsed_codes:
             if code.startswith("sys-") or re.search(r"-\d+$", code):
-                normalized_code = code
-            elif code in REUSED_PUBLIC_CODES:
                 normalized_code = code
             elif code in explicit_suffixes:
                 suffix = next_suffix.get(code, 1)
@@ -247,11 +287,7 @@ def normalize_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
             else:
                 normalized_code = code
 
-            if (
-                normalized_code in used_codes
-                and normalized_code not in reserved_codes
-                and normalized_code not in REUSED_PUBLIC_CODES
-            ):
+            if normalized_code in used_codes and normalized_code not in reserved_codes:
                 raise RuntimeError(
                     f"Duplicate normalized reason code {normalized_code!r} in Feishu row {row['source_row']}"
                 )
