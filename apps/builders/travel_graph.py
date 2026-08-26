@@ -56,6 +56,11 @@ STD_OUTPUTS = [
     ("a1b2c3d4-0000-0000-0000-createtime0", "创建时间", "create_time"),
 ]
 INPUT_NAMESPACE = uuid.UUID("f3e9c4b3-e0f2-4d29-9b37-bf2bb3f355e0")
+# Feishu currently reuses these public codes across two source rows.  The
+# stable rule_key/outputPath, rather than the public code, is the backend
+# identity for those rows.  Other repeated legacy codes are normalized with
+# explicit occurrence suffixes by the snapshot synchronizer.
+_REUSED_PUBLIC_CODES = frozenset({"E32", "E39"})
 
 # Rows whose business result is document-level.  The row number is stable even
 # if the text/code in the Feishu sheet is edited later.
@@ -146,13 +151,14 @@ def _load_csv_rows(source_path: Path | str | None = None) -> list[dict[str, str]
 
     # The normalized snapshot is the backend-facing identity map.  A code may
     # appear in several decision-table outcome rows inside one node (PASS /
-    # REJECT / WARNING), but it must not identify two different source rules.
+    # REJECT / WARNING).  E32/E39 are also reused across source rows per the
+    # current Feishu sheet; rule_key/outputPath remains the precise identity.
     code_owner: dict[str, str] = {}
     for row in rows:
         rule_key = row.get("rule_key") or row.get("source_row") or "unknown"
         for code in _normalized_codes(row):
             previous = code_owner.get(code)
-            if previous is not None and previous != rule_key:
+            if previous is not None and previous != rule_key and code not in _REUSED_PUBLIC_CODES:
                 raise ValueError(
                     f"duplicate normalized travel reason code {code!r}: "
                     f"{previous} and {rule_key}"
