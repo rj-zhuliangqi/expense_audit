@@ -11,9 +11,10 @@ from collections.abc import Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from .is_eor import is_eor_profile, resolve_is_eor_value
+
 
 _FINANCE_SUMMARY_PROFILES = frozenset({"personal_transport", "telecom", "entertainment"})
-_EOR_E31_PROFILES = frozenset({"personal_transport", "telecom", "entertainment"})
 _FINANCE_RISK_BLOCKING = "blocking"
 _FINANCE_RISK_HIGH = "high"
 _FINANCE_RISK_MEDIUM_LOW = "medium_low"
@@ -404,10 +405,18 @@ def extract_valid_invoice_final_amount(
 
 
 def _extract_decision_final_amount(decision_output: Mapping[str, Any]) -> Decimal | None:
+    # 不同费用流程图的内容审核节点使用不同的输出路径：
+    # 交通/通讯费历史图使用 ``invoice_content_valid_result``，业务招待费
+    # 当前图使用 ``content_compliance_result``。金额字段本身仍然是
+    # ``invoice_finalAmount``，这里统一兼容，避免 E36 的有效金额在汇总层丢失。
     candidates: list[Any] = [decision_output.get("invoice_finalAmount")]
-    content_valid_result = decision_output.get("invoice_content_valid_result")
-    if isinstance(content_valid_result, Mapping):
-        candidates.append(content_valid_result.get("invoice_finalAmount"))
+    for result_key in (
+        "invoice_content_valid_result",
+        "content_compliance_result",
+    ):
+        result = decision_output.get(result_key)
+        if isinstance(result, Mapping):
+            candidates.append(result.get("invoice_finalAmount"))
 
     for candidate in candidates:
         amount = _to_decimal(candidate)
@@ -888,8 +897,7 @@ def _is_eor_enabled(
     expense_profile: str | None,
 ) -> bool:
     """Return whether EOR semantics apply to this receipt's E31 rule."""
-    normalized_profile = str(expense_profile or "").strip().lower().replace("-", "_")
-    if normalized_profile not in _EOR_E31_PROFILES:
+    if not is_eor_profile(expense_profile):
         return False
 
     for receipt in (prepared_receipt, processed_receipt):
@@ -897,9 +905,9 @@ def _is_eor_enabled(
         if not isinstance(service_data, Mapping):
             continue
         audit_info = service_data.get("auditInfo")
-        if not isinstance(audit_info, Mapping) or "isEor" not in audit_info:
-            continue
-        return str(audit_info.get("isEor") or "").strip().lower() in {"1", "true"}
+        normalized = resolve_is_eor_value(audit_info)
+        if normalized is not None:
+            return normalized == "1"
     return False
 
 

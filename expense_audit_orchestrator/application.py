@@ -4,6 +4,7 @@ from collections import Counter, defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 import re
 from typing import TYPE_CHECKING, Any
@@ -1556,5 +1557,15 @@ def _invoice_has_unresolved_e36_amount(invoice_result: Mapping[str, Any]) -> boo
         ).strip().upper()
         if reason_code != "E36":
             continue
-        return True
+        # E36 正常返回（包括 E36=PASS）时，决策表结果中应带有
+        # invoice_finalAmount。只有金额缺失/非法时才把整单金额标记为未知；
+        # 不能仅因为找到了 E36 行就把正常结果误判为模型异常。
+        final_amount = value.get("invoice_finalAmount")
+        try:
+            if isinstance(final_amount, bool):
+                raise InvalidOperation
+            parsed_amount = Decimal(str(final_amount).replace(",", "").strip())
+        except (InvalidOperation, TypeError, ValueError):
+            return True
+        return not (parsed_amount.is_finite() and parsed_amount >= 0)
     return False

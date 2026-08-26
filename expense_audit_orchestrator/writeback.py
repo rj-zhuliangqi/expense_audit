@@ -4,6 +4,10 @@ from collections.abc import Callable, Mapping
 from typing import Any
 from uuid import uuid4
 
+from .is_eor import (
+    is_eor_profile,
+    resolve_is_eor_value,
+)
 from .receipt_summary import (
     build_ai_audit_advice,
     build_ai_audit_summary,
@@ -106,6 +110,13 @@ def assemble_result_audit_info(
     service_data["auditInfo"] = audit_info
     instance_code = _get_string_value(audit_info, "instanceCode") or receipt_code
     is_eor = _is_eor_enabled(audit_info, expense_profile)
+    # 旧数据中 isEor 可能缺失；对这三个支持 EOR 的费用类型，缺失与流程图
+    # 中 ``isEor == "1"`` 的 false 分支语义一致，按非 EOR 回写 "0"。
+    # 这样后端不会把缺失字段按 Python false/"false" 绑定到单字符列。
+    normalized_is_eor = resolve_is_eor_value(
+        audit_info,
+        default="0" if is_eor_profile(expense_profile) else None,
+    )
 
     invoice_pairs = _pair_invoices(prepared_receipt, processed_receipt)
     is_amount_sufficient = processed_receipt.get("isAmountSufficient")
@@ -178,6 +189,11 @@ def assemble_result_audit_info(
         "auditTruthCheckResultItems": _build_audit_truthcheck_result_items(instance_code, invoice_pairs),
         "auditTruthCheckResultItemCols": _build_audit_truthcheck_result_item_cols(instance_code, invoice_pairs),
     }
+    # IsEor 是核销单原始业务字段，不是模型输出。E31 的图内判断依赖它，
+    # 回写接口也会同步更新 form_masterinfo.IsEor，因此只允许以数据库兼容的
+    # 单字符值回写，禁止把 Python bool 或 ``"true"/"false"`` 直接传给后端。
+    if normalized_is_eor is not None:
+        result["isEor"] = normalized_is_eor
     # 核销单级金额汇总：优先使用编排层已计算的值；兼容直接调用
     # assemble_result_audit_info 的场景时，在回写前按同一套 Decimal 规则补算。
     ai_audit_summary = processed_receipt.get("aiAuditSummary")
@@ -1216,8 +1232,7 @@ def _is_eor_enabled(audit_info: Mapping[str, Any], expense_profile: str | None) 
     normalized_profile = (expense_profile or "").strip().lower().replace("-", "_")
     if normalized_profile not in {"telecom", "personal_transport", "entertainment"}:
         return False
-    value = audit_info.get("isEor")
-    return str(value).strip().lower() in {"1", "true"}
+    return resolve_is_eor_value(audit_info) == "1"
 
 
 def _resolve_expense_profile_name(*sources: Mapping[str, Any]) -> str | None:
