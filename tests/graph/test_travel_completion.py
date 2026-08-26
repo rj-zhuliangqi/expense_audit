@@ -27,7 +27,7 @@ class _CapturingRuntime:
             "checkStatus": "warning" if state == "warning" else "passed",
             "decisionOutput": {
                 "travel_travel_r37_检查发票可抵扣税额和表单税额是否相等_result": {
-                    "reason_code": "E39",
+                    "reason_code": "E39-2",
                     "distinguish_result": "WARNING" if state == "warning" else "PASS",
                     "invoice_tax_total": tax_info.get("invoiceDeductibleTaxTotal"),
                 }
@@ -211,7 +211,7 @@ class TravelCompletionTests(unittest.TestCase):
         self.assertFalse(second["primaryInvoice"])
         self.assertEqual(first["taxInfo"]["invoiceDeductibleTaxTotal"], 3)
         self.assertEqual(second["taxInfo"]["invoiceDeductibleTaxTotal"], 3)
-        self.assertEqual(second["raisedRuleCodes"], ["E39"])
+        self.assertEqual(second["raisedRuleCodes"], ["E39-2"])
         self.assertEqual(
             second["raisedRuleKeys"],
             ["travel_r37_检查发票可抵扣税额和表单税额是否相等"],

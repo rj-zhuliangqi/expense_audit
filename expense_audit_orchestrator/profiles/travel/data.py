@@ -743,18 +743,23 @@ def _build_receipt_rule_states(
 def _copy_travel_rule_state_aliases(states: dict[str, str]) -> None:
     aliases = {
         "r02": "e38_city_transport_amount",
-        "r03": "e23_role_city_transport",
-        "r05": "e30_station_vehicle",
-        "r06": "e25_meal_meeting_subsidy",
-        "r07": "e31_subsidy_amount",
-        "r09": "self_driving_amount",
-        "r25": "e17_recharge_card",
-        "r26": "sys001_authenticity",
-        "r27": "e09_saler_blacklist",
-        "r28": "sys003_void",
-        "r29": "sys004_red_flush",
-        "r30": "e05_duplicate",
-        "r32": "travel_monthly_train",
+        "r03": "e42_taxi_serial",
+        "r04": "e23_role_city_transport",
+        "r06": "e30_station_vehicle",
+        "r07": "e25_meal_meeting_subsidy",
+        "r08": "e31_subsidy_amount",
+        "r10": "self_driving_amount",
+        "r18": "travel_monthly_train",
+        "r27": "e17_recharge_card",
+        "r28": "sys001_authenticity",
+        "r29": "e09_saler_blacklist",
+        "r30": "sys003_void",
+        "r31": "sys004_red_flush",
+        "r32": "e05_duplicate",
+        "r33": "w39_travel_scene",
+        "r34": "e01",
+        "r35": "e02",
+        "r36": "e33_year",
         "r37": "travel_tax_amount",
     }
     for alias, source in aliases.items():
@@ -1605,28 +1610,27 @@ def travel_invoice_enricher(
     # Stable source-row state aliases are the graph/application seam. They are
     # copied after all OCR-derived descriptive states have been calculated.
     _copy_travel_rule_state_aliases(states)
-    states["r04"] = states.get("e20_city_transport_date", "missing")
-    states["r08"] = states.get("e20_self_driving_date", "missing")
-    states["r10"] = states.get("e29_other_transport_passenger", "missing")
-    states["r11"] = states.get("e20_other_transport_date", "missing")
-    states["r12"] = states.get("e31_other_transport_amount", "missing")
-    states["r13"] = states.get("e29_train_passenger", "missing")
-    states["r14"] = states.get("e20_train_date", "missing")
-    states["r15"] = states.get("e32_train_seat", "missing")
-    states["r16"] = states.get("e31_train_amount", "missing")
-    states["r17"] = states.get("e20_flight_date", "missing")
-    states["r18"] = states.get("e31_vaccine_amount", "missing")
-    states["r19"] = states.get("e31_network_card_amount", "missing")
-    states["r20"] = states.get("e31_refund_change_amount", "missing")
-    states["r21"] = states.get("w37_baggage_airline", "missing")
-    states["r22"] = states.get("w35_baggage_date", "missing")
-    states["r23"] = states.get("w38_baggage_weight", "missing")
-    states["r24"] = states.get("e31_baggage_amount", "missing")
-    states["r31"] = states.get("w39_travel_scene", "missing")
-    states["r33"] = states.get("e01", "missing")
-    states["r34"] = states.get("e02", "missing")
-    states["r35"] = states.get("e33_year", "missing")
-    states["r36"] = states.get("e42_taxi_serial", "missing")
+    states["r05"] = states.get("e20_city_transport_date", "missing")
+    states["r09"] = states.get("e20_self_driving_date", "missing")
+    states["r11"] = states.get("e29_other_transport_passenger", "missing")
+    states["r12"] = states.get("e20_other_transport_date", "missing")
+    states["r13"] = states.get("e31_other_transport_amount", "missing")
+    states["r14"] = states.get("e29_train_passenger", "missing")
+    states["r15"] = states.get("e20_train_date", "missing")
+    states["r16"] = states.get("e32_train_seat", "missing")
+    states["r17"] = states.get("e31_train_amount", "missing")
+    states["r19"] = states.get("e20_flight_date", "missing")
+    states["r20"] = states.get("e31_vaccine_amount", "missing")
+    states["r21"] = states.get("e31_network_card_amount", "missing")
+    states["r22"] = states.get("e31_refund_change_amount", "missing")
+    states["r23"] = states.get("w37_baggage_airline", "missing")
+    states["r24"] = states.get("w35_baggage_date", "missing")
+    states["r25"] = states.get("w38_baggage_weight", "missing")
+    states["r26"] = states.get("e31_baggage_amount", "missing")
+    states["r33"] = states.get("w39_travel_scene", "missing")
+    states["r34"] = states.get("e01", "missing")
+    states["r35"] = states.get("e02", "missing")
+    states["r36"] = states.get("e33_year", "missing")
     states["r37"] = states.get("travel_tax_amount", "missing")
 
     invoice_snapshot = {

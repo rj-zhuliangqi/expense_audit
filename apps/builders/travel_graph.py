@@ -4,8 +4,8 @@ The travel graph is generated from ``resources/reference/travel_rules.csv``.
 The CSV is an offline snapshot of the Feishu rule sheet; the graph builder
 never needs a Feishu login or network access.  Every source row becomes its
 own decision table, including rows that share a reason code.  The output path
-contains the stable ``rule_key`` so the application can distinguish duplicate
-codes such as E20/E31/E39.
+contains the stable ``rule_key`` so the application can distinguish each source
+rule even when legacy Feishu text contains a repeated base code.
 """
 from __future__ import annotations
 
@@ -59,8 +59,8 @@ INPUT_NAMESPACE = uuid.UUID("f3e9c4b3-e0f2-4d29-9b37-bf2bb3f355e0")
 
 # Rows whose business result is document-level.  The row number is stable even
 # if the text/code in the Feishu sheet is edited later.
-_DOCUMENT_SOURCE_ROWS = frozenset({2, 3, 5, 6, 7, 9, 12, 16, 18, 19, 20, 24, 37})
-_COMMON_SOURCE_ROWS = frozenset({25, 26, 27, 28, 29, 30, 33, 34, 35})
+_DOCUMENT_SOURCE_ROWS = frozenset({2, 4, 6, 7, 8, 10, 13, 17, 20, 21, 22, 26, 37})
+_COMMON_SOURCE_ROWS = frozenset({27, 28, 29, 30, 31, 32, 34, 35, 36})
 
 # Executable mapping.  Display text and metadata always come from the CSV;
 # this table only tells the graph/data-preparation seam which normalized state
@@ -71,40 +71,40 @@ _BEHAVIOR: dict[int, dict[str, Any]] = {
     # map in the graph also protects direct graph callers that pass a stale
     # ``ruleStates`` map together with ``sourceStatus: NOT_READY``.
     2: {"state": "r02", "formula": "e38", "sources": ("journeys", "cityTransports")},
-    3: {"state": "r03", "formula": "e23", "sources": ("journeys",)},
-    4: {"state": "r04", "formula": "date", "sources": ("journeys", "cityTransports")},
-    5: {"state": "r05", "formula": "e30", "sources": ("journeys", "airTickets", "trainTickets")},
-    6: {"state": "r06", "formula": "e25", "sources": ("businessFeeDetails", "journeys", "travelSubsidies")},
-    7: {"state": "r07", "formula": "subsidy", "sources": ("travelSubsidies",)},
-    8: {"state": "r08", "formula": "date", "sources": ("journeys", "drivingCars")},
-    9: {"state": "r09", "formula": "self_driving", "sources": ("drivingCars",)},
-    10: {"state": "r10", "formula": "passenger", "sources": ("otherTransports",)},
-    11: {"state": "r11", "formula": "date", "sources": ("journeys", "otherTransports")},
-    12: {"state": "r12", "formula": "amount", "sources": ("otherTransports",)},
-    13: {"state": "r13", "formula": "passenger", "sources": ("trainTickets",)},
-    14: {"state": "r14", "formula": "date", "sources": ("journeys", "trainTickets")},
-    15: {"state": "r15", "formula": "seat", "sources": ("trainTickets",)},
-    16: {"state": "r16", "formula": "amount", "sources": ("trainTickets",)},
-    17: {"state": "r17", "formula": "date", "sources": ("journeys", "airTickets")},
-    18: {"state": "r18", "formula": "amount", "sources": ("otherExpenses",)},
-    19: {"state": "r19", "formula": "amount", "sources": ("otherExpenses",)},
+    3: {"state": "r03", "formula": "taxi_serial", "sources": ()},
+    4: {"state": "r04", "formula": "e23", "sources": ("journeys",)},
+    5: {"state": "r05", "formula": "date", "sources": ("journeys", "cityTransports")},
+    6: {"state": "r06", "formula": "e30", "sources": ("journeys", "airTickets", "trainTickets")},
+    7: {"state": "r07", "formula": "e25", "sources": ("businessFeeDetails", "journeys", "travelSubsidies")},
+    8: {"state": "r08", "formula": "subsidy", "sources": ("travelSubsidies",)},
+    9: {"state": "r09", "formula": "date", "sources": ("journeys", "drivingCars")},
+    10: {"state": "r10", "formula": "self_driving", "sources": ("drivingCars",)},
+    11: {"state": "r11", "formula": "passenger", "sources": ("otherTransports",)},
+    12: {"state": "r12", "formula": "date", "sources": ("journeys", "otherTransports")},
+    13: {"state": "r13", "formula": "amount", "sources": ("otherTransports",)},
+    14: {"state": "r14", "formula": "passenger", "sources": ("trainTickets",)},
+    15: {"state": "r15", "formula": "date", "sources": ("journeys", "trainTickets")},
+    16: {"state": "r16", "formula": "seat", "sources": ("trainTickets",)},
+    17: {"state": "r17", "formula": "amount", "sources": ("trainTickets",)},
+    18: {"state": "r18", "formula": "monthly_train", "sources": ("trainTickets",)},
+    19: {"state": "r19", "formula": "date", "sources": ("journeys", "airTickets")},
     20: {"state": "r20", "formula": "amount", "sources": ("otherExpenses",)},
-    21: {"state": "r21", "formula": "baggage", "sources": ("airTickets",)},
-    22: {"state": "r22", "formula": "baggage", "sources": ("journeys", "airTickets")},
+    21: {"state": "r21", "formula": "amount", "sources": ("otherExpenses",)},
+    22: {"state": "r22", "formula": "amount", "sources": ("otherExpenses",)},
     23: {"state": "r23", "formula": "baggage", "sources": ("airTickets",)},
-    24: {"state": "r24", "formula": "amount", "sources": ("otherExpenses",)},
-    25: {"state": "r25", "formula": "e17", "sources": ()},
-    26: {"state": "r26", "formula": "sys001", "sources": ()},
-    27: {"state": "r27", "formula": "e09", "sources": ()},
-    28: {"state": "r28", "formula": "invoice_status", "sources": ()},
-    29: {"state": "r29", "formula": "invoice_status", "sources": ()},
-    30: {"state": "r30", "formula": "e05", "sources": ()},
-    31: {"state": "r31", "formula": "scene", "sources": ()},
-    32: {"state": "r32", "formula": "monthly_train", "sources": ("trainTickets",)},
-    33: {"state": "r33", "formula": "e01", "sources": ()},
-    34: {"state": "r34", "formula": "e02", "sources": ()},
-    35: {"state": "r35", "formula": "year", "sources": ()},
-    36: {"state": "r36", "formula": "taxi_serial", "sources": ()},
+    24: {"state": "r24", "formula": "baggage", "sources": ("journeys", "airTickets")},
+    25: {"state": "r25", "formula": "baggage", "sources": ("airTickets",)},
+    26: {"state": "r26", "formula": "amount", "sources": ("otherExpenses",)},
+    27: {"state": "r27", "formula": "e17", "sources": ()},
+    28: {"state": "r28", "formula": "sys001", "sources": ()},
+    29: {"state": "r29", "formula": "e09", "sources": ()},
+    30: {"state": "r30", "formula": "invoice_status", "sources": ()},
+    31: {"state": "r31", "formula": "invoice_status", "sources": ()},
+    32: {"state": "r32", "formula": "e05", "sources": ()},
+    33: {"state": "r33", "formula": "scene", "sources": ()},
+    34: {"state": "r34", "formula": "e01", "sources": ()},
+    35: {"state": "r35", "formula": "e02", "sources": ()},
+    36: {"state": "r36", "formula": "year", "sources": ()},
     37: {"state": "r37", "formula": "tax", "sources": ()},
 }
 
@@ -143,6 +143,21 @@ def _load_csv_rows(source_path: Path | str | None = None) -> list[dict[str, str]
     missing = required.difference(rows[0]) if rows else required
     if missing:
         raise ValueError(f"travel rule CSV missing columns: {sorted(missing)}")
+
+    # The normalized snapshot is the backend-facing identity map.  A code may
+    # appear in several decision-table outcome rows inside one node (PASS /
+    # REJECT / WARNING), but it must not identify two different source rules.
+    code_owner: dict[str, str] = {}
+    for row in rows:
+        rule_key = row.get("rule_key") or row.get("source_row") or "unknown"
+        for code in _normalized_codes(row):
+            previous = code_owner.get(code)
+            if previous is not None and previous != rule_key:
+                raise ValueError(
+                    f"duplicate normalized travel reason code {code!r}: "
+                    f"{previous} and {rule_key}"
+                )
+            code_owner[code] = rule_key
     return rows
 
 
@@ -170,7 +185,7 @@ def _build_definitions(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
             "sources": tuple(behavior.pop("sources", ())),
             "document_level": source_row in _DOCUMENT_SOURCE_ROWS,
             "common": source_row in _COMMON_SOURCE_ROWS,
-            "content_classifier": source_row == 31,
+            "content_classifier": source_row == 33,
         }
         definitions.append(definition)
     return definitions
@@ -183,9 +198,9 @@ RULE_DEFINITIONS = _build_definitions(_load_csv_rows())
 
 def _rule_type(definition: dict[str, Any]) -> str:
     """Keep the historical audit_type contract; G column is a problem label."""
-    if definition["source_row"] in {2, 5, 6, 7, 9, 12, 16, 18, 19, 20, 24, 37}:
+    if definition["source_row"] in {2, 6, 7, 8, 10, 13, 17, 20, 21, 22, 26, 37}:
         return "verification-form"
-    if definition["source_row"] in {3, 10, 13, 25, 27, 31, 32}:
+    if definition["source_row"] in {4, 11, 14, 18, 27, 29, 33}:
         return "staff-behavior"
     return "general-rules"
 
@@ -231,40 +246,40 @@ def _state_expression(definition: dict[str, Any]) -> str:
         # Stable rXX state names are the primary contract.  These descriptive
         # aliases keep old prepared receipts and graph fixtures executable.
         "r02": "e38_city_transport_amount",
-        "r03": "e23_role_city_transport",
-        "r04": "e20_city_transport_date",
-        "r05": "e30_station_vehicle",
-        "r06": "e25_meal_meeting_subsidy",
-        "r07": "e31_subsidy_amount",
-        "r08": "e20_self_driving_date",
-        "r09": "self_driving_amount",
-        "r10": "e29_other_transport_passenger",
-        "r11": "e20_other_transport_date",
-        "r12": "e31_other_transport_amount",
-        "r13": "e29_train_passenger",
-        "r14": "e20_train_date",
-        "r15": "e32_train_seat",
-        "r16": "e31_train_amount",
-        "r17": "e20_flight_date",
-        "r18": "e31_vaccine_amount",
-        "r19": "e31_network_card_amount",
-        "r20": "e31_refund_change_amount",
-        "r21": "w37_baggage_airline",
-        "r22": "w35_baggage_date",
-        "r23": "w38_baggage_weight",
-        "r24": "e31_baggage_amount",
-        "r25": "e17_recharge_card",
-        "r26": "sys001_authenticity",
-        "r27": "e09_saler_blacklist",
-        "r28": "sys003_void",
-        "r29": "sys004_red_flush",
-        "r30": "e05_duplicate",
-        "r31": "w39_travel_scene",
-        "r32": "travel_monthly_train",
-        "r33": "e01",
-        "r34": "e02",
-        "r35": "e33_year",
-        "r36": "e42_taxi_serial",
+        "r03": "e42_taxi_serial",
+        "r04": "e23_role_city_transport",
+        "r05": "e20_city_transport_date",
+        "r06": "e30_station_vehicle",
+        "r07": "e25_meal_meeting_subsidy",
+        "r08": "e31_subsidy_amount",
+        "r09": "e20_self_driving_date",
+        "r10": "self_driving_amount",
+        "r11": "e29_other_transport_passenger",
+        "r12": "e20_other_transport_date",
+        "r13": "e31_other_transport_amount",
+        "r14": "e29_train_passenger",
+        "r15": "e20_train_date",
+        "r16": "e32_train_seat",
+        "r17": "e31_train_amount",
+        "r18": "travel_monthly_train",
+        "r19": "e20_flight_date",
+        "r20": "e31_vaccine_amount",
+        "r21": "e31_network_card_amount",
+        "r22": "e31_refund_change_amount",
+        "r23": "w37_baggage_airline",
+        "r24": "w35_baggage_date",
+        "r25": "w38_baggage_weight",
+        "r26": "e31_baggage_amount",
+        "r27": "e17_recharge_card",
+        "r28": "sys001_authenticity",
+        "r29": "e09_saler_blacklist",
+        "r30": "sys003_void",
+        "r31": "sys004_red_flush",
+        "r32": "e05_duplicate",
+        "r33": "w39_travel_scene",
+        "r34": "e01",
+        "r35": "e02",
+        "r36": "e33_year",
         "r37": "travel_tax_amount",
     }
     alias_expr = f" ?? serviceData.travelAudit.ruleStates.{aliases[state]}" if state in aliases else ""
@@ -377,7 +392,7 @@ def _make_decision_node(definition: dict[str, Any], row: dict[str, str]) -> dict
     # duplicate travel rule.
     input_field = (
         "travel_e05_duplicate_state"
-        if definition["source_row"] == 30
+        if definition["source_row"] == 32
         else f"travelAuditState_{definition['source_row']}"
     )
     code = definition["codes"][0]
@@ -411,10 +426,15 @@ def _make_decision_node(definition: dict[str, Any], row: dict[str, str]) -> dict
     add("dedup", "PASS", code)
     add("pass", "PASS", code)
 
-    if definition["source_row"] == 9:
-        add("reject_theory", "REJECT", "E32", message=failure)
-        add("reject_invoice", "REJECT", "E31", message=failure)
-    elif definition["source_row"] == 30:
+    if definition["source_row"] == 10:
+        # The source E cell contains two final codes for this one audit point:
+        # the application/theory overage and the insufficient invoice amount.
+        # Keep both exact normalized codes instead of reverting to old codes.
+        theory_code = definition["codes"][0]
+        invoice_code = definition["codes"][1] if len(definition["codes"]) > 1 else definition["codes"][0]
+        add("reject_theory", "REJECT", theory_code, message=failure)
+        add("reject_invoice", "REJECT", invoice_code, message=failure)
+    elif definition["source_row"] == 32:
         # E05's public messages include the duplicate source; preserve the
         # existing common-invoice output contract.
         for state, message in (
@@ -435,7 +455,7 @@ def _make_decision_node(definition: dict[str, Any], row: dict[str, str]) -> dict
     return {
         "id": (
             "travel_e05_duplicate_check"
-            if definition["source_row"] == 30
+            if definition["source_row"] == 32
             else f"travel_{definition['rule_key']}_check"
         ),
         "type": "decisionTableNode",
@@ -466,7 +486,7 @@ def _make_preprocess_node(definitions: list[dict[str, Any]]) -> dict[str, Any]:
                 "id": _stable_id(f"expr:travelState:{definition['rule_key']}"),
                 "key": (
                     "travel_e05_duplicate_state"
-                    if definition["source_row"] == 30
+                    if definition["source_row"] == 32
                     else f"travelAuditState_{definition['source_row']}"
                 ),
                 "value": state_expression,
@@ -521,7 +541,7 @@ def _make_content_nodes() -> list[dict[str, Any]]:
                 {
                     "id": _stable_id("expr:travelContentState"),
                     "key": "travelContentState",
-                    "value": '(serviceData.travelAudit != null and serviceData.travelAudit.ruleStates != null) ? (serviceData.travelAudit.ruleStates.r31 ?? serviceData.travelAudit.ruleStates.w39_travel_scene ?? travelContentState ?? "missing") : (travelContentState ?? "missing")',
+                    "value": '(serviceData.travelAudit != null and serviceData.travelAudit.ruleStates != null) ? (serviceData.travelAudit.ruleStates.r33 ?? serviceData.travelAudit.ruleStates.w39_travel_scene ?? travelContentState ?? "missing") : (travelContentState ?? "missing")',
                 }
             ],
             "passThrough": True,

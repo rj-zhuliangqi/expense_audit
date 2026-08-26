@@ -144,10 +144,18 @@ def _slug(value: str) -> str:
     return value.lower() or "rule"
 
 
+_REASON_CODE_RE = re.compile(
+    r"(?<![A-Za-z0-9])((?:sys-\d{3}|[EW]\d{2}(?:-\d+)?))(?![A-Za-z0-9])"
+)
+
+
 def _normalize_codes(text: str) -> str:
     # Code text is embedded in the employee-facing error column.  Prefer the
     # final replacement code when a row says "旧 code 改为 新 code".
-    replacements = re.findall(r"(?:改为|修改为)\s*([A-Za-z]+-?\d+)", text)
+    replacements = re.findall(
+        r"(?:改为|修改为)\s*((?:sys-\d{3}|[EW]\d{2}(?:-\d+)?))",
+        text,
+    )
     if replacements:
         preferred = replacements[-1]
         if preferred == "E34" and "E42" in text:
@@ -162,7 +170,7 @@ def _normalize_codes(text: str) -> str:
             preferred = "E39"
         return preferred
 
-    codes = re.findall(r"(?<![A-Za-z0-9])(sys-\d{3}|[EW]\d{2})(?![A-Za-z0-9])", text)
+    codes = _REASON_CODE_RE.findall(text)
     if "E34" in codes and "E42" in text:
         codes = [code for code in codes if code != "E34"]
         codes.append("E42")
@@ -175,14 +183,59 @@ def _normalize_codes(text: str) -> str:
 
 def normalize_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
     normalized: list[dict[str, str]] = []
-    for row in rows:
+    # The E column is the source of truth.  Preserve codes that already carry
+    # an explicit occurrence suffix (for example E20-1/E20-2), and assign a
+    # deterministic, non-colliding suffix only to legacy unsuffixed duplicates.
+    # The raw E-cell text remains in reason_code_source for auditability.
+    parsed_by_row: list[tuple[dict[str, str], list[str]]] = [
+        (row, _normalize_codes(row["员工端显示报错问题"]).split("|"))
+        for row in rows
+    ]
+    base_counts: dict[str, int] = {}
+    reserved_codes: set[str] = set()
+    for _row, parsed_codes in parsed_by_row:
+        for code in parsed_codes:
+            if code.startswith("sys-") or re.search(r"-\d+$", code):
+                if code in reserved_codes:
+                    raise RuntimeError(f"Duplicate explicitly suffixed reason code in Feishu rows: {code}")
+                reserved_codes.add(code)
+            else:
+                base_counts[code] = base_counts.get(code, 0) + 1
+
+    used_codes = set(reserved_codes)
+    next_suffix: dict[str, int] = {}
+    for row, parsed_codes in parsed_by_row:
         audit_content = row["审核时看什么"]
         reason_source = row["员工端显示报错问题"]
+        normalized_codes: list[str] = []
+        for code in parsed_codes:
+            if code.startswith("sys-") or re.search(r"-\d+$", code):
+                normalized_code = code
+            elif base_counts.get(code, 0) > 1:
+                suffix = next_suffix.get(code, 1)
+                normalized_code = f"{code}-{suffix}"
+                while normalized_code in used_codes:
+                    suffix += 1
+                    normalized_code = f"{code}-{suffix}"
+                next_suffix[code] = suffix + 1
+            else:
+                normalized_code = code
+
+            if normalized_code in used_codes and normalized_code not in reserved_codes:
+                raise RuntimeError(
+                    f"Duplicate normalized reason code {normalized_code!r} in Feishu row {row['source_row']}"
+                )
+            if normalized_code in normalized_codes:
+                raise RuntimeError(
+                    f"Duplicate normalized reason code {normalized_code!r} within Feishu row {row['source_row']}"
+                )
+            normalized_codes.append(normalized_code)
+            used_codes.add(normalized_code)
         normalized.append({
             "source_row": row["source_row"],
             **{header: row[header] for header in EXPECTED_HEADERS},
             "rule_key": f"travel_r{int(row['source_row']):02d}_{_slug(audit_content)}",
-            "reason_code": _normalize_codes(reason_source),
+            "reason_code": "|".join(normalized_codes),
             "audit_content": audit_content,
             "data_dependency": row["费控需要提供的接口"],
             "rule_condition": row["规则标准"],

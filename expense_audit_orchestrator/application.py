@@ -1394,7 +1394,7 @@ def _update_receipt_travel_context(
 
 
 _TRAVEL_DOCUMENT_SOURCE_ROWS = frozenset({
-    2, 3, 5, 6, 7, 9, 12, 16, 18, 19, 20, 24, 37,
+    2, 4, 6, 7, 8, 10, 13, 17, 20, 21, 22, 26, 37,
 })
 
 
@@ -1422,9 +1422,10 @@ def _extract_document_rule_context(
 ) -> tuple[list[str], list[str]]:
     """Extract document-level exceptions by stable rule key, not code.
 
-    E20/E31/E39 are intentionally repeated in the Feishu sheet. The full
-    ``travel_rXX_...`` key is therefore the only safe deduplication identity;
-    ``raisedRuleCodes`` remains a compatibility summary only.
+    The historical Feishu sheet contains repeated base-code text in some
+    legacy rows, while the normalized snapshot assigns each source rule a
+    unique suffixed code. The full ``travel_rXX_...`` key remains the safe
+    deduplication identity; ``raisedRuleCodes`` is a compatibility summary.
     """
     decision_output = invoice_result.get("decisionOutput")
     if not isinstance(decision_output, Mapping):
