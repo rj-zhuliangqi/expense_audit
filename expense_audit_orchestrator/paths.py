@@ -33,7 +33,18 @@ DEFAULT_OPERATOR_CITY_CSV_PATH = REFERENCE_ROOT / "operator_city.csv"
 # Existing .env files and operator commands may still refer to a graph by its
 # former root-level filename.  Resolve those names to the archived asset rather
 # than requiring a flag/configuration change during this layout-only migration.
-_OFFICIAL_GRAPH_BY_BASENAME = {path.name: path for path in OFFICIAL_GRAPH_PATHS.values()}
+#
+# The telecom graph used to be named without the ``telecom`` profile suffix;
+# keep that historical basename as an explicit alias.  The other three graph
+# names already match their official basenames, so they are covered by the
+# mapping generated from ``OFFICIAL_GRAPH_PATHS`` below.
+_LEGACY_GRAPH_BASENAME_ALIASES: dict[str, Path] = {
+    "graph-latest-0727-1900.json": OFFICIAL_GRAPH_PATHS["telecom"],
+}
+_OFFICIAL_GRAPH_BY_BASENAME = {
+    **{path.name: path for path in OFFICIAL_GRAPH_PATHS.values()},
+    **_LEGACY_GRAPH_BASENAME_ALIASES,
+}
 
 # Rule-source files are often supplied locally and may contain business data.
 # Keep their legacy locations as optional candidates, but never silently invent
