@@ -377,33 +377,114 @@ def extract_valid_invoice_final_amount(
     invoice_result: Mapping[str, Any],
     prepared_input: Mapping[str, Any] | None = None,
 ) -> Decimal | None:
-    """Extract graph ``invoice_finalAmount`` with a safe OCR fallback.
+    """Extract the graph-provided reimbursable amount.
 
-    The LLM output is authoritative when present.  A successful invoice with no
-    amount (for example an older graph result) falls back to the prepared OCR
-    ``totalAmount`` only when no blocking rule is present.  Model failures and
-    rejected invoices never receive that fallback.
+    ``invoice_finalAmount`` is an output of the graph, not an optional display
+    field.  In particular, an absent value is not permission to use OCR's
+    ``totalAmount``: doing so turns an incomplete/model-failed audit into a
+    valid amount and hides the real failure from E31.  Callers that need to
+    distinguish a missing amount from a blocked invoice should use
+    :func:`resolve_invoice_amount_status`.
     """
     decision_output = _resolve_decision_output(invoice_result)
     final_amount = _extract_decision_final_amount(decision_output)
     if not invoice_contributes_valid_amount(invoice_result):
         return None
-    if final_amount is not None:
-        return final_amount
+    return final_amount
 
-    # E36 的有效金额必须来自 LLM。即使规则状态是 PASS，也不能在新旧图
-    # 结果混用时用 OCR 金额兜底。
-    if any(
-        str(rule_result.get("reason_code") or rule_result.get("reasonCode") or "")
-        .strip()
-        .upper()
-        == "E36"
-        for rule_result in _iter_decision_rule_results(decision_output)
-    ):
-        return None
 
-    source = prepared_input or _resolve_prepared_input(invoice_result)
-    return _resolve_invoice_ocr_amount(source)
+def extract_graph_invoice_final_amount(
+    invoice_result: Mapping[str, Any],
+) -> Decimal | None:
+    """Return a valid ``invoice_finalAmount`` regardless of rule status.
+
+    This is intentionally separate from :func:`extract_valid_invoice_final_amount`:
+    a rejected invoice can still have a trustworthy graph amount, which is
+    needed to tell ``有效金额为 0`` apart from ``金额结果未知``.
+    """
+    return _extract_decision_final_amount(_resolve_decision_output(invoice_result))
+
+
+def rule_has_explicit_model_failure(rule_result: Mapping[str, Any]) -> bool:
+    """Return whether a rule row explicitly reports an LLM/model failure.
+
+    Do not classify arbitrary business text containing the word “模型” as a
+    service outage.  The graph's structured model category/status and its
+    canonical failure messages are the only accepted row-level signals.
+    """
+    for key in ("modelFailure", "model_failure", "llmFailure", "llm_failure"):
+        if rule_result.get(key) is True:
+            return True
+
+    for key in ("llmStatus", "llm_status", "modelStatus", "model_status"):
+        if _is_explicit_model_status_failure(rule_result.get(key)):
+            return True
+
+    for key in ("problem_category", "problemCategory", "problemTags"):
+        value = str(rule_result.get(key) or "").strip().lower()
+        if value in {"模型服务异常", "model service error", "model failure"}:
+            return True
+
+    # These are the graph's explicit failure templates.  A broad substring
+    # match such as just “模型服务” would misclassify normal business text.
+    for key in ("message", "employeeSuggestionTips", "suggestion"):
+        if _is_model_error_text(rule_result.get(key)):
+            return True
+    return False
+
+
+def invoice_has_model_failure(invoice_result: Mapping[str, Any]) -> bool:
+    """Return whether an invoice has a structured model/runtime failure."""
+    decision_output = _resolve_decision_output(invoice_result)
+    for rule_result in _iter_decision_rule_results(decision_output):
+        reason_code = _resolve_rule_code(rule_result)
+        if reason_code in {"E17", "W40", "W32", "E34", "E36", "W31"} and (
+            rule_has_explicit_model_failure(rule_result)
+        ):
+            return True
+
+    # Runtime payloads may place the status at different levels depending on
+    # the worker/runtime version.  Inspect the whole structured result, but do
+    # not scan arbitrary business text for the word “模型”.
+    if _mapping_contains_model_error(invoice_result):
+        return True
+    return _is_model_error_text(invoice_result.get("errorMessage"))
+
+
+def resolve_invoice_amount_status(
+    invoice_result: Mapping[str, Any],
+    *,
+    prepared_input: Mapping[str, Any] | None = None,
+) -> tuple[str, str | None]:
+    """Resolve whether an invoice's amount is known without any fallback.
+
+    Returns ``("known", None)`` or ``("unknown", reason)``.  The reason is
+    deliberately structured so writeback can show a model error only when the
+    runtime/LLM actually reported one.
+    """
+    # An explicit LLM/runtime failure is the most specific diagnosis, even if
+    # the outer graph also reports executionStatus=FAILED.  Do not downgrade a
+    # real model timeout to a generic execution failure.
+    if invoice_has_model_failure(invoice_result):
+        return "unknown", "model_failure"
+    execution_status = str(invoice_result.get("executionStatus") or "").strip().upper()
+    if execution_status and execution_status != "SUCCEEDED":
+        return "unknown", "execution_failed"
+    if invoice_result.get("errorMessage"):
+        return "unknown", "runtime_error"
+    decision_output = _resolve_decision_output(invoice_result)
+    for rule_result in _iter_decision_rule_results(decision_output):
+        reason_code = _resolve_rule_code(rule_result)
+        status = str(
+            rule_result.get("distinguish_result")
+            or rule_result.get("distinguishResult")
+            or ""
+        ).strip().lower()
+        if reason_code in {"E34", "E36"} and status == "failed":
+            return "unknown", "audit_rule_failed"
+    if extract_graph_invoice_final_amount(invoice_result) is None:
+        return "unknown", "missing_invoice_final_amount"
+    return "known", None
 
 
 def _extract_decision_final_amount(decision_output: Mapping[str, Any]) -> Decimal | None:
@@ -602,10 +683,15 @@ def _is_blocking_rule(
         return False
     if normalized_code == "E31":
         return False
+    if status == "failed":
+        # FAILED is never a usable amount result, even if a stale payload also
+        # contains invoice_finalAmount.  It is intentionally not synonymous
+        # with a model failure; the caller keeps that distinction separately.
+        return True
     if normalized_code in _INVOICE_FINAL_AMOUNT_EXEMPT_RULE_CODES and final_amount is not None:
         # A parsed E36 result may legitimately return a post-deduction amount,
-        # but an E36 model-service failure must never be treated as a valid
-        # amount merely because a stale/partial payload also contains a number.
+        # but an explicit model-service failure must never be treated as valid
+        # merely because a stale/partial payload also contains a number.
         if _is_model_failure_rule(normalized_code, status, rule_result):
             return True
         return False
@@ -613,14 +699,23 @@ def _is_blocking_rule(
 
 
 _MODEL_ERROR_TOKENS = (
-    "模型服务",
+    "模型服务异常",
+    "模型服务暂时异常",
+    "模型服务超时",
+    "模型服务不可用",
+    "模型服务错误",
     "模型异常",
     "模型失败",
-    "模型调用",
-    "llm",
-    "model service",
+    "模型调用失败",
+    "模型调用异常",
+    "模型超时",
+    "llm error",
+    "llm timeout",
+    "model service error",
+    "model service unavailable",
     "model failure",
-    "model call",
+    "model call failed",
+    "model timeout",
 )
 
 
@@ -629,13 +724,26 @@ def _is_model_error_text(value: Any) -> bool:
     return bool(text) and any(token in text for token in _MODEL_ERROR_TOKENS)
 
 
+def _is_explicit_model_status_failure(value: Any) -> bool:
+    status = str(value or "").strip().lower().replace("-", "_")
+    return status in {
+        "error",
+        "failed",
+        "failure",
+        "timeout",
+        "timed_out",
+        "unavailable",
+        "service_unavailable",
+    }
+
+
 def _mapping_contains_model_error(value: Any) -> bool:
     """Detect model failures even when the graph kept them outside rule rows."""
     if isinstance(value, Mapping):
         for key, nested in value.items():
             normalized_key = str(key or "").replace("_", "").lower()
-            if normalized_key in {"llmstatus", "llmstate"}:
-                if str(nested or "").strip().lower() not in {"success", "succeeded", "ok"}:
+            if normalized_key in {"llmstatus", "llmstate", "modelstatus", "modelstate"}:
+                if _is_explicit_model_status_failure(nested):
                     return True
             elif normalized_key in {"errormessage", "error"} and _is_model_error_text(nested):
                 return True
@@ -657,17 +765,7 @@ def _is_model_failure_rule(
     # W31 is a weak fraud warning.
     if reason_code not in {"E17", "W40", "W32", "E34", "E36", "W31"}:
         return False
-    rule_text = " ".join(
-        str(rule_result.get(key) or "")
-        for key in (
-            "message",
-            "problem_category",
-            "problemCategory",
-            "employeeSuggestionTips",
-            "suggestion",
-        )
-    )
-    return status == "failed" or _is_model_error_text(rule_text)
+    return rule_has_explicit_model_failure(rule_result)
 
 
 def _apply_audit_row_status(

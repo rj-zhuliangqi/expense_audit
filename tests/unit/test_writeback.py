@@ -1520,5 +1520,141 @@ class WritebackAssemblerTests(unittest.TestCase):
         self.assertEqual(compliance, [False, False, True, True, True])
 
 
+    def test_personal_transport_known_amount_is_not_written_as_model_failure(self) -> None:
+        prepared_input = {
+            "invoiceNo": "26117000001100093758",
+            "totalAmount": "61.80",
+            "serviceData": {
+                "currentInvoiceInfo": {"aiiid": "INFO-TRANSPORT-001"},
+                "currentAuditInvoiceFile": {"afiid": "FILE-TRANSPORT-001", "fid": "FID-TRANSPORT-001"},
+            },
+        }
+        prepared_receipt = {
+            "receiptCode": "rjw260827000033",
+            "serviceData": {"auditInfo": {"instanceCode": "rjw260827000033", "applyAmount": "1.00"}},
+            "invoicePreparations": [
+                {"invoiceKey": "FID-TRANSPORT-001", "preparedInput": prepared_input}
+            ],
+        }
+        processed_receipt = {
+            "receiptCode": "rjw260827000033",
+            "serviceData": prepared_receipt["serviceData"],
+            "invoiceResults": [
+                {
+                    "invoiceKey": "FID-TRANSPORT-001",
+                    "preparedInput": prepared_input,
+                    "executionStatus": "SUCCEEDED",
+                    "decisionStatus": "reject",
+                    "decisionOutput": {
+                        "amount_result": {
+                            "reason_code": "E31",
+                            "distinguish_result": "REJECT",
+                            "message": "旧图金额无法确认",
+                        },
+                        "duplicate_result": {
+                            "reason_code": "E05",
+                            "distinguish_result": "REJECT",
+                            "message": "发票重复使用",
+                        },
+                        "traveler_result": {
+                            "reason_code": "E37",
+                            "distinguish_result": "REJECT",
+                            "message": "出行人不一致",
+                        },
+                        # passThrough 的权威金额在 decisionOutput 顶层。
+                        "invoice_finalAmount": 61.8,
+                    },
+                }
+            ],
+            "applyAmount": 1.0,
+            "validInvoiceTotal": 0.0,
+            "remainingApplyAmount": 1.0,
+            "isAmountSufficient": False,
+            "amountResolutionStatus": "known",
+            "amountResolutionReason": None,
+        }
+
+        payload = assemble_result_audit_info(
+            prepared_receipt, processed_receipt, expense_profile="personal_transport"
+        )
+        e31 = next(row for row in payload["auditLogs"] if row["reasonCode"] == "E31")
+
+        self.assertEqual(e31["distinguishResult"], "reject")
+        self.assertIn("当前有效发票金额为 0 元", e31["message"])
+        self.assertIn("金额不足", e31["problemTags"])
+        self.assertNotIn("模型", e31["employeeSuggestionTips"])
+        self.assertNotIn("模型", e31["problemTags"])
+        self.assertNotIn("模型", e31["suggestionTags"])
+        self.assertNotIn("模型服务异常", payload["aiAuditAdvice"])
+
+    def test_only_explicit_llm_error_gets_model_failure_writeback(self) -> None:
+        prepared_input = {
+            "invoiceNo": "INV-MODEL-ERROR",
+            "totalAmount": "61.80",
+            "serviceData": {
+                "currentInvoiceInfo": {"aiiid": "INFO-MODEL-001"},
+                "currentAuditInvoiceFile": {"afiid": "FILE-MODEL-001", "fid": "FID-MODEL-001"},
+            },
+        }
+        prepared_receipt = {
+            "receiptCode": "REC-MODEL-ERROR",
+            "serviceData": {"auditInfo": {"instanceCode": "REC-MODEL-ERROR", "applyAmount": "1.00"}},
+            "invoicePreparations": [
+                {"invoiceKey": "FID-MODEL-001", "preparedInput": prepared_input}
+            ],
+        }
+        processed_receipt = {
+            "receiptCode": "REC-MODEL-ERROR",
+            "serviceData": prepared_receipt["serviceData"],
+            "invoiceResults": [
+                {
+                    "invoiceKey": "FID-MODEL-001",
+                    "preparedInput": prepared_input,
+                    # 即使外层执行状态也是 FAILED，只要运行时明确报告
+                    # llmStatus=error，回写仍应保留真实的模型异常原因。
+                    "executionStatus": "FAILED",
+                    "decisionStatus": "reject",
+                    "runtimeResult": {"llmStatus": "error", "errorMessage": "model timeout"},
+                    "decisionOutput": {
+                        "amount_result": {"reason_code": "E31", "distinguish_result": "REJECT"},
+                        "content_result": {
+                            "reason_code": "E36",
+                            "distinguish_result": "REJECT",
+                        },
+                    },
+                }
+            ],
+            "applyAmount": 1.0,
+            "isAmountSufficient": None,
+        }
+
+        payload = assemble_result_audit_info(
+            prepared_receipt, processed_receipt, expense_profile="personal_transport"
+        )
+        e31 = next(row for row in payload["auditLogs"] if row["reasonCode"] == "E31")
+
+        self.assertIn("模型服务异常", e31["message"])
+        self.assertEqual(e31["problemTags"], "模型服务异常")
+        self.assertEqual(e31["suggestionTags"], "【稍后重试】【联系管理员】")
+
+    def test_business_text_containing_model_service_is_not_model_failure(self) -> None:
+        from expense_audit_orchestrator.receipt_summary import resolve_invoice_amount_status
+
+        invoice_result = {
+            "executionStatus": "SUCCEEDED",
+            "decisionStatus": "reject",
+            "decisionOutput": {
+                "content_result": {
+                    "reason_code": "E36",
+                    "distinguish_result": "REJECT",
+                    "message": "该业务说明包含模型服务适用范围，不代表服务异常。",
+                },
+                "invoice_finalAmount": "61.80",
+            },
+        }
+
+        self.assertEqual(resolve_invoice_amount_status(invoice_result), ("known", None))
+
+
 if __name__ == "__main__":
     unittest.main()
