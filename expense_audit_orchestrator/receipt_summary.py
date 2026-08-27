@@ -212,6 +212,7 @@ def build_ai_audit_advice(
     processed_receipt: Mapping[str, Any],
     *,
     expense_profile: str | None = None,
+    audit_logs: Sequence[Mapping[str, Any]] | None = None,
 ) -> str | None:
     """Build deterministic receipt-level advice without masking audit issues.
 
@@ -233,6 +234,7 @@ def build_ai_audit_advice(
         processed_receipt,
         prepared_receipt=prepared_receipt,
         expense_profile=expense_profile,
+        audit_logs=audit_logs,
     )
     status_notice = _build_status_notice(status_flags)
 
@@ -668,11 +670,67 @@ def _is_model_failure_rule(
     return status == "failed" or _is_model_error_text(rule_text)
 
 
+def _apply_audit_row_status(
+    flags: dict[str, bool],
+    audit_row: Mapping[str, Any],
+    *,
+    is_eor: bool,
+) -> None:
+    """Apply one final/writeback audit row to receipt-level status flags."""
+    status = str(
+        audit_row.get("distinguishResult")
+        or audit_row.get("distinguish_result")
+        or ""
+    ).strip().lower()
+    reason_code = str(
+        audit_row.get("reasonCode")
+        or audit_row.get("reason_code")
+        or ""
+    ).strip().upper()
+    rule_text = " ".join(
+        str(audit_row.get(key) or "")
+        for key in (
+            "message",
+            "specificProblemDes",
+            "problemTags",
+            "problem_category",
+            "employeeSuggestionTips",
+            "suggestionTags",
+        )
+    )
+    if _is_model_error_text(rule_text):
+        flags["model_error"] = True
+
+    if reason_code == "W33" and status in {"reject", "failed"}:
+        flags["warning"] = True
+        return
+    if reason_code in {"E17", "W40", "W32", "E34", "E36", "W31"} and _is_model_failure_rule(
+        reason_code, status, audit_row
+    ):
+        if reason_code == "W31":
+            flags["warning"] = True
+        else:
+            flags["reject"] = True
+        flags["model_error"] = True
+        return
+    if reason_code == "E31" and status == "failed":
+        flags["reject"] = True
+    elif reason_code == "E31" and is_eor and status == "reject":
+        flags["warning"] = True
+    elif status == "reject":
+        flags["reject"] = True
+    elif status == "warning":
+        flags["warning"] = True
+    elif status == "failed":
+        flags["failed"] = True
+
+
 def _audit_status_flags(
     processed_receipt: Mapping[str, Any],
     *,
     prepared_receipt: Mapping[str, Any] | None = None,
     expense_profile: str | None = None,
+    audit_logs: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, bool]:
     flags = {
         "reject": False,
@@ -700,6 +758,38 @@ def _audit_status_flags(
         processed_receipt,
         expense_profile,
     )
+
+    # The writeback layer normalizes receipt-level rows (especially E31/W33)
+    # after invoice execution.  When it supplies those final rows, they are
+    # authoritative for advice; do not let a raw per-invoice E31=REJECT leak
+    # into the final summary after writeback has changed it to PASS.
+    if audit_logs is not None:
+        final_rows = [row for row in audit_logs if isinstance(row, Mapping)]
+        for audit_row in final_rows:
+            _apply_audit_row_status(flags, audit_row, is_eor=is_eor)
+
+        final_codes = {
+            str(
+                row.get("reasonCode")
+                or row.get("reason_code")
+                or ""
+            ).strip().upper()
+            for row in final_rows
+        }
+        if "E31" not in final_codes and "isAmountSufficient" in processed_receipt:
+            amount_status = processed_receipt.get("isAmountSufficient")
+            if amount_status is False:
+                flags["warning" if is_eor else "reject"] = True
+            elif amount_status is None:
+                flags["reject"] = True
+        if "W33" not in final_codes and processed_receipt.get("isGiftCountReasonable") is False:
+            flags["warning"] = True
+
+        if _mapping_contains_model_error(processed_receipt):
+            flags["model_error"] = True
+            if not flags["reject"] and not flags["warning"] and not flags["failed"]:
+                flags["reject"] = True
+        return flags
 
     # E31 是核销单级规则，不一定出现在 invoiceResults 的 decisionOutput 中。
     # 应用层已经根据有效发票金额写入 isAmountSufficient，汇总必须同步读取，
@@ -826,52 +916,7 @@ def _audit_status_flags(
     # 没有 orchestrator 内部的 invoiceResults。不能因为缺少内部结构，
     # 就把已有的 REJECT/WARNING 覆盖成“本次发票全部通过！”。
     for audit_row in _iter_prebuilt_audit_rows(processed_receipt):
-        status = str(
-            audit_row.get("distinguishResult")
-            or audit_row.get("distinguish_result")
-            or ""
-        ).strip().lower()
-        reason_code = str(
-            audit_row.get("reasonCode")
-            or audit_row.get("reason_code")
-            or ""
-        ).strip().upper()
-        rule_text = " ".join(
-            str(audit_row.get(key) or "")
-            for key in (
-                "message",
-                "specificProblemDes",
-                "problemTags",
-                "problem_category",
-                "employeeSuggestionTips",
-                "suggestionTags",
-            )
-        )
-        if _is_model_error_text(rule_text):
-            flags["model_error"] = True
-
-        if reason_code == "W33" and status in {"reject", "failed"}:
-            flags["warning"] = True
-            continue
-        if reason_code in {"E17", "W40", "W32", "E34", "E36", "W31"} and _is_model_failure_rule(
-            reason_code, status, audit_row
-        ):
-            if reason_code == "W31":
-                flags["warning"] = True
-            else:
-                flags["reject"] = True
-            flags["model_error"] = True
-            continue
-        if reason_code == "E31" and status == "failed":
-            flags["reject"] = True
-        elif reason_code == "E31" and is_eor and status == "reject":
-            flags["warning"] = True
-        elif status == "reject":
-            flags["reject"] = True
-        elif status == "warning":
-            flags["warning"] = True
-        elif status == "failed":
-            flags["failed"] = True
+        _apply_audit_row_status(flags, audit_row, is_eor=is_eor)
 
     if _mapping_contains_model_error(processed_receipt):
         flags["model_error"] = True

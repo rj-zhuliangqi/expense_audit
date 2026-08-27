@@ -217,7 +217,7 @@
           {
             "id": "84bb4038-5410-4b14-9ffa-3b478d6c1f05",
             "key": "isAmountEnough",
-            "value": "number(serviceData.auditInfo.applyAmount ?? 0) <= number(invoiceAmount ?? 0)"
+            "value": "number(serviceData.auditInfo.applyAmount ?? 0) <= number(totalAmount ?? 0)"
           },
           {
             "id": "eor-e31-expression",
@@ -687,10 +687,10 @@
             "629d6a9c-0e78-40c1-baef-0abea4b1e67f": "invoice_info_id",
             "509fd9ba-3996-4e4a-9021-df6513ed6807": "\"\"",
             "a1b2c3d4-0000-0000-0000-regulation0": "\"《锐捷网络员工费用管理与报销制度》\n5.2票据使用规范\n所有费用报销须提供真实、合法、合规的票据。\"",
-            "a1b2c3d4-0000-0000-0000-suggestion0": "\"【删除重复发票】请删除本次发票，并上传未使用过的有效发票。\"",
+            "a1b2c3d4-0000-0000-0000-suggestion0": "\"\"",
             "a1b2c3d4-0000-0000-0000-createtime0": "context.executionTime",
-            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"重复报销\"",
-            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"【重新开票】\"",
+            "a1b2c3d4-0000-0000-0000-problemcategory0": "\"\"",
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": "\"\"",
             "e05-history-duplicate-input": "true",
             "e05-receipt-invoice-duplicate-input": "false"
           }

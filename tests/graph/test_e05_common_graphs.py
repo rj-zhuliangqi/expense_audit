@@ -120,6 +120,13 @@ class CommonE05GraphTests(unittest.TestCase):
                     self.assertEqual(e05["distinguish_result"], result)
                     self.assertEqual(e05["message"], message)
                     self.assertNotRegex(e05["message"], r"\{[^{}]+\}")
+                    if profile == "entertainment" and scenario == "pass":
+                        for field in (
+                            "employeeSuggestionTips",
+                            "problem_category",
+                            "optimization_action_category",
+                        ):
+                            self.assertEqual(e05.get(field), "", field)
 
     def test_travel_adapter_uses_the_same_four_duplicate_outcomes(self) -> None:
         graph = json.loads(OFFICIAL_GRAPH_PATHS["travel"].read_text(encoding="utf-8"))

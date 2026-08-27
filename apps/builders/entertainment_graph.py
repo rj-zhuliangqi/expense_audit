@@ -283,7 +283,11 @@ ENTERTAINMENT_PREPROCESS_EXPRESSIONS = [
     {
         "id": _new_uuid(),
         "key": "isAmountEnough",
-        "value": 'number(serviceData.auditInfo.applyAmount ?? 0) <= number(invoiceAmount ?? 0)',
+        # E31 uses the tax-inclusive OCR total.  invoiceAmount is the
+        # pre-tax amount and can make a fully covered reimbursement look
+        # short (for example applyAmount=5000, invoiceAmount=4950.5,
+        # totalAmount=5000).
+        "value": 'number(serviceData.auditInfo.applyAmount ?? 0) <= number(totalAmount ?? 0)',
     },
     {
         "id": "eor-e31-expression",

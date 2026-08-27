@@ -325,7 +325,9 @@ class WritebackAssemblerTests(unittest.TestCase):
         self.assertEqual(payload["auditLogs"][0]["suggestionTags"], "【补充发票】【调减金额】")
         self.assertEqual(payload["auditLogs"][1]["reasonCode"], "E01")
         self.assertEqual(payload["auditLogs"][1]["distinguishResult"], "pass")
-        self.assertEqual(payload["auditLogs"][1]["specificProblemDes"], payload["auditLogs"][1]["message"])
+        # PASS rows must not expose a problem description copied from a
+        # reject-only rule template.
+        self.assertEqual(payload["auditLogs"][1]["specificProblemDes"], "")
         self.assertEqual(payload["auditLogs"][1]["policiesIndex"], "")
         self.assertEqual(payload["auditLogs"][1]["employeeSuggestionTips"], "")
         self.assertEqual(payload["auditInvoiceInfos"][0]["reasonCode"], "E31")

@@ -609,6 +609,86 @@ class ReceiptSummaryTests(unittest.TestCase):
                 self.assertIn(expected_status, advice)
                 self.assertNotIn("本次发票全部通过", advice)
 
+    def test_writeback_advice_uses_normalized_e31_and_clears_pass_e05_details(self) -> None:
+        prepared_receipt = {
+            "receiptCode": "REC-ENTERTAINMENT-5000",
+            "serviceData": {
+                "auditInfo": {
+                    "instanceCode": "REC-ENTERTAINMENT-5000",
+                    "applyAmount": "5000.00",
+                }
+            },
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-5000",
+                    "preparedInput": {
+                        "instance_code": "REC-ENTERTAINMENT-5000",
+                        "invoiceNo": "INV-5000",
+                        "invoiceAmount": "4950.50",
+                        "totalAmount": "5000.00",
+                        "serviceData": {
+                            "currentInvoiceInfo": {"aiiid": "AIIID-5000"},
+                            "currentAuditInvoiceFile": {
+                                "afiid": "AFID-5000",
+                                "fid": "FID-5000",
+                            },
+                        },
+                    },
+                }
+            ],
+        }
+        processed_receipt = {
+            "receiptCode": "REC-ENTERTAINMENT-5000",
+            "serviceData": prepared_receipt["serviceData"],
+            "isAmountSufficient": True,
+            "validInvoiceTotal": 5000.00,
+            "aiAuditAdvice": "本次审核存在REJECT稽核项，请根据稽核明细处理；待补充发票金额0.00元",
+            "invoiceResults": [
+                {
+                    "invoiceKey": "FID-5000",
+                    "executionStatus": "SUCCEEDED",
+                    "decisionStatus": "reject",
+                    "preparedInput": prepared_receipt["invoicePreparations"][0]["preparedInput"],
+                    "decisionOutput": {
+                        "amount_result": {
+                            "reason_code": "E31",
+                            "distinguish_result": "REJECT",
+                            "message": "金额不足",
+                        },
+                        "duplicate_result": {
+                            "reason_code": "E05",
+                            "distinguish_result": "PASS",
+                            "message": "",
+                            "employeeSuggestionTips": "【删除重复发票】错误残留",
+                            "problem_category": "重复报销",
+                            "optimization_action_category": "【重新开票】",
+                        },
+                        "invoice_finalAmount": "5000.00",
+                    },
+                }
+            ],
+        }
+
+        payload = assemble_result_audit_info(
+            prepared_receipt,
+            processed_receipt,
+            expense_profile="entertainment",
+        )
+
+        self.assertNotIn("REJECT", payload["aiAuditAdvice"])
+        self.assertEqual(payload["aiAuditAdvice"], "本次发票全部通过！")
+        e31 = next(row for row in payload["auditLogs"] if row["reasonCode"] == "E31")
+        self.assertEqual(e31["distinguishResult"], "pass")
+        e05 = next(row for row in payload["auditLogs"] if row["reasonCode"] == "E05")
+        self.assertEqual(e05["distinguishResult"], "pass")
+        for field in (
+            "specificProblemDes",
+            "employeeSuggestionTips",
+            "problemTags",
+            "suggestionTags",
+        ):
+            self.assertEqual(e05[field], "", field)
+
 
 if __name__ == "__main__":
     unittest.main()

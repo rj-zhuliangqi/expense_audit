@@ -159,6 +159,14 @@ def patch_e05_node(node: dict[str, Any]) -> dict[str, Any]:
             "true",
             E05_RECEIPT_DUPLICATE_MESSAGE,
         ),
-        make_rule(history_pass, "e05-no-duplicate", "true", "false", '""', '"PASS"'),
+        # A PASS row must not carry the reject-only remediation copied from
+        # the source history row.  Otherwise a successful E05 still appears
+        # with "删除重复发票" / "重复报销" in writeback.
+        make_rule(history_pass, "e05-no-duplicate", "true", "false", '""', '"PASS"')
+        | {
+            "a1b2c3d4-0000-0000-0000-suggestion0": '""',
+            "a1b2c3d4-0000-0000-0000-problemcategory0": '""',
+            "a1b2c3d4-0000-0000-0000-optimizationactioncategory0": '""',
+        },
     ]
     return node

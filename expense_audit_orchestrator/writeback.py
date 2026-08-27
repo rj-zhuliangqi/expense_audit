@@ -65,6 +65,36 @@ def _is_pass_like_advice(value: str) -> bool:
     )
 
 
+def _has_conflicting_audit_status(existing: str, generated: str) -> bool:
+    """Return whether an existing advice exposes a status absent from final rows."""
+    existing_upper = str(existing or "").upper()
+    generated_upper = str(generated or "").upper()
+    for marker in (
+        "REJECT",
+        "WARNING",
+        "FAILED",
+        "模型服务异常",
+        "业务费用明细接口异常",
+    ):
+        if marker in existing_upper and marker not in generated_upper:
+            return True
+    return False
+
+
+def _clear_pass_audit_fields(audit_log: dict[str, Any]) -> None:
+    """Remove reject-only details from every PASS audit row."""
+    status = str(audit_log.get("distinguishResult") or "").strip().lower()
+    if status not in {"pass", "passed"}:
+        return
+    for field in (
+        "specificProblemDes",
+        "employeeSuggestionTips",
+        "problemTags",
+        "suggestionTags",
+    ):
+        audit_log[field] = ""
+
+
 def _default_compliance(goods_name: str, item: Mapping[str, Any]) -> bool:
     return True
 
@@ -205,15 +235,33 @@ def assemble_result_audit_info(
     # 核销单级整体建议必须与最终稽核状态一致。历史结果或外部调用方可能
     # 携带了“本次发票全部通过！”的旧文案，但当前回写阶段已经把 E31/W33
     # 等核销单级规则重算为 reject/warning；此时必须用确定性建议替换旧文案。
+    final_audit_logs = result["auditLogs"]
+    has_final_status_rows = any(
+        isinstance(row, Mapping)
+        and row.get("reasonCode")
+        and row.get("distinguishResult")
+        for row in final_audit_logs
+    )
+    if not has_final_status_rows:
+        # Legacy replay callers may provide only already-expanded auditLogs;
+        # preserve those rows as the source of final advice status.
+        legacy_audit_logs = processed_receipt.get("auditLogs")
+        if isinstance(legacy_audit_logs, list):
+            final_audit_logs = legacy_audit_logs
+
     generated_advice = build_ai_audit_advice(
         prepared_receipt,
         processed_receipt,
         expense_profile=expense_profile,
+        audit_logs=final_audit_logs,
     )
     overall_advice = processed_receipt.get("aiAuditAdvice")
     if isinstance(overall_advice, str) and overall_advice.strip():
         normalized_advice = overall_advice.strip()
-        if generated_advice and _is_pass_like_advice(normalized_advice):
+        if generated_advice and (
+            _is_pass_like_advice(normalized_advice)
+            or _has_conflicting_audit_status(normalized_advice, generated_advice)
+        ):
             normalized_advice = generated_advice
         result["aiAuditAdvice"] = normalized_advice
     elif generated_advice:
@@ -594,44 +642,44 @@ def _build_audit_logs(
 
                 # createTime 取图内各稽核点输出的 create_time（来自 context.executionTime），
                 # 兼容 create_time / createTime 两种键名；回写层不另行生成时间戳。
-                invoice_logs.append(
-                    {
-                        "instanceCode": _get_string_value(rule_result, "instance_code")
-                        or prepared_instance_code
-                        or instance_code,
-                        "invoiceFileId": _get_string_value(rule_result, "invoice_file_id")
-                        or prepared_invoice_file_id
-                        or _get_string_value(current_audit_invoice_file, "afiid", "aifid"),
-                        "invoiceInfoId": _get_string_value(rule_result, "invoice_info_id")
-                        or prepared_invoice_info_id
-                        or current_invoice_info.get("aiiid"),
-                        "reasonCode": rule_result.get("reason_code") or rule_result.get("reasonCode"),
-                        "auditType": rule_result.get("audit_type") or rule_result.get("auditType"),
-                        "auditContent": rule_result.get("audit_content") or rule_result.get("auditContent"),
-                        "distinguishContent": rule_result.get("distinguish_content") or rule_result.get("distinguishContent"),
-                        "distinguishResult": _normalize_rule_distinguish_result(
-                            rule_result.get("distinguish_result") or rule_result.get("distinguishResult"),
-                            reason_code=str(
-                                rule_result.get("reason_code") or rule_result.get("reasonCode") or ""
-                            ),
-                        )
-                        or result.get("decisionStatus"),
-                        "message": rule_result.get("message") or result.get("errorMessage"),
-                        "specificProblemDes": rule_result.get("message") or result.get("errorMessage"),
-                        "policiesIndex": rule_result.get("policiesIndex"),
-                        "employeeSuggestionTips": rule_result.get("employeeSuggestionTips"),
-                        # 通讯费规则图新增的标签字段：
-                        # problem_category -> problemTags，优化动作分类 -> suggestionTags。
-                        "problemTags": _get_rule_tag(rule_result, "problem_category", "problemCategory", "problemTags"),
-                        "suggestionTags": _get_rule_tag(
-                            rule_result,
-                            "optimization_action_category",
-                            "optimizationActionCategory",
-                            "suggestionTags",
+                audit_log = {
+                    "instanceCode": _get_string_value(rule_result, "instance_code")
+                    or prepared_instance_code
+                    or instance_code,
+                    "invoiceFileId": _get_string_value(rule_result, "invoice_file_id")
+                    or prepared_invoice_file_id
+                    or _get_string_value(current_audit_invoice_file, "afiid", "aifid"),
+                    "invoiceInfoId": _get_string_value(rule_result, "invoice_info_id")
+                    or prepared_invoice_info_id
+                    or current_invoice_info.get("aiiid"),
+                    "reasonCode": rule_result.get("reason_code") or rule_result.get("reasonCode"),
+                    "auditType": rule_result.get("audit_type") or rule_result.get("auditType"),
+                    "auditContent": rule_result.get("audit_content") or rule_result.get("auditContent"),
+                    "distinguishContent": rule_result.get("distinguish_content") or rule_result.get("distinguishContent"),
+                    "distinguishResult": _normalize_rule_distinguish_result(
+                        rule_result.get("distinguish_result") or rule_result.get("distinguishResult"),
+                        reason_code=str(
+                            rule_result.get("reason_code") or rule_result.get("reasonCode") or ""
                         ),
-                        "createTime": rule_result.get("create_time") or rule_result.get("createTime"),
-                    }
-                )
+                    )
+                    or result.get("decisionStatus"),
+                    "message": rule_result.get("message") or result.get("errorMessage"),
+                    "specificProblemDes": rule_result.get("message") or result.get("errorMessage"),
+                    "policiesIndex": rule_result.get("policiesIndex"),
+                    "employeeSuggestionTips": rule_result.get("employeeSuggestionTips"),
+                    # 通讯费规则图新增的标签字段：
+                    # problem_category -> problemTags，优化动作分类 -> suggestionTags。
+                    "problemTags": _get_rule_tag(rule_result, "problem_category", "problemCategory", "problemTags"),
+                    "suggestionTags": _get_rule_tag(
+                        rule_result,
+                        "optimization_action_category",
+                        "optimizationActionCategory",
+                        "suggestionTags",
+                    ),
+                    "createTime": rule_result.get("create_time") or rule_result.get("createTime"),
+                }
+                _clear_pass_audit_fields(audit_log)
+                invoice_logs.append(audit_log)
             if audit_rule_catalog:
                 actual_codes = {str(log.get("reasonCode") or "") for log in invoice_logs}
                 for reason_code, metadata in audit_rule_catalog.items():
@@ -706,39 +754,40 @@ def _build_audit_logs(
                                     ),
                                 }
                             )
+                    _clear_pass_audit_fields(catalog_rule_result)
                     invoice_logs.append(catalog_rule_result)
             audit_logs.extend(invoice_logs)
             continue
 
-        audit_logs.append(
-            {
-                "instanceCode": prepared_instance_code,
-                "invoiceFileId": prepared_invoice_file_id,
-                "invoiceInfoId": prepared_invoice_info_id,
-                "reasonCode": decision_output.get("reasonCode"),
-                "auditType": decision_output.get("auditType"),
-                "auditContent": decision_output.get("auditContent"),
-                "distinguishContent": decision_output.get("distinguishContent"),
-                "distinguishResult": result.get("decisionStatus"),
-                "message": decision_output.get("message") or result.get("errorMessage"),
-                "specificProblemDes": decision_output.get("message") or result.get("errorMessage"),
-                "policiesIndex": decision_output.get("policiesIndex"),
-                "employeeSuggestionTips": decision_output.get("employeeSuggestionTips"),
-                "problemTags": _get_rule_tag(
-                    decision_output,
-                    "problem_category",
-                    "problemCategory",
-                    "problemTags",
-                ),
-                "suggestionTags": _get_rule_tag(
-                    decision_output,
-                    "optimization_action_category",
-                    "optimizationActionCategory",
-                    "suggestionTags",
-                ),
-                "createTime": decision_output.get("create_time") or decision_output.get("createTime"),
-            }
-        )
+        audit_log = {
+            "instanceCode": prepared_instance_code,
+            "invoiceFileId": prepared_invoice_file_id,
+            "invoiceInfoId": prepared_invoice_info_id,
+            "reasonCode": decision_output.get("reasonCode"),
+            "auditType": decision_output.get("auditType"),
+            "auditContent": decision_output.get("auditContent"),
+            "distinguishContent": decision_output.get("distinguishContent"),
+            "distinguishResult": result.get("decisionStatus"),
+            "message": decision_output.get("message") or result.get("errorMessage"),
+            "specificProblemDes": decision_output.get("message") or result.get("errorMessage"),
+            "policiesIndex": decision_output.get("policiesIndex"),
+            "employeeSuggestionTips": decision_output.get("employeeSuggestionTips"),
+            "problemTags": _get_rule_tag(
+                decision_output,
+                "problem_category",
+                "problemCategory",
+                "problemTags",
+            ),
+            "suggestionTags": _get_rule_tag(
+                decision_output,
+                "optimization_action_category",
+                "optimizationActionCategory",
+                "suggestionTags",
+            ),
+            "createTime": decision_output.get("create_time") or decision_output.get("createTime"),
+        }
+        _clear_pass_audit_fields(audit_log)
+        audit_logs.append(audit_log)
     return audit_logs
 
 
