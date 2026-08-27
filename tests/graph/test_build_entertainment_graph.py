@@ -80,7 +80,42 @@ def _is_invoice_number_continuous_expression() -> str:
     )
 
 
+def _is_amount_enough_expression() -> str:
+    return next(
+        expression["value"]
+        for expression in ENTERTAINMENT_PREPROCESS_EXPRESSIONS
+        if expression["key"] == "isAmountEnough"
+    )
+
+
 class EntertainmentContentGraphWiringTests(unittest.TestCase):
+    def test_e31_compares_application_amount_with_tax_inclusive_total(self) -> None:
+        checked_in_graph = json.loads(
+            OFFICIAL_GRAPH_PATHS["entertainment"].read_text(encoding="utf-8")
+        )
+        checked_in_expression = next(
+            expression["value"]
+            for node in checked_in_graph["nodes"]
+            if node.get("type") == "expressionNode"
+            for expression in node.get("content", {}).get("expressions", [])
+            if expression.get("key") == "isAmountEnough"
+        )
+
+        for expression in (_is_amount_enough_expression(), checked_in_expression):
+            with self.subTest(expression=expression):
+                self.assertIn("totalAmount", expression)
+                self.assertNotIn("invoiceAmount", expression)
+                self.assertTrue(
+                    zen.evaluate_expression(
+                        expression,
+                        {
+                            "serviceData": {"auditInfo": {"applyAmount": 5000}},
+                            "invoiceAmount": 4950.5,
+                            "totalAmount": 5000,
+                        },
+                    )
+                )
+
     def test_content_prompt_explicitly_passes_amount_and_items_to_llm(self) -> None:
         # GoRules functionNode 下游只接收上游返回值，不能依赖 input.prev
         # 自动拿回 request 输入；金额不透传会让网关无法校验 finalAmount，
