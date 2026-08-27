@@ -1,9 +1,10 @@
 """Normalize the EOR flag shared by graph execution and writeback.
 
-The audit service uses a one-character database value for ``IsEor`` while
+The audit service exposes a one-character source value for ``IsEor`` while
 callers and older payloads may use booleans or differently-cased JSON keys.
 Keep the conversion in one place so all expense profiles use identical
-semantics.
+semantics. The normalized value is used internally by graph/E31 logic; it is
+not a top-level field of the result writeback DTO.
 """
 
 from __future__ import annotations
