@@ -2152,6 +2152,66 @@ class FormalServiceTests(unittest.TestCase):
         data_preparer.prepare_receipt_context.assert_not_called()
         data_preparer.prepare_invoice_input.assert_not_called()
 
+    def test_process_prepared_receipt_keeps_top_level_amount_known_when_invoice_is_blocked(self) -> None:
+        prepared_receipt = {
+            "receiptCode": "rjw260827000033",
+            "serviceData": {"auditInfo": {"instanceCode": "rjw260827000033", "applyAmount": 1.0}},
+            "receiptContext": {"receiptCode": "rjw260827000033"},
+            "invoiceCount": 1,
+            "invoicePreparations": [
+                {
+                    "invoiceKey": "FID-TRANSPORT-001",
+                    "invoiceFile": {"fid": "FID-TRANSPORT-001"},
+                    "preparedInput": {
+                        "invoiceNo": "26117000001100093758",
+                        "totalAmount": "61.80",
+                        "serviceData": {
+                            "auditInvoiceFile": {"fid": "FID-TRANSPORT-001"},
+                            "currentInvoiceInfo": {"aiiid": "INFO-TRANSPORT-001"},
+                            "currentAuditInvoiceFile": {"afiid": "FILE-TRANSPORT-001"},
+                        },
+                    },
+                }
+            ],
+        }
+
+        class BlockedInvoiceGraphRuntimeClient:
+            def evaluate(self, *, prepared_input: dict[str, Any], graph_path=None, graph_content=None) -> dict[str, Any]:
+                del graph_path, graph_content
+                return {
+                    "receiptCode": "rjw260827000033",
+                    "decisionOutput": {
+                        "amount_result": {
+                            "reason_code": "E31",
+                            "distinguish_result": "REJECT",
+                        },
+                        "duplicate_result": {
+                            "reason_code": "E05",
+                            "distinguish_result": "REJECT",
+                        },
+                        "traveler_result": {
+                            "reason_code": "E37",
+                            "distinguish_result": "REJECT",
+                        },
+                        # 正式个人交通费图由 passThrough 写在顶层。
+                        "invoice_finalAmount": 61.8,
+                    },
+                    "preparedInput": prepared_input,
+                }
+
+        service = ReceiptAuditService(
+            graph_runtime_client=BlockedInvoiceGraphRuntimeClient(),
+            data_preparer=MagicMock(),
+        )
+
+        result = service.process_prepared_receipt(prepared_receipt)
+
+        self.assertEqual(result["isAmountSufficient"], False)
+        self.assertEqual(result["validInvoiceTotal"], 0.0)
+        self.assertEqual(result["remainingApplyAmount"], 1.0)
+        self.assertEqual(result["amountResolutionStatus"], "known")
+        self.assertIsNone(result["amountResolutionReason"])
+
     def test_receipt_audit_service_process_prepared_receipt_continues_after_invoice_runtime_failure(self) -> None:
         prepared_receipt = {
             "receiptCode": "REC-PARTIAL-001",

@@ -10,6 +10,8 @@ from .receipt_summary import (
     build_ai_audit_summary,
     build_ai_audit_summary_finance,
     extract_valid_invoice_final_amount,
+    resolve_invoice_amount_status,
+    rule_has_explicit_model_failure,
 )
 
 
@@ -140,6 +142,9 @@ def assemble_result_audit_info(
     invoice_pairs = _pair_invoices(prepared_receipt, processed_receipt)
     is_amount_sufficient = processed_receipt.get("isAmountSufficient")
     amount_status_available = "isAmountSufficient" in processed_receipt
+    amount_resolution_reason = _resolve_amount_resolution_reason(
+        processed_receipt, invoice_pairs
+    )
     is_gift_count_reasonable = processed_receipt.get("isGiftCountReasonable")
     gift_reception_count = _coerce_receipt_number(
         processed_receipt.get("giftReceptionCount")
@@ -170,6 +175,7 @@ def assemble_result_audit_info(
             is_amount_sufficient=is_amount_sufficient,
             is_eor=is_eor,
             amount_status_available=amount_status_available,
+            amount_resolution_reason=amount_resolution_reason,
             apply_amount=apply_amount,
             valid_invoice_total=valid_invoice_total,
             is_gift_count_reasonable=is_gift_count_reasonable,
@@ -186,6 +192,7 @@ def assemble_result_audit_info(
             is_amount_sufficient=is_amount_sufficient,
             is_eor=is_eor,
             amount_status_available=amount_status_available,
+            amount_resolution_reason=amount_resolution_reason,
             apply_amount=apply_amount,
             valid_invoice_total=valid_invoice_total,
             is_gift_count_reasonable=is_gift_count_reasonable,
@@ -295,6 +302,38 @@ def _pair_invoices(
     return pairs
 
 
+def _resolve_amount_resolution_reason(
+    processed_receipt: Mapping[str, Any],
+    invoice_pairs: list[tuple[dict[str, Any], dict[str, Any]]],
+) -> str | None:
+    """Resolve the structured reason for an unknown receipt amount.
+
+    New orchestrator payloads carry this explicitly.  For legacy/direct
+    callers, inspect the invoice results instead of assuming ``None`` means a
+    model failure.
+    """
+    status = str(processed_receipt.get("amountResolutionStatus") or "").strip().lower()
+    explicit_reason = processed_receipt.get("amountResolutionReason")
+    if status == "known":
+        return None
+    if isinstance(explicit_reason, str) and explicit_reason.strip():
+        return explicit_reason.strip()
+    if processed_receipt.get("isAmountSufficient") is not None:
+        return None
+
+    for _preparation, invoice_result in invoice_pairs:
+        _status, reason = resolve_invoice_amount_status(
+            invoice_result,
+            prepared_input=_resolve_prepared_input(_preparation, invoice_result),
+        )
+        if _status == "unknown" and reason:
+            return reason
+
+    # Unknown legacy payloads are an incomplete audit result, not evidence of a
+    # model outage.  Keep the failure visible without inventing a model error.
+    return "missing_invoice_final_amount"
+
+
 def _resolve_receipt_amount(processed_receipt: Mapping[str, Any], key: str) -> float | None:
     value = processed_receipt.get(key)
     if value is None:
@@ -355,6 +394,7 @@ def _override_e31_rule_result(
     rule_result: Mapping[str, Any],
     *,
     is_amount_sufficient: bool | None,
+    amount_resolution_reason: str | None = None,
     is_eor: bool = False,
     apply_amount: float | None = None,
     valid_invoice_total: float | None = None,
@@ -379,15 +419,27 @@ def _override_e31_rule_result(
     elif is_amount_sufficient is None:
         overridden["distinguish_result"] = "REJECT"
         overridden["distinguishResult"] = "REJECT"
-        overridden["message"] = (
-            "有效发票金额无法确认，可能是模型服务异常，请稍后重试或联系管理员处理。"
-        )
         overridden["policiesIndex"] = ""
-        overridden["employeeSuggestionTips"] = (
-            "【模型异常】请稍后重试；如问题持续，请联系管理员处理。"
-        )
-        overridden["problem_category"] = "模型服务异常"
-        overridden["optimization_action_category"] = "【稍后重试】【联系管理员】"
+        if amount_resolution_reason == "model_failure":
+            overridden["message"] = (
+                "有效发票金额无法确认，模型服务异常，请稍后重试或联系管理员处理。"
+            )
+            overridden["employeeSuggestionTips"] = (
+                "【模型异常】请稍后重试；如问题持续，请联系管理员处理。"
+            )
+            overridden["problem_category"] = "模型服务异常"
+            overridden["optimization_action_category"] = "【稍后重试】【联系管理员】"
+        else:
+            if amount_resolution_reason in {"execution_failed", "runtime_error", "audit_rule_failed"}:
+                message = "稽核流程执行失败，金额无法确认，请联系管理员处理。"
+            elif amount_resolution_reason == "missing_invoice_final_amount":
+                message = "稽核结果未返回有效金额，金额无法确认，请联系管理员处理。"
+            else:
+                message = "稽核结果异常，金额无法确认，请联系管理员处理。"
+            overridden["message"] = message
+            overridden["employeeSuggestionTips"] = "当前稽核结果无法确认金额，请联系管理员处理。"
+            overridden["problem_category"] = "稽核结果异常"
+            overridden["optimization_action_category"] = "【联系管理员】"
     else:
         result_status = "WARNING" if is_eor else "REJECT"
         overridden["distinguish_result"] = result_status
@@ -399,23 +451,27 @@ def _override_e31_rule_result(
                 apply_amount, valid_invoice_total, expense_profile=expense_profile
             )
             overridden["policiesIndex"] = overridden.get("policiesIndex") or ""
+            graph_has_model_failure = rule_has_explicit_model_failure(rule_result)
             overridden["employeeSuggestionTips"] = (
-                _get_string_value(overridden, "employeeSuggestionTips")
-                or PERSONAL_TRANSPORT_E31_SUGGESTION
-            )
+                ""
+                if graph_has_model_failure
+                else _get_string_value(overridden, "employeeSuggestionTips")
+            ) or PERSONAL_TRANSPORT_E31_SUGGESTION
             overridden["problem_category"] = (
-                _get_rule_tag(overridden, "problem_category", "problemCategory", "problemTags")
-                or PERSONAL_TRANSPORT_E31_PROBLEM_CATEGORY
-            )
+                ""
+                if graph_has_model_failure
+                else _get_rule_tag(overridden, "problem_category", "problemCategory", "problemTags")
+            ) or PERSONAL_TRANSPORT_E31_PROBLEM_CATEGORY
             overridden["optimization_action_category"] = (
-                _get_rule_tag(
+                ""
+                if graph_has_model_failure
+                else _get_rule_tag(
                     overridden,
                     "optimization_action_category",
                     "optimizationActionCategory",
                     "suggestionTags",
                 )
-                or PERSONAL_TRANSPORT_E31_OPTIMIZATION_ACTION_CATEGORY
-            )
+            ) or PERSONAL_TRANSPORT_E31_OPTIMIZATION_ACTION_CATEGORY
         else:
             overridden["message"] = _build_e31_message(
                 apply_amount, valid_invoice_total, expense_profile=expense_profile
@@ -579,6 +635,7 @@ def _build_audit_logs(
     is_amount_sufficient: bool | None = None,
     is_eor: bool = False,
     amount_status_available: bool = False,
+    amount_resolution_reason: str | None = None,
     apply_amount: float | None = None,
     valid_invoice_total: float | None = None,
     is_gift_count_reasonable: bool | None = None,
@@ -618,6 +675,7 @@ def _build_audit_logs(
                     rule_result = _override_e31_rule_result(
                         rule_result,
                         is_amount_sufficient=is_amount_sufficient,
+                        amount_resolution_reason=amount_resolution_reason,
                         is_eor=is_eor,
                         apply_amount=apply_amount,
                         valid_invoice_total=valid_invoice_total,
@@ -860,6 +918,7 @@ def _build_audit_invoice_infos(
     is_amount_sufficient: bool | None = None,
     is_eor: bool = False,
     amount_status_available: bool = False,
+    amount_resolution_reason: str | None = None,
     apply_amount: float | None = None,
     valid_invoice_total: float | None = None,
     is_gift_count_reasonable: bool | None = None,
@@ -881,6 +940,7 @@ def _build_audit_invoice_infos(
             overridden_amount_result = _override_e31_rule_result(
                 decision_output["amount_result"],
                 is_amount_sufficient=is_amount_sufficient,
+                amount_resolution_reason=amount_resolution_reason,
                 is_eor=is_eor,
                 apply_amount=apply_amount,
                 valid_invoice_total=valid_invoice_total,
@@ -1315,22 +1375,37 @@ def _extract_rule_results(decision_output: Mapping[str, Any]) -> list[dict[str, 
                 or ""
             ).strip().lower()
 
-            # 回写协议中 E31 不允许暴露 FAILED；金额无法确认统一按 REJECT。
+            # 回写协议中 E31 不允许暴露 FAILED；但只有结构化/明确的
+            # 模型失败才可以写“模型服务异常”。
             if reason_code == "E31" and status == "failed":
                 normalized["distinguish_result"] = "REJECT"
                 normalized["distinguishResult"] = "REJECT"
-                normalized["message"] = normalized.get("message") or (
-                    "有效发票金额无法确认，可能是模型服务异常，请稍后重试或联系管理员处理。"
-                )
-                normalized["employeeSuggestionTips"] = normalized.get(
-                    "employeeSuggestionTips"
-                ) or "【模型异常】请稍后重试；如问题持续，请联系管理员处理。"
-                normalized["problem_category"] = normalized.get(
-                    "problem_category"
-                ) or "模型服务异常"
-                normalized["optimization_action_category"] = normalized.get(
-                    "optimization_action_category"
-                ) or "【稍后重试】【联系管理员】"
+                if rule_has_explicit_model_failure(normalized):
+                    normalized["message"] = normalized.get("message") or (
+                        "有效发票金额无法确认，模型服务异常，请稍后重试或联系管理员处理。"
+                    )
+                    normalized["employeeSuggestionTips"] = normalized.get(
+                        "employeeSuggestionTips"
+                    ) or "【模型异常】请稍后重试；如问题持续，请联系管理员处理。"
+                    normalized["problem_category"] = normalized.get(
+                        "problem_category"
+                    ) or "模型服务异常"
+                    normalized["optimization_action_category"] = normalized.get(
+                        "optimization_action_category"
+                    ) or "【稍后重试】【联系管理员】"
+                else:
+                    normalized["message"] = normalized.get("message") or (
+                        "稽核流程执行失败，金额无法确认，请联系管理员处理。"
+                    )
+                    normalized["employeeSuggestionTips"] = normalized.get(
+                        "employeeSuggestionTips"
+                    ) or "当前稽核结果无法确认金额，请联系管理员处理。"
+                    normalized["problem_category"] = normalized.get(
+                        "problem_category"
+                    ) or "稽核结果异常"
+                    normalized["optimization_action_category"] = normalized.get(
+                        "optimization_action_category"
+                    ) or "【联系管理员】"
 
             # W33 是弱控，历史数据即使写成 REJECT/FAILED，也只能按 WARNING
             # 回写，避免弱控把整单升级为拒绝。
@@ -1346,11 +1421,11 @@ def _extract_rule_results(decision_output: Mapping[str, Any]) -> list[dict[str, 
 
 
 def _normalize_model_failure_rule_result(value: Mapping[str, Any]) -> dict[str, Any]:
-    """Map legacy LLM ``FAILED`` rows to the business status contract.
+    """Normalize legacy failed rows without inventing a model outage.
 
     The graph now emits E36=REJECT and W31=WARNING directly.  This normalizer
-    keeps old graph/runtime payloads safe during rolling upgrades and ensures a
-    model outage can never be mistaken for a generic FAILED or a pass.
+    keeps old graph/runtime payloads safe during rolling upgrades while
+    distinguishing explicit model failures from generic failed execution.
     """
     result = dict(value)
     reason_code = str(
@@ -1359,21 +1434,8 @@ def _normalize_model_failure_rule_result(value: Mapping[str, Any]) -> dict[str, 
     status = str(
         result.get("distinguish_result") or result.get("distinguishResult") or ""
     ).strip().lower()
-    rule_text = " ".join(
-        str(result.get(key) or "")
-        for key in (
-            "message",
-            "problem_category",
-            "problemCategory",
-            "employeeSuggestionTips",
-            "suggestion",
-        )
-    ).lower()
-    model_failure = any(
-        token in rule_text
-        for token in ("模型服务", "模型异常", "模型失败", "llm", "model service", "model failure")
-    )
-    if reason_code == "E31" and (status == "failed" or model_failure):
+    model_failure = rule_has_explicit_model_failure(result)
+    if reason_code == "E31" and model_failure:
         result["distinguish_result"] = "REJECT"
         result["distinguishResult"] = "REJECT"
         result["message"] = result.get("message") or (
@@ -1393,18 +1455,18 @@ def _normalize_model_failure_rule_result(value: Mapping[str, Any]) -> dict[str, 
         result["message"] = result.get("message") or (
             "礼品数量与接待人数的匹配结果需要人工复核。"
         )
-    elif reason_code in {"E17", "W40", "W32", "E34", "E36"} and (status == "failed" or model_failure):
-        # E17/E34/E36 都依赖 LLM 完成内容或金额判断，模型失败时必须
-        # 显式拒绝，不能沿用旧图的 FAILED 或因缺少结果而默认 PASS。
+    elif reason_code in {"E17", "W40", "W32", "E34", "E36", "W31"} and model_failure:
+        # 只有结构化/明确的模型失败才能暴露模型服务异常。
         failure_messages = {
             "E17": "模型服务暂时异常，当前充值卡检查未完成，请稍后重试或联系管理员处理。",
             "W40": "模型服务暂时异常，当前账单年份检查未完成，请稍后重试或联系管理员处理。",
             "W32": "模型服务暂时异常，当前手机号检查未完成，请稍后重试或联系管理员处理。",
             "E34": "模型服务暂时异常，当前发票内容金额检查未完成，请稍后重试或联系管理员处理。",
             "E36": "模型服务暂时异常，当前内容合规检查未完成，请稍后重试或联系管理员处理。",
+            "W31": "模型服务暂时异常，当前虚开发票预警检查未完成，请稍后重试或联系管理员处理。",
         }
-        result["distinguish_result"] = "REJECT"
-        result["distinguishResult"] = "REJECT"
+        result["distinguish_result"] = "WARNING" if reason_code == "W31" else "REJECT"
+        result["distinguishResult"] = result["distinguish_result"]
         result["message"] = result.get("message") or failure_messages[reason_code]
         result["policiesIndex"] = result.get("policiesIndex") or ""
         result["employeeSuggestionTips"] = result.get("employeeSuggestionTips") or (
@@ -1414,19 +1476,21 @@ def _normalize_model_failure_rule_result(value: Mapping[str, Any]) -> dict[str, 
         result["optimization_action_category"] = (
             result.get("optimization_action_category") or "【稍后重试】【联系管理员】"
         )
-    elif reason_code == "W31" and (status == "failed" or model_failure):
-        result["distinguish_result"] = "WARNING"
-        result["distinguishResult"] = "WARNING"
+    elif reason_code in {"E17", "W40", "W32", "E34", "E36", "W31"} and status == "failed":
+        # 泛化 FAILED 只能说明该稽核结果未完成，不能据此臆造模型服务
+        # 故障。保留失败事实，但使用非模型异常标签。
+        result["distinguish_result"] = "WARNING" if reason_code == "W31" else "REJECT"
+        result["distinguishResult"] = result["distinguish_result"]
         result["message"] = result.get("message") or (
-            "模型服务暂时异常，当前虚开发票预警检查未完成，请稍后重试或联系管理员处理。"
+            "稽核规则执行失败，结果无法确认，请联系管理员处理。"
         )
         result["policiesIndex"] = result.get("policiesIndex") or ""
         result["employeeSuggestionTips"] = result.get("employeeSuggestionTips") or (
-            "【模型异常】请稍后重试；如问题持续，请联系管理员处理。"
+            "当前稽核结果无法确认，请联系管理员处理。"
         )
-        result["problem_category"] = result.get("problem_category") or "模型服务异常"
+        result["problem_category"] = result.get("problem_category") or "稽核结果异常"
         result["optimization_action_category"] = (
-            result.get("optimization_action_category") or "【稍后重试】【联系管理员】"
+            result.get("optimization_action_category") or "【联系管理员】"
         )
     return result
 

@@ -99,6 +99,21 @@ class EntertainmentE36AmountTests(unittest.TestCase):
         self.assertTrue(_invoice_has_unresolved_e36_amount(invoice_result))
         self.assertFalse(invoice_contributes_valid_amount(invoice_result))
 
+    def test_missing_graph_amount_does_not_fallback_to_ocr_total(self) -> None:
+        invoice_result = {
+            "executionStatus": "SUCCEEDED",
+            "decisionStatus": "passed",
+            "decisionOutput": {"checkStatus": "passed"},
+            "preparedInput": {"totalAmount": "61.80"},
+        }
+
+        self.assertIsNone(
+            extract_valid_invoice_final_amount(
+                invoice_result,
+                prepared_input=invoice_result["preparedInput"],
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

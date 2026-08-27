@@ -4,7 +4,6 @@ from collections import Counter, defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
 from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation
 from pathlib import Path
 import re
 from typing import TYPE_CHECKING, Any
@@ -18,8 +17,10 @@ from .receipt_summary import (
     build_ai_audit_advice,
     build_ai_audit_summary,
     build_ai_audit_summary_finance,
+    extract_graph_invoice_final_amount,
     extract_valid_invoice_final_amount,
     invoice_contributes_valid_amount,
+    resolve_invoice_amount_status,
 )
 
 if TYPE_CHECKING:
@@ -226,6 +227,7 @@ class ReceiptAuditService:
         cumulative_goods_count = 0.0
         invoice_preparations = prepared_receipt["invoicePreparations"]
         amount_resolution_unknown = False
+        amount_resolution_reason: str | None = None
         # 差旅文档级规则（税额、补贴、场站、自驾等）只在首张发票执行；
         # 逐张规则仍对每张发票执行。提前汇总全部发票税额，避免首张票只
         # 比较当前票税额而漏掉后续票。
@@ -285,14 +287,22 @@ class ReceiptAuditService:
             _collect_invoice_number(invoice_preparation, previous_invoice_numbers)
             _collect_w34_invoice_number(invoice_preparation, previous_w34_invoice_numbers)
 
+            prepared_input = _resolve_prepared_input(invoice_preparation)
+            amount_status, amount_reason = resolve_invoice_amount_status(
+                invoice_result,
+                prepared_input=prepared_input,
+            )
+            if amount_status == "unknown":
+                # 金额未知必须保留真实原因；不能把所有未知都包装成模型
+                # 异常，也不能让后续回写层静默使用 OCR 金额。
+                amount_resolution_unknown = True
+                if amount_resolution_reason is None:
+                    amount_resolution_reason = amount_reason
+
             used_amount = _extract_invoice_final_amount(
                 invoice_result,
-                prepared_input=_resolve_prepared_input(invoice_preparation),
+                prepared_input=prepared_input,
             )
-            if used_amount is None and _invoice_has_unresolved_e36_amount(invoice_result):
-                # E36 的有效金额来自 LLM。缺失/错误/模型服务失败时，不能把
-                # OCR 总额当作有效金额，也不能让 E31 误判为“只是金额不足”。
-                amount_resolution_unknown = True
             if used_amount is not None and remaining_apply_amount is not None:
                 remaining_apply_amount -= used_amount
 
@@ -325,6 +335,13 @@ class ReceiptAuditService:
                     remaining_apply_amount,
                 )
             ),
+            # Internal diagnostic fields consumed by writeback.  They make an
+            # unresolved amount auditable without turning every None into a
+            # model-service error.
+            "amountResolutionStatus": (
+                "unknown" if amount_resolution_unknown else "known"
+            ),
+            "amountResolutionReason": amount_resolution_reason,
             "resolvedProfile": resolved_profile,
         }
         if gift_count_context is not None:
@@ -1560,12 +1577,9 @@ def _invoice_has_unresolved_e36_amount(invoice_result: Mapping[str, Any]) -> boo
         # E36 正常返回（包括 E36=PASS）时，决策表结果中应带有
         # invoice_finalAmount。只有金额缺失/非法时才把整单金额标记为未知；
         # 不能仅因为找到了 E36 行就把正常结果误判为模型异常。
-        final_amount = value.get("invoice_finalAmount")
-        try:
-            if isinstance(final_amount, bool):
-                raise InvalidOperation
-            parsed_amount = Decimal(str(final_amount).replace(",", "").strip())
-        except (InvalidOperation, TypeError, ValueError):
-            return True
-        return not (parsed_amount.is_finite() and parsed_amount >= 0)
+        # Amount may be emitted by passThrough at decisionOutput top level
+        # rather than on the E36 row itself.  Read the graph-authoritative
+        # value, not only the nested rule object.
+        final_amount = extract_graph_invoice_final_amount(invoice_result)
+        return final_amount is None
     return False
