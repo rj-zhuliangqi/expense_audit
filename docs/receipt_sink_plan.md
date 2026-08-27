@@ -141,7 +141,7 @@ OCR envelope 是内部包装结构，不是外部接口。它的目的不是改�
 | 目标字段 | 主要来源 | 回退/保留策略 | 状态 |
 | --- | --- | --- | --- |
 | instanceCode | auditInfo.instanceCode | receiptCode | 已映射 |
-| isEor | auditInfo.isEor | 统一规范化为字符串 `"0"` / `"1"`；非法值不回写 | 已映射 |
+| isEor | — | 不属于当前 `ResultAuditInfoDTO` 顶层字段；仅从 `auditInfo.isEor` 读取并用于流程图/E31 判断，不发送到 `audit-info-save` | 不回写 |
 | auditLogs | invoiceResults + decisionOutput | 缺失字段保留空值 | 已初步实现 |
 | auditInvoiceInfos | invoiceInfo + normalized OCR + currentAuditInvoiceFile | 无法确认的字段保留 | 已初步实现 |
 | auditInvoiceFiles | serviceData.auditInvoiceFiles | 无则空数组 | 已映射 |

@@ -74,7 +74,7 @@ class EorE31WritebackAndSummaryTests(unittest.TestCase):
         self.assertEqual(eor_payload["auditLogs"][0]["reasonCode"], "E31")
         self.assertEqual(eor_payload["auditLogs"][0]["distinguishResult"], "warning")
         self.assertEqual(eor_payload["auditInvoiceInfos"][0]["reasonCode"], "E31")
-        self.assertEqual(eor_payload["isEor"], "1")
+        self.assertNotIn("isEor", eor_payload)
 
         normal_prepared, normal_processed = _writeback_fixture("0")
         normal_payload = assemble_result_audit_info(
@@ -83,9 +83,9 @@ class EorE31WritebackAndSummaryTests(unittest.TestCase):
             expense_profile="telecom",
         )
         self.assertEqual(normal_payload["auditLogs"][0]["distinguishResult"], "reject")
-        self.assertEqual(normal_payload["isEor"], "0")
+        self.assertNotIn("isEor", normal_payload)
 
-    def test_is_eor_writeback_normalizes_boolean_values(self) -> None:
+    def test_is_eor_values_drive_e31_without_entering_writeback_dto(self) -> None:
         for profile, value, expected in (
             ("telecom", True, "1"),
             ("personal_transport", False, "0"),
@@ -98,7 +98,11 @@ class EorE31WritebackAndSummaryTests(unittest.TestCase):
                     processed,
                     expense_profile=profile,
                 )
-                self.assertEqual(payload["isEor"], expected)
+                self.assertNotIn("isEor", payload)
+                self.assertEqual(
+                    payload["auditLogs"][0]["distinguishResult"],
+                    "warning" if expected == "1" else "reject",
+                )
 
     def test_is_eor_legacy_key_aliases_are_normalized(self) -> None:
         for profile, key in (
@@ -116,7 +120,8 @@ class EorE31WritebackAndSummaryTests(unittest.TestCase):
                     processed,
                     expense_profile=profile,
                 )
-                self.assertEqual(payload["isEor"], "1")
+                self.assertNotIn("isEor", payload)
+                self.assertEqual(payload["auditLogs"][0]["distinguishResult"], "warning")
 
     def test_missing_is_eor_defaults_to_non_eor_for_all_supported_profiles(self) -> None:
         for profile in ("telecom", "personal_transport", "entertainment"):
@@ -127,7 +132,7 @@ class EorE31WritebackAndSummaryTests(unittest.TestCase):
                     processed,
                     expense_profile=profile,
                 )
-                self.assertEqual(payload["isEor"], "0")
+                self.assertNotIn("isEor", payload)
                 self.assertEqual(
                     payload["auditLogs"][0]["distinguishResult"],
                     "reject",
@@ -142,11 +147,8 @@ class EorE31WritebackAndSummaryTests(unittest.TestCase):
                     processed,
                     expense_profile=profile,
                 )
-                self.assertEqual(payload["isEor"], "1")
-                self.assertEqual(
-                    payload["auditLogs"][0]["distinguishResult"],
-                    "warning",
-                )
+                self.assertNotIn("isEor", payload)
+                self.assertEqual(payload["auditLogs"][0]["distinguishResult"], "warning")
 
     def test_eor_e31_is_high_risk_and_overall_advice_is_warning(self) -> None:
         prepared, processed = _writeback_fixture("1")
