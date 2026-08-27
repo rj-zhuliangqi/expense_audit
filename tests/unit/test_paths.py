@@ -37,18 +37,29 @@ class ProjectPathContractTests(unittest.TestCase):
         self.assertEqual(DEFAULT_GRAPH_PATH, OFFICIAL_GRAPH_PATHS["telecom"])
         self.assertEqual(DEFAULT_GRAPH_PATH.name, "graph-latest-telecom-0727-1900.json")
 
+    def test_relative_graph_paths_resolve_to_all_official_assets(self) -> None:
+        expected_paths = {
+            "telecom": "graph-latest-telecom-0727-1900.json",
+            "entertainment": "graph-latest-entertainment-0722.json",
+            "personal_transport": "graph-latest-personal-transport-0722.json",
+            "travel": "graph-latest-travel-0807.json",
+        }
+        for profile, basename in expected_paths.items():
+            with self.subTest(profile=profile, basename=basename):
+                expected = OFFICIAL_GRAPH_PATHS[profile]
+                self.assertEqual(resolve_project_path(f"resources/graphs/{basename}"), expected)
+                self.assertEqual(resolve_project_path(basename), expected)
+                self.assertEqual(expected.parent, GRAPHS_ROOT)
+                self.assertTrue(expected.is_file())
+
+    def test_legacy_telecom_basename_resolves_to_official_asset(self) -> None:
+        self.assertEqual(
+            resolve_project_path("graph-latest-0727-1900.json"),
+            OFFICIAL_GRAPH_PATHS["telecom"],
+        )
+
     def test_relative_paths_are_project_relative(self) -> None:
         self.assertEqual(resolve_project_path("resources/samples/prepare_test.json"), DEFAULT_OCR_PATH)
-        self.assertEqual(
-            resolve_project_path("resources/graphs/graph-latest-telecom-0727-1900.json"),
-            OFFICIAL_GRAPH_PATHS["telecom"],
-        )
-        self.assertEqual(
-            resolve_project_path("graph-latest-telecom-0727-1900.json"),
-            OFFICIAL_GRAPH_PATHS["telecom"],
-        )
-        self.assertEqual(resolve_project_path("resources/graphs/graph-latest-travel-0807.json"), OFFICIAL_GRAPH_PATHS["travel"])
-        self.assertEqual(resolve_project_path("graph-latest-travel-0807.json"), OFFICIAL_GRAPH_PATHS["travel"])
         self.assertEqual(resolve_project_path("/tmp/custom.json"), Path("/tmp/custom.json"))
         self.assertEqual(resolve_project_path(None, DEFAULT_GRAPH_PATH), DEFAULT_GRAPH_PATH)
 
