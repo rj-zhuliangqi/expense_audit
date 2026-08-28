@@ -370,17 +370,21 @@ class ReceiptAuditService:
                     "giftDetailLookupError": gift_lookup_error,
                 }
             )
-        # 核销单级金额汇总：所有发票跑完后生成，避免依赖最后一张发票。
-        ai_audit_summary = build_ai_audit_summary(prepared_receipt, receipt_result)
-        if ai_audit_summary:
-            receipt_result["aiAuditSummary"] = ai_audit_summary
-
         # 给财务看的稽核点统计与给用户看的整体建议是两个不同字段。
         # 动态路由优先使用本单 resolved profile 的风险配置；静态模式使用
         # service 构造时绑定的 profile 配置。
         effective_profile_name = (
             resolved_profile.name if resolved_profile is not None else self._expense_profile
         )
+
+        # 核销单级金额汇总：所有发票跑完后生成，避免依赖最后一张发票。
+        ai_audit_summary = build_ai_audit_summary(
+            prepared_receipt,
+            receipt_result,
+            expense_profile=effective_profile_name,
+        )
+        if ai_audit_summary:
+            receipt_result["aiAuditSummary"] = ai_audit_summary
         effective_risk_catalog = (
             resolved_profile.audit_risk_catalog
             if resolved_profile is not None

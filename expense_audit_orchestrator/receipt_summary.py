@@ -15,6 +15,7 @@ from .is_eor import is_eor_profile, resolve_is_eor_value
 
 
 _FINANCE_SUMMARY_PROFILES = frozenset({"personal_transport", "telecom", "entertainment"})
+_TELECOM_PROFILE_NAMES = frozenset({"telecom", "通讯费"})
 _FINANCE_RISK_BLOCKING = "blocking"
 _FINANCE_RISK_HIGH = "high"
 _FINANCE_RISK_MEDIUM_LOW = "medium_low"
@@ -176,9 +177,16 @@ def _resolve_finance_risk_level(
 _INVOICE_FINAL_AMOUNT_EXEMPT_RULE_CODES = frozenset({"E31", "E34", "E36"})
 
 
+def _is_telecom_profile(expense_profile: str | None) -> bool:
+    normalized_profile = str(expense_profile or "").strip().lower().replace("-", "_")
+    return normalized_profile in _TELECOM_PROFILE_NAMES
+
+
 def build_ai_audit_summary(
     prepared_receipt: Mapping[str, Any],
     processed_receipt: Mapping[str, Any],
+    *,
+    expense_profile: str | None = None,
 ) -> str | None:
     """Build the fixed receipt-level ``aiAuditSummary`` text.
 
@@ -199,11 +207,14 @@ def build_ai_audit_summary(
     if totals is None:
         return None
 
-    return (
-        f"本次报销申请总金额{_format_summary_amount(totals.apply_amount)}元|"
-        f"提交发票总金额{_format_summary_amount(totals.submitted_total)}元|"
-        f"发票有效可报销金额{_format_summary_amount(totals.valid_invoice_total)}元|"
-        f"发票待补充金额{_format_summary_amount(totals.shortage)}元"
+    separator = "，" if _is_telecom_profile(expense_profile) else "|"
+    return separator.join(
+        (
+            f"本次报销申请总金额{_format_summary_amount(totals.apply_amount)}元",
+            f"提交发票总金额{_format_summary_amount(totals.submitted_total)}元",
+            f"发票有效可报销金额{_format_summary_amount(totals.valid_invoice_total)}元",
+            f"发票待补充金额{_format_summary_amount(totals.shortage)}元",
+        )
     )
 
 
@@ -246,6 +257,14 @@ def build_ai_audit_advice(
         return None
 
     if problem_invoice_numbers:
+        if _is_telecom_profile(expense_profile):
+            return (
+                f"本次报销捕捉{len(problem_invoice_numbers)}张问题发票,"
+                f"需要删除/重开发票{'、'.join(problem_invoice_numbers)} "
+                f"待补充发票金额{_format_summary_amount(totals.shortage)}元，"
+                "请根据问题和建议清单处理"
+            )
+
         advice = (
             f"本次报销捕捉{len(problem_invoice_numbers)}张问题发票,"
             f"需要删除/重开发票{'、'.join(problem_invoice_numbers)},"
