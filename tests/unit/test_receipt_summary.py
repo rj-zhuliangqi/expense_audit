@@ -9,7 +9,7 @@ from expense_audit_orchestrator.writeback import assemble_result_audit_info
 
 
 class ReceiptSummaryTests(unittest.TestCase):
-    def test_telecom_summary_and_advice_use_requested_templates(self) -> None:
+    def test_fixed_summary_and_advice_templates_for_supported_profiles(self) -> None:
         prepared_receipt = {
             "receiptCode": "REC-TELECOM-TEMPLATE",
             "serviceData": {
@@ -74,22 +74,25 @@ class ReceiptSummaryTests(unittest.TestCase):
             ],
         }
 
-        payload = assemble_result_audit_info(
-            prepared_receipt,
-            processed_receipt,
-            expense_profile="telecom",
-        )
+        for expense_profile in ("telecom", "personal_transport", "entertainment"):
+            with self.subTest(expense_profile=expense_profile):
+                payload = assemble_result_audit_info(
+                    prepared_receipt,
+                    processed_receipt,
+                    expense_profile=expense_profile,
+                )
 
-        self.assertEqual(
-            payload["aiAuditSummary"],
-            "本次报销申请总金额36.01元，提交发票总金额350.11元，"
-            "发票有效可报销金额0.00元，发票待补充金额36.01元",
-        )
-        self.assertEqual(
-            payload["aiAuditAdvice"],
-            "本次报销捕捉2张问题发票,需要删除/重开发票26537000000257039069、"
-            "26357000000155572564 待补充发票金额36.01元，请根据问题和建议清单处理",
-        )
+                self.assertEqual(
+                    payload["aiAuditSummary"],
+                    "本次报销申请总金额36.01元，提交发票总金额350.11元，"
+                    "发票有效可报销金额0.00元，发票待补充金额36.01元",
+                )
+                self.assertEqual(
+                    payload["aiAuditAdvice"],
+                    "本次报销捕捉2张问题发票,需要删除/重开发票26537000000257039069、"
+                    "26357000000155572564 待补充发票金额36.01元，请根据问题和建议清单处理",
+                )
+
 
     def test_advice_uses_blocking_invoice_numbers_and_exact_shortage(self) -> None:
         prepared_receipt = {

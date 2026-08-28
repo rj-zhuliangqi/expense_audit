@@ -88,8 +88,8 @@ class EntertainmentE36AmountTests(unittest.TestCase):
         self.assertEqual(e31_log["distinguishResult"], "pass")
         self.assertEqual(
             payload["aiAuditSummary"],
-            "本次报销申请总金额5,000.00元|提交发票总金额5,000.00元|"
-            "发票有效可报销金额5,000.00元|发票待补充金额0.00元",
+            "本次报销申请总金额5,000.00元，提交发票总金额5,000.00元，"
+            "发票有效可报销金额5,000.00元，发票待补充金额0.00元",
         )
 
     def test_missing_e36_amount_remains_unresolved(self) -> None:
