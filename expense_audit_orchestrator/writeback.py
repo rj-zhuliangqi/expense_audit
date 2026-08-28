@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from .is_eor import resolve_is_eor_value
 from .receipt_summary import (
+    _is_telecom_profile,
     build_ai_audit_advice,
     build_ai_audit_summary,
     build_ai_audit_summary_finance,
@@ -221,8 +222,23 @@ def assemble_result_audit_info(
     # 核销单级金额汇总：优先使用编排层已计算的值；兼容直接调用
     # assemble_result_audit_info 的场景时，在回写前按同一套 Decimal 规则补算。
     ai_audit_summary = processed_receipt.get("aiAuditSummary")
-    if not isinstance(ai_audit_summary, str) or not ai_audit_summary.strip():
-        ai_audit_summary = build_ai_audit_summary(prepared_receipt, processed_receipt)
+    if _is_telecom_profile(expense_profile):
+        generated_summary = build_ai_audit_summary(
+            prepared_receipt,
+            processed_receipt,
+            expense_profile=expense_profile,
+        )
+        if generated_summary:
+            ai_audit_summary = generated_summary
+        elif isinstance(ai_audit_summary, str):
+            # 即使金额上下文不完整，也不要把历史竖线格式继续回写。
+            ai_audit_summary = ai_audit_summary.replace("|", "，")
+    elif not isinstance(ai_audit_summary, str) or not ai_audit_summary.strip():
+        ai_audit_summary = build_ai_audit_summary(
+            prepared_receipt,
+            processed_receipt,
+            expense_profile=expense_profile,
+        )
     if isinstance(ai_audit_summary, str) and ai_audit_summary.strip():
         result["aiAuditSummary"] = ai_audit_summary.strip()
 
@@ -263,7 +279,10 @@ def assemble_result_audit_info(
         audit_logs=final_audit_logs,
     )
     overall_advice = processed_receipt.get("aiAuditAdvice")
-    if isinstance(overall_advice, str) and overall_advice.strip():
+    if _is_telecom_profile(expense_profile) and generated_advice:
+        # 通讯费整体建议使用固定模板，不能沿用历史或图内生成的旧文案。
+        result["aiAuditAdvice"] = generated_advice
+    elif isinstance(overall_advice, str) and overall_advice.strip():
         normalized_advice = overall_advice.strip()
         if generated_advice and (
             _is_pass_like_advice(normalized_advice)
