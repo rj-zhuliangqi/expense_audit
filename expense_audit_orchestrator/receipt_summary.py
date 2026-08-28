@@ -15,7 +15,17 @@ from .is_eor import is_eor_profile, resolve_is_eor_value
 
 
 _FINANCE_SUMMARY_PROFILES = frozenset({"personal_transport", "telecom", "entertainment"})
-_TELECOM_PROFILE_NAMES = frozenset({"telecom", "通讯费"})
+_FIXED_TEMPLATE_PROFILE_NAMES = frozenset(
+    {
+        "telecom",
+        "通讯费",
+        "personal_transport",
+        "交通费",
+        "个人交通费",
+        "entertainment",
+        "业务招待费",
+    }
+)
 _FINANCE_RISK_BLOCKING = "blocking"
 _FINANCE_RISK_HIGH = "high"
 _FINANCE_RISK_MEDIUM_LOW = "medium_low"
@@ -177,9 +187,9 @@ def _resolve_finance_risk_level(
 _INVOICE_FINAL_AMOUNT_EXEMPT_RULE_CODES = frozenset({"E31", "E34", "E36"})
 
 
-def _is_telecom_profile(expense_profile: str | None) -> bool:
+def _uses_fixed_audit_templates(expense_profile: str | None) -> bool:
     normalized_profile = str(expense_profile or "").strip().lower().replace("-", "_")
-    return normalized_profile in _TELECOM_PROFILE_NAMES
+    return normalized_profile in _FIXED_TEMPLATE_PROFILE_NAMES
 
 
 def build_ai_audit_summary(
@@ -207,7 +217,7 @@ def build_ai_audit_summary(
     if totals is None:
         return None
 
-    separator = "，" if _is_telecom_profile(expense_profile) else "|"
+    separator = "，" if _uses_fixed_audit_templates(expense_profile) else "|"
     return separator.join(
         (
             f"本次报销申请总金额{_format_summary_amount(totals.apply_amount)}元",
@@ -257,7 +267,7 @@ def build_ai_audit_advice(
         return None
 
     if problem_invoice_numbers:
-        if _is_telecom_profile(expense_profile):
+        if _uses_fixed_audit_templates(expense_profile):
             return (
                 f"本次报销捕捉{len(problem_invoice_numbers)}张问题发票,"
                 f"需要删除/重开发票{'、'.join(problem_invoice_numbers)} "

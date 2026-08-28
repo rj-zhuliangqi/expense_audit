@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from .is_eor import resolve_is_eor_value
 from .receipt_summary import (
-    _is_telecom_profile,
+    _uses_fixed_audit_templates,
     build_ai_audit_advice,
     build_ai_audit_summary,
     build_ai_audit_summary_finance,
@@ -222,7 +222,7 @@ def assemble_result_audit_info(
     # 核销单级金额汇总：优先使用编排层已计算的值；兼容直接调用
     # assemble_result_audit_info 的场景时，在回写前按同一套 Decimal 规则补算。
     ai_audit_summary = processed_receipt.get("aiAuditSummary")
-    if _is_telecom_profile(expense_profile):
+    if _uses_fixed_audit_templates(expense_profile):
         generated_summary = build_ai_audit_summary(
             prepared_receipt,
             processed_receipt,
@@ -279,8 +279,8 @@ def assemble_result_audit_info(
         audit_logs=final_audit_logs,
     )
     overall_advice = processed_receipt.get("aiAuditAdvice")
-    if _is_telecom_profile(expense_profile) and generated_advice:
-        # 通讯费整体建议使用固定模板，不能沿用历史或图内生成的旧文案。
+    if _uses_fixed_audit_templates(expense_profile) and generated_advice:
+        # 通讯费、交通费和业务招待费整体建议使用固定模板，不能沿用历史或图内生成的旧文案。
         result["aiAuditAdvice"] = generated_advice
     elif isinstance(overall_advice, str) and overall_advice.strip():
         normalized_advice = overall_advice.strip()
