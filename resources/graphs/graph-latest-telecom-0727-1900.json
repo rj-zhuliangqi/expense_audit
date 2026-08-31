@@ -180,6 +180,11 @@
             "value": "(buyerTaxNo ?? \"\") != \"\" and (buyerTaxNo ?? \"\") == (filter((serviceData.companyList ?? []) as c, (c.ccode ?? c.accountingCode) == (instanceComCode ?? serviceData.auditInfo.instanceComCode ?? \"\"))[0].companyTax ?? \"\")"
           },
           {
+            "id": "telecom-e02-personal-buyer",
+            "key": "isPersonalBuyer",
+            "value": "(trim((buyerName ?? orgName ?? \"\")) != \"\" and ((endsWith(trim((buyerName ?? orgName ?? \"\")), \"公司\") or endsWith(trim((buyerName ?? orgName ?? \"\")), \"企业\") or endsWith(trim((buyerName ?? orgName ?? \"\")), \"集团\") or endsWith(trim((buyerName ?? orgName ?? \"\")), \"事务所\") or endsWith(trim((buyerName ?? orgName ?? \"\")), \"商行\") or endsWith(trim((buyerName ?? orgName ?? \"\")), \"合作社\")) == false))"
+          },
+          {
             "id": "telecom-e02-invoice-type-code",
             "key": "e02InvoiceTypeCode",
             "value": "(type(invoiceType) == \"number\") ? invoiceType : ((type(invoiceType) == \"string\" and trim(invoiceType) != \"\" and matches(trim(invoiceType), \"^[+-]?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))([eE][+-]?[0-9]+)?$\")) ? number(trim(invoiceType)) : -1)"
@@ -192,7 +197,7 @@
           {
             "id": "telecom-e02-tax-check",
             "key": "tax_check",
-            "value": "not($.e02Applicable ?? false) or $.isTaxExists"
+            "value": "not($.e02Applicable ?? false) or $.isPersonalBuyer or $.isTaxExists"
           },
           {
             "id": "f86cf5db-4ebb-4ae1-9a21-2166e5b50098",
