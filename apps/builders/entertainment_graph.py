@@ -613,6 +613,7 @@ ENTERTAINMENT_CONTENT_PROMPT_SOURCE = r"""export const handler = async (input) =
   // 发票内容唯一使用数据准备阶段由 items[*].goodsName 汇总出的单据级 goodsName。
   const goodsName = String(input.goodsName ?? '');
   const items = Array.isArray(input.items) ? input.items : [];
+  const auditItems = items;
   const rawTotalAmount = input.totalAmount ?? 0;
   const parsedTotalAmount = parseFloat(rawTotalAmount);
   const totalAmount = Number.isFinite(parsedTotalAmount) ? parsedTotalAmount : 0;
@@ -669,13 +670,15 @@ ENTERTAINMENT_CONTENT_PROMPT_SOURCE = r"""export const handler = async (input) =
 {
   "passed": true 或 false,
   "violationType": "none"、"prohibited_item" 或 "recharge_card",
+  "rechargeHitItems": 命中礼品卡、充值卡或预付/储值卡的具体明细名称，用“、”分隔；否则为空字符串,
   "finalAmount": 有效可报销金额（数字）
 }
 
 字段约束：
 - passed=true 时，violationType 必须为 "none"；
 - 命中黄金、珠宝、首饰、茅台、五粮液时，violationType 返回 "prohibited_item"；
-- 命中礼品卡、充值卡或明确的预付/储值卡时，violationType 返回 "recharge_card"。
+- 命中礼品卡、充值卡或明确的预付/储值卡时，violationType 返回 "recharge_card"，且 rechargeHitItems 必须写入具体明细名称；
+- 未命中卡类项目时，rechargeHitItems 必须为空字符串。
 
 # 待审核的发票项目名称（JSON 字符串）
 ${goodsNameForPrompt}
@@ -691,6 +694,7 @@ ${itemsForPrompt}`;
     context: input.context || {},
     totalAmount: input.totalAmount ?? null,
     items,
+    auditItems,
     goodsName,
     invoiceNo: input.invoiceNo ?? '',
     instance_code: input.instance_code ?? null,
@@ -759,10 +763,36 @@ def _build_content_compliance_llm_node() -> dict:
         "    }\r\n"
         "\r\n"
         "    const result = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});\r\n"
+        "    let llmResult = result.llmResult || null;\r\n"
+        "\r\n"
+        "    // E17 不再直接信任 violationType=recharge_card：必须能指向明确卡类/资金预存明细。\r\n"
+        "    // E36 仍使用 contentCheckResult，避免本结果门禁影响其他禁止项目的判定。\r\n"
+        "    if (llmResult && llmResult.passed === false && llmResult.violationType === 'recharge_card') {\r\n"
+        "      const normalize = (value) => String(value ?? '')\r\n"
+        "        .toLowerCase()\r\n"
+        "        .replace(/[\\s，。、“”‘’（）()【】\\[\\]：:；;、/\\\\_-]+/g, '');\r\n"
+        "      const explicitRecharge = /(礼品卡|预付卡|充值|预存|储值|卡券|单用途卡|多用途卡|消费卡|福利卡|电子卡)/i;\r\n"
+        "      const rawHitItems = Array.isArray(llmResult.rechargeHitItems)\r\n"
+        "        ? llmResult.rechargeHitItems.join('、')\r\n"
+        "        : llmResult.rechargeHitItems;\r\n"
+        "      const hitText = normalize(rawHitItems);\r\n"
+        "      const originalItemsText = normalize(\r\n"
+        "        (Array.isArray(input.auditItems) ? input.auditItems : [])\r\n"
+        "          .map((item) => item?.goodsName ?? item)\r\n"
+        "          .join('|')\r\n"
+        "      );\r\n"
+        "\r\n"
+        "      if (!hitText || !explicitRecharge.test(hitText) || !explicitRecharge.test(originalItemsText)) {\r\n"
+        "        llmResult = {\r\n"
+        "          ...llmResult,\r\n"
+        "          rechargeHitItems: ''\r\n"
+        "        };\r\n"
+        "      }\r\n"
+        "    }\r\n"
         "\r\n"
         "    return {\r\n"
         "      llm_status: result.llmStatus || 'error',\r\n"
-        "      llm_result: result.llmResult || null,\r\n"
+        "      llm_result: llmResult,\r\n"
         "      raw_content: result.rawContent || null,\r\n"
         "      error_message: result.errorMessage || null\r\n"
         "    };\r\n"
@@ -795,6 +825,11 @@ def _build_content_compliance_postprocess_node() -> dict:
                     "id": _new_uuid(),
                     "key": "contentCheckResult",
                     "value": '(llm_status ?? "error") == "success" ? (((llm_result ?? {}).passed == true) ? "pass" : (((llm_result ?? {}).violationType == "recharge_card") ? "recharge_card" : "prohibited_item")) : "error"',
+                },
+                {
+                    "id": _new_uuid(),
+                    "key": "rechargeCheckResult",
+                    "value": '(llm_status ?? "error") == "success" ? (((llm_result ?? {}).passed == true) ? "pass" : (((llm_result ?? {}).violationType == "recharge_card") ? ((((llm_result.rechargeHitItems ?? "") == "") ? "pass" : "recharge_card")) : "pass")) : "error"',
                 },
             ],
             "passThrough": True,
@@ -931,7 +966,7 @@ def _build_recharge_card_check_node() -> dict:
             distinguish_result="REJECT",
             audit_content="检查发票内容是否包含充值卡、预付卡或预存类项目",
             audit_type="general-rules",
-            message='"发票号【"+(invoiceNo??"")+"】✗ 发票内容【"+(goodsName??"")+"】包含充值卡/预付卡/预存等公司禁止报销项"',
+            message='"发票号【"+(invoiceNo??"")+"】✗ 发票内容【"+((llm_result.rechargeHitItems ?? "") == "" ? (goodsName ?? "") : llm_result.rechargeHitItems)+"】包含充值卡/预付卡/预存等公司禁止报销项"',
             policies_index='"《锐捷网络员工费用管理与报销制度》\\n4.2.2.2 禁止报销：预付卡销售、充值卡、成品油(卡)"',
             suggestion='"【删除发票】删除本票据，并提供非充值内容的发票"',
             problem_category="充值消费",
@@ -941,7 +976,7 @@ def _build_recharge_card_check_node() -> dict:
     return _make_decision_table(
         node_id="ent-recharge-card-check",
         name="充值卡检查",
-        input_field="contentCheckResult",
+        input_field="rechargeCheckResult",
         input_name="充值卡检查结果",
         rules=rules,
         output_path="recharge_card_result",
