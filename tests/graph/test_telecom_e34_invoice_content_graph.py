@@ -48,25 +48,25 @@ class TelecomE34InvoiceContentGraphTests(unittest.TestCase):
         self.assertIsNotNone(self.decision)
         self.assertEqual(self.graph["contentType"], "application/vnd.gorules.decision")
 
-    def test_prompt_uses_strict_telecom_whitelist(self) -> None:
+    def test_prompt_uses_semantic_telecom_classification(self) -> None:
         required_fragments = (
             "*电信服务*",
-            "通信服务费",
-            "套餐合约费/套餐固定费",
-            "套餐固定费",
-            "通话费/语音通话费",
-            "短信服务费",
-            "流量费",
-            "生产生活服务",
-            "信息技术服务",
-            "现代服务",
-            "终端费",
+            "语义泛化优先",
+            "禁止机械白名单匹配",
+            "不能只按字符串是否逐字命中示例词",
+            "税收分类前缀",
+            "通信费、通信服务费",
+            "移动通信服务费",
+            "电信服务-通信费",
+            "话费”或“通信费”本身不能等同于充值",
+            "充值、预存、储值、充值卡",
+            "通信终端硬件",
             "机顶盒",
-            "光猫设备",
-            "技术服务费",
-            "信息系统服务费",
-            "设备租赁费",
-            "宽带安装",
+            "光猫",
+            "技术服务",
+            "信息系统服务",
+            "设备租赁",
+            "宽带或电视安装",
             "解约费",
             "违约金",
             "生产生活服务*信息系统服务费",
@@ -80,6 +80,20 @@ class TelecomE34InvoiceContentGraphTests(unittest.TestCase):
         self.assertIn("detailAmount", self.prompt_source)
         self.assertIn("逐项", self.prompt_source)
         self.assertIn("多个项目使用中文顿号", self.prompt_source)
+        self.assertNotIn("公司允许报销范围（严格白名单）", self.prompt_source)
+        self.assertNotIn("只要明细项目不同时满足上述两个允许条件", self.prompt_source)
+
+    def test_prompt_regresses_communication_fee_as_allowed(self) -> None:
+        # 该真实票据的“通信费”是普通通信服务的同义表达，不应因未逐字命中“通信服务费”而拒绝。
+        expected_fragments = (
+            "*电信服务*电信服务-通信费",
+            "普通通信服务费，应判定为允许报销",
+            "finalAmount 为 314.10",
+            "话费”或“通信费”本身不能等同于充值",
+        )
+        for fragment in expected_fragments:
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.prompt_source)
 
     def test_amount_gate_rejects_when_llm_reduced_invoice_amount(self) -> None:
         expression = self.is_valid_expression
@@ -144,7 +158,7 @@ class TelecomE34InvoiceContentGraphTests(unittest.TestCase):
         self.assertIn("invoiceNo", message_expression)
         self.assertIn("compliance_llm_result.hitItems", message_expression)
         self.assertIn(
-            "通讯费仅允许报销*电信服务*大类下，细分通信服务费、套餐合约费/套餐固定费、通话费/语音通话费、短信服务费、流量费小类。",
+            "经语义判断属于通讯费禁止报销项目或不属于实际通信服务范围。",
             message_expression,
         )
         self.assertNotIn("{发票号}", message_expression)
