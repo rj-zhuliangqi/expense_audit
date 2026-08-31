@@ -769,8 +769,22 @@ class ContentComplianceLlmTests(unittest.TestCase):
         self.assertIn("黄金针菇", ENTERTAINMENT_CONTENT_PROMPT_SOURCE)
         self.assertIn("茅台老树S15干红葡萄酒", ENTERTAINMENT_CONTENT_PROMPT_SOURCE)
         self.assertIn("默认通过", ENTERTAINMENT_CONTENT_PROMPT_SOURCE)
+        self.assertIn("不是“允许项目白名单”", ENTERTAINMENT_CONTENT_PROMPT_SOURCE)
+        self.assertIn("不要因为没有出现在示例中就拒绝", ENTERTAINMENT_CONTENT_PROMPT_SOURCE)
+        self.assertIn("语义归一化", ENTERTAINMENT_CONTENT_PROMPT_SOURCE)
         for prohibited_item in ("黄金", "珠宝", "首饰", "茅台", "五粮液", "礼品卡", "充值卡"):
             self.assertIn(prohibited_item, ENTERTAINMENT_CONTENT_PROMPT_SOURCE)
+
+    def test_content_check_uses_e36_and_not_legacy_e34(self) -> None:
+        graph = build_entertainment_graph()
+        codes = {
+            json.loads(rule["48a29115-f542-44d3-8c02-3ff71e19ee38"])
+            for node in graph["nodes"]
+            if node.get("type") == "decisionTableNode"
+            for rule in node["content"]["rules"]
+        }
+        self.assertIn("E36", codes)
+        self.assertNotIn("E34", codes)
 
     def test_postprocess_maps_both_blacklist_categories_to_e36_results(self) -> None:
         node = _build_content_compliance_postprocess_node()

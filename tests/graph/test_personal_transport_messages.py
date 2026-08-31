@@ -336,9 +336,14 @@ class PersonalTransportMessageTests(unittest.TestCase):
         self.assertIn("同义词", sources["充值卡检查prompt"])
         self.assertIn("无法确定时返回 true", sources["充值卡检查prompt"])
         self.assertIn("严禁因为没有发票内容而拒绝", sources["发票合规prompt"])
+        self.assertIn("禁止清单不是允许项目白名单", sources["发票合规prompt"])
+        self.assertIn("固定的“允许词”比对", sources["发票合规prompt"])
+        self.assertIn("只有在内容明确命中交通费制度禁止类别", sources["发票合规prompt"])
+        self.assertIn("同义表达、简称、词序变化", sources["发票合规prompt"])
+        self.assertNotIn("上述允许报销范围以外", sources["发票合规prompt"])
 
-        # E36 的交通费允许清单必须覆盖最新的经营租赁/共享出行场景，
-        # 避免模型将共享单车发票误判为普通非交通租赁服务。
+        # E36 的交通业务语义参照必须覆盖最新的经营租赁/共享出行场景，
+        # 但这些只是非穷尽示例，不能构成封闭白名单。
         for fragment in (
             "代驾", "停车", "电费", "供电", "充电", "客运", "车位管理费",
             "通行费", "代订车", "信息系统增值服务", "车辆停放", "运输服务",
@@ -361,7 +366,7 @@ class PersonalTransportMessageTests(unittest.TestCase):
             )
         )
         e36_message = e36_reject[MESSAGE_FIELD_ID]
-        for fragment in ("*经营租赁*租赁服务", "共享单车", "共享电单车", "停车占道费"):
+        for fragment in ("明确不属于个人交通出行", "预付/充值", "航空", "保险", "车辆维修"):
             with self.subTest(message_fragment=fragment):
                 self.assertIn(fragment, e36_message)
 
@@ -374,6 +379,23 @@ class PersonalTransportMessageTests(unittest.TestCase):
                 self.assertIn("invoiceContext", source, node["name"])
                 self.assertIn("invoiceNo: input?.invoiceNo", source, node["name"])
                 self.assertIn("invoice_file_id: input?.invoice_file_id", source, node["name"])
+
+    def test_content_check_is_e36_and_taxi_continuity_is_e42(self) -> None:
+        code_by_node = {}
+        for node in self.graph["nodes"]:
+            if node.get("type") != "decisionTableNode":
+                continue
+            content = node["content"]
+            code_field = next(output["id"] for output in content["outputs"] if output["field"] == "reason_code")
+            codes = {json.loads(rule[code_field]) for rule in content["rules"]}
+            if "E36" in codes:
+                code_by_node[node["id"]] = codes
+            if node["id"] == "travel_e34_taxi_consecutive_check":
+                self.assertIn("E42", codes)
+                self.assertNotIn("E34", codes)
+        self.assertIn("travel_e36_content_project_check", code_by_node)
+        self.assertIn("E36", code_by_node["travel_e36_content_project_check"])
+        self.assertNotIn("E34", code_by_node["travel_e36_content_project_check"])
 
     def test_invoice_type_72_matches_electronic_ordinary_invoice_mapping(self) -> None:
         prepared = self._base_input()
